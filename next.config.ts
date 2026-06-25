@@ -9,6 +9,9 @@ const nextConfig = {
       exclude: ['error', 'warn']
     } : false
   },
+
+  // Permite recursos de desarrollo (HMR) desde la IP de la red local.
+  allowedDevOrigins: ['192.168.100.8'],
   
   reactStrictMode: true,
 };

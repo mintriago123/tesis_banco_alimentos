@@ -20,8 +20,6 @@ import {
 } from '@/lib/comprobante';
 import {
   buildDonacionAprobadaEmailTemplate,
-  buildDonacionRecogidaEmailTemplate,
-  buildDonacionEntregadaEmailTemplate,
   buildDonacionCanceladaEmailTemplate,
 } from '@/lib/email/templates/donacionEmail';
 import { getBaseUrl } from '@/lib/getBaseUrl';
@@ -46,6 +44,298 @@ const NO_ROWS_CODE = 'PGRST116';
 const processingCache = new Map<number, Promise<ServiceResult<{ message: string; warning?: boolean }>>>();
 
 export const createDonationActionService = (supabaseClient: SupabaseClient) => {
+  const isApprovedLikeState = (estado: string | null | undefined): boolean => {
+    const normalized = String(estado ?? '').trim().toLowerCase();
+    return normalized === 'aprobada' || normalized === 'entregada';
+  };
+
+  const getCurrentDonationEstado = async (donationId: number): Promise<string | null> => {
+    const { data, error } = await supabaseClient
+      .from('donaciones')
+      .select('estado')
+      .eq('id', donationId)
+      .maybeSingle();
+
+    if (error) {
+      logger.warn('No se pudo leer estado actual desde BD; se usará estado local', {
+        donationId,
+        error
+      });
+      return null;
+    }
+
+    return typeof data?.estado === 'string' ? data.estado : null;
+  };
+
+  const rollbackDonationFromInventory = async (donation: Donation): Promise<ServiceResult<void>> => {
+    try {
+      let depositoPreferido: string | null = null;
+      const preferredDeposit = await supabaseClient
+        .from('donante_depositos')
+        .select('id_deposito, es_principal, created_at')
+        .eq('donante_id', donation.user_id)
+        .eq('activo', true)
+        .order('es_principal', { ascending: false })
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (!preferredDeposit.error && preferredDeposit.data?.id_deposito) {
+        depositoPreferido = preferredDeposit.data.id_deposito;
+      }
+
+      const { data: productsData, error: productError } = await supabaseClient
+        .from('productos_donados')
+        .select('id_producto, cantidad')
+        .eq('id_usuario', donation.user_id)
+        .eq('unidad_id', donation.unidad_id)
+        .ilike('nombre_producto', donation.tipo_producto)
+        .order('id_producto', { ascending: false })
+        .limit(20);
+
+      if (productError) {
+        return {
+          success: false,
+          error: 'No fue posible ubicar el producto para revertir inventario',
+          errorDetails: productError
+        };
+      }
+
+      if (!productsData || productsData.length === 0) {
+        logger.warn('No se encontró producto para rollback de donación', { donationId: donation.id });
+        return { success: true };
+      }
+
+      let cantidadPendiente = donation.cantidad;
+
+      for (const productData of productsData) {
+        if (cantidadPendiente <= 0) break;
+
+        const { data: invRows, error: invError } = await supabaseClient
+          .from('inventario')
+          .select('id_inventario, id_deposito, cantidad_disponible')
+          .eq('id_producto', productData.id_producto)
+          .gt('cantidad_disponible', 0)
+          .order('fecha_actualizacion', { ascending: false })
+          .limit(50);
+
+        if (invError) {
+          return {
+            success: false,
+            error: 'No fue posible ubicar inventario para rollback',
+            errorDetails: invError
+          };
+        }
+
+        const inventories = [...(invRows ?? [])].sort((a, b) => {
+          if (!depositoPreferido) return 0;
+          const aPreferred = a.id_deposito === depositoPreferido ? 1 : 0;
+          const bPreferred = b.id_deposito === depositoPreferido ? 1 : 0;
+          return bPreferred - aPreferred;
+        });
+
+        const totalInventarioProducto = inventories.reduce(
+          (acc, row) => acc + Number(row.cantidad_disponible ?? 0),
+          0
+        );
+
+        if (totalInventarioProducto <= 0) {
+          continue;
+        }
+
+        const maxProducto = Number(productData.cantidad ?? 0);
+        const cantidadARevertir = Math.min(cantidadPendiente, totalInventarioProducto, maxProducto);
+
+        if (cantidadARevertir <= 0) {
+          continue;
+        }
+
+        const nuevaCantidadProducto = Math.max(maxProducto - cantidadARevertir, 0);
+        const { error: updateProductError } = await supabaseClient
+          .from('productos_donados')
+          .update({ cantidad: nuevaCantidadProducto })
+          .eq('id_producto', productData.id_producto);
+
+        if (updateProductError) {
+          return {
+            success: false,
+            error: 'No fue posible revertir cantidad en productos donados',
+            errorDetails: updateProductError
+          };
+        }
+
+        let pendienteInventario = cantidadARevertir;
+        for (const invRow of inventories) {
+          if (pendienteInventario <= 0) break;
+
+          const disponible = Number(invRow.cantidad_disponible ?? 0);
+          const descuento = Math.min(disponible, pendienteInventario);
+          const nuevaCantidadInventario = Math.max(disponible - descuento, 0);
+
+          const { error: updateInvError } = await supabaseClient
+            .from('inventario')
+            .update({
+              cantidad_disponible: nuevaCantidadInventario,
+              fecha_actualizacion: new Date().toISOString()
+            })
+            .eq('id_inventario', invRow.id_inventario);
+
+          if (updateInvError) {
+            return {
+              success: false,
+              error: 'No fue posible revertir cantidad en inventario',
+              errorDetails: updateInvError
+            };
+          }
+
+          pendienteInventario -= descuento;
+        }
+
+        cantidadPendiente -= cantidadARevertir;
+      }
+
+      if (cantidadPendiente > 0) {
+        logger.warn('Rollback parcial de inventario: no se encontró suficiente stock para revertir todo', {
+          donationId: donation.id,
+          cantidadOriginal: donation.cantidad,
+          cantidadNoRevertida: cantidadPendiente
+        });
+      }
+
+      logger.info('Rollback de inventario aplicado para donación', {
+        donationId: donation.id,
+        cantidadOriginal: donation.cantidad,
+        cantidadRevertida: donation.cantidad - cantidadPendiente
+      });
+
+      return { success: true };
+    } catch (error) {
+      logger.error('Error inesperado al revertir inventario de donación', error);
+      return {
+        success: false,
+        error: 'Error inesperado al revertir inventario',
+        errorDetails: error
+      };
+    }
+  };
+
+  const updateDonationEstadoInDatabase = async (donationId: number, updateData: Record<string, unknown>) => {
+    const primary = await supabaseClient
+      .from('donaciones')
+      .update(updateData)
+      .eq('id', donationId);
+
+    if (!primary.error) {
+      return { error: null as null | typeof primary.error, usedLegacyEstado: false };
+    }
+
+    const estadoValue = String(updateData.estado ?? '');
+    const isConstraintError = primary.error.code === '23514';
+
+    if (isConstraintError && estadoValue === 'Aprobada') {
+      const fallbackData = {
+        ...updateData,
+        estado: 'Entregada'
+      };
+
+      const legacy = await supabaseClient
+        .from('donaciones')
+        .update(fallbackData)
+        .eq('id', donationId);
+
+      if (!legacy.error) {
+        logger.warn('BD con constraint legacy detectada. Se guardó estado Entregada como equivalente de Aprobada.', {
+          donationId
+        });
+        return { error: null as null | typeof legacy.error, usedLegacyEstado: true };
+      }
+
+      return { error: legacy.error, usedLegacyEstado: false };
+    }
+
+    return { error: primary.error, usedLegacyEstado: false };
+  };
+
+  const ensureDonorDepositMapping = async (donorId: string): Promise<ServiceResult<{ depositoId: string }>> => {
+    try {
+      const existing = await supabaseClient
+        .from('donante_depositos')
+        .select('id_deposito, es_principal, created_at')
+        .eq('donante_id', donorId)
+        .eq('activo', true)
+        .order('es_principal', { ascending: false })
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (existing.error) {
+        logger.error('Error consultando mapeo de bodega por donante', existing.error);
+        return {
+          success: false,
+          error: 'No fue posible validar la bodega del donante',
+          errorDetails: existing.error
+        };
+      }
+
+      if (existing.data?.id_deposito) {
+        return {
+          success: true,
+          data: { depositoId: existing.data.id_deposito }
+        };
+      }
+
+      const newDeposito = await supabaseClient
+        .from('depositos')
+        .insert({
+          nombre: `Depósito Donante ${donorId.slice(0, 8)}`,
+          descripcion: `Depósito asignado automáticamente al donante ${donorId}`
+        })
+        .select('id_deposito')
+        .single();
+
+      if (newDeposito.error || !newDeposito.data) {
+        logger.error('Error creando depósito para donante', newDeposito.error);
+        return {
+          success: false,
+          error: 'No fue posible crear la bodega del donante',
+          errorDetails: newDeposito.error
+        };
+      }
+
+      const donorMapping = await supabaseClient
+        .from('donante_depositos')
+        .insert({
+          donante_id: donorId,
+          id_deposito: newDeposito.data.id_deposito,
+          es_principal: true,
+          activo: true
+        })
+        .select('id_deposito')
+        .single();
+
+      if (donorMapping.error || !donorMapping.data) {
+        logger.error('Error creando mapeo donante-bodega', donorMapping.error);
+        return {
+          success: false,
+          error: 'No fue posible vincular al donante con su bodega',
+          errorDetails: donorMapping.error
+        };
+      }
+
+      return {
+        success: true,
+        data: { depositoId: donorMapping.data.id_deposito }
+      };
+    } catch (error) {
+      logger.error('Excepción asegurando mapeo de bodega por donante', error);
+      return {
+        success: false,
+        error: 'Error inesperado asegurando la bodega del donante',
+        errorDetails: error
+      };
+    }
+  };
+
   const updateDonationEstado = async (
     donation: Donation,
     nuevoEstado: DonationEstado,
@@ -73,6 +363,17 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
         };
       }
 
+      if (nuevoEstado === 'Aprobada') {
+        const mappingResult = await ensureDonorDepositMapping(donation.user_id);
+        if (!mappingResult.success) {
+          return {
+            success: false,
+            error: mappingResult.error ?? 'No fue posible asegurar la bodega del donante',
+            errorDetails: mappingResult.errorDetails
+          };
+        }
+      }
+
       // Generar código de comprobante si no existe
       const codigoComprobante = donation.codigo_comprobante ?? generarCodigoComprobante('donacion', String(donation.id));
       
@@ -94,10 +395,12 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
         updateData.fecha_cancelacion = new Date().toISOString();
       }
       
-      const { error } = await supabaseClient
-        .from('donaciones')
-        .update(updateData)
-        .eq('id', donation.id);
+      const estadoActualEnBd = await getCurrentDonationEstado(donation.id);
+      const previousEstado = estadoActualEnBd ?? String((donation as Donation & { estado?: string }).estado ?? '');
+      const wasApprovedLike = isApprovedLikeState(previousEstado);
+      const willBeApprovedLike = isApprovedLikeState(nuevoEstado);
+
+      const { error, usedLegacyEstado } = await updateDonationEstadoInDatabase(donation.id, updateData);
 
       if (error) {
         logger.error('Error actualizando estado de donación', error);
@@ -118,12 +421,23 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
         };
       }
 
+      if (wasApprovedLike && !willBeApprovedLike) {
+        const rollbackResult = await rollbackDonationFromInventory(donation);
+        if (!rollbackResult.success) {
+          return {
+            success: false,
+            error: rollbackResult.error ?? 'No fue posible revertir inventario de la donación',
+            errorDetails: rollbackResult.errorDetails
+          };
+        }
+      }
+
       // NOTA: El trigger de BD (trigger_crear_producto) se encarga automáticamente
-      // de agregar la donación al inventario cuando el estado cambia a "Entregada"
+      // de agregar la donación al inventario cuando el estado cambia a "Aprobada"
       // No necesitamos hacerlo manualmente aquí (esto previene duplicaciones)
       
-      if (nuevoEstado === 'Entregada') {
-        logger.info('✅ Donación marcada como Entregada - El trigger de BD actualizará el inventario automáticamente', { 
+      if (nuevoEstado === 'Aprobada') {
+        logger.info('✅ Donación marcada como Aprobada - El trigger de BD actualizará el inventario automáticamente', { 
           donationId: donation.id, 
           estadoAnterior: donation.estado, 
           estadoNuevo: nuevoEstado 
@@ -135,7 +449,9 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
       return {
         success: true,
         data: {
-          message: SYSTEM_MESSAGES.stateUpdateSuccess(nuevoEstado),
+          message: usedLegacyEstado
+            ? `${SYSTEM_MESSAGES.stateUpdateSuccess(nuevoEstado)} (compatibilidad temporal con BD legacy activa)`
+            : SYSTEM_MESSAGES.stateUpdateSuccess(nuevoEstado),
           warning: false
         }
       };
@@ -208,44 +524,16 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
 
       // Configurar notificación y email según el estado
       switch (nuevoEstado) {
-        case 'Recogida': {
-          const emailTemplate = buildDonacionRecogidaEmailTemplate({
+        case 'Aprobada': {
+          const emailTemplate = buildDonacionAprobadaEmailTemplate({
             comprobante,
             qrImageBase64,
             baseUrl,
           });
 
           await sendNotification({
-            titulo: `🚚 Donación Recogida - Código: ${comprobante.codigoComprobante}`,
-            mensaje: `Estimado/a ${datosUsuario.nombre}, su donación de ${donation.cantidad} ${datosPedido.unidad} de ${donation.tipo_producto} ha sido recogida por nuestro equipo. Los alimentos se encuentran en camino a nuestras instalaciones.`,
-            categoria: 'donacion',
-            tipo: 'info',
-            destinatarioId: donation.user_id ?? undefined,
-            urlAccion: '/donante/donaciones',
-            metadatos: {
-              donacionId: donation.id,
-              nuevoEstado,
-              codigoComprobante: comprobante.codigoComprobante,
-            },
-            email: {
-              subject: emailTemplate.subject,
-              html: emailTemplate.html,
-              text: emailTemplate.text,
-            },
-          });
-          break;
-        }
-
-        case 'Entregada': {
-          const emailTemplate = buildDonacionEntregadaEmailTemplate({
-            comprobante,
-            qrImageBase64,
-            baseUrl,
-          });
-
-          await sendNotification({
-            titulo: `✅ Donación Procesada - ¡Gracias! - Código: ${comprobante.codigoComprobante}`,
-            mensaje: `Estimado/a ${datosUsuario.nombre}, su donación de ${donation.cantidad} ${datosPedido.unidad} de ${donation.tipo_producto} ha sido procesada e incorporada a nuestro inventario. ¡Gracias por su generosidad! Su aporte ayudará a familias que lo necesitan.`,
+            titulo: `✅ Donación Aprobada - ¡Gracias! - Código: ${comprobante.codigoComprobante}`,
+            mensaje: `Estimado/a ${datosUsuario.nombre}, su donación de ${donation.cantidad} ${datosPedido.unidad} de ${donation.tipo_producto} ha sido aprobada e incorporada a nuestro inventario. ¡Gracias por su generosidad! Su aporte ayudará a familias que lo necesitan.`,
             categoria: 'donacion',
             tipo: 'success',
             destinatarioId: donation.user_id ?? undefined,
@@ -303,7 +591,7 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
         }
 
         default: {
-          // Estado por defecto (Pendiente u otro)
+          // Estado Pendiente u otro
           const emailTemplate = buildDonacionAprobadaEmailTemplate({
             comprobante,
             qrImageBase64,
@@ -312,7 +600,7 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
 
           await sendNotification({
             titulo: `🎁 Donación Registrada - Código: ${comprobante.codigoComprobante}`,
-            mensaje: `Estimado/a ${datosUsuario.nombre}, su donación de ${donation.cantidad} ${datosPedido.unidad} de ${donation.tipo_producto} ha sido registrada. Nuestro equipo se comunicará pronto para coordinar la recolección.`,
+            mensaje: `Estimado/a ${datosUsuario.nombre}, su donación de ${donation.cantidad} ${datosPedido.unidad} de ${donation.tipo_producto} ha sido registrada. Nuestro equipo la procesará pronto.`,
             categoria: 'donacion',
             tipo: 'info',
             destinatarioId: donation.user_id ?? undefined,
@@ -628,7 +916,7 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
           id_donante: donation.user_id,
           id_solicitante: authData.user.id,
           estado_movimiento: 'donado',
-          observaciones: `Donación entregada - ${donation.tipo_producto} (${donation.cantidad} ${donation.unidad_simbolo})`
+          observaciones: `Donación aprobada - ${donation.tipo_producto} (${donation.cantidad} ${donation.unidad_simbolo})`
         })
         .select('id_movimiento')
         .single();
@@ -649,7 +937,7 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
           cantidad: donation.cantidad,
           tipo_transaccion: 'ingreso',
           rol_usuario: 'donante',
-          observacion_detalle: `Ingreso por donación entregada - ${donation.tipo_producto}`
+          observacion_detalle: `Ingreso por donación aprobada - ${donation.tipo_producto}`
         });
 
       if (detalleError) {

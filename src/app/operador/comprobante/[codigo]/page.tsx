@@ -353,29 +353,6 @@ export default function ComprobantePage({ params }: { params: Promise<{ codigo: 
               </div>
             )}
 
-            {/* Firmas */}
-            <div className="pt-4 border-t-2 border-dashed border-gray-300">
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 text-center">
-                Firmas de Conformidad
-              </h3>
-              <div className="grid grid-cols-2 gap-8">
-                <div className="text-center">
-                  <div className="h-16 border-b-2 border-gray-400 mb-2"></div>
-                  <p className="font-medium text-gray-700 text-sm">
-                    {data.tipo === 'solicitud' ? 'Firma del Beneficiario' : 'Firma del Donante'}
-                  </p>
-                  <p className="text-xs text-gray-500">Nombre: {data.usuario.nombre}</p>
-                  <p className="text-xs text-gray-500">C.I.: {data.usuario.cedula}</p>
-                </div>
-                <div className="text-center">
-                  <div className="h-16 border-b-2 border-gray-400 mb-2"></div>
-                  <p className="font-medium text-gray-700 text-sm">Firma del Operador</p>
-                  <p className="text-xs text-gray-500">Banco de Alimentos</p>
-                  <p className="text-xs text-gray-500">Fecha: _______________</p>
-                </div>
-              </div>
-            </div>
-
             {/* Pie de página */}
             <div className="mt-4 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">
               <p>Este documento es un comprobante electrónico válido emitido por el Banco de Alimentos.</p>

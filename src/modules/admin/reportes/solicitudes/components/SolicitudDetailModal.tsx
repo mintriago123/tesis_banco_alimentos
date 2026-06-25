@@ -41,6 +41,10 @@ interface SolicitudDetailModalProps {
   isProcessing: boolean;
   motivoRechazo?: string;
   onMotivoRechazoChange?: (value: string) => void;
+  depositoSeleccionado: string;
+  onDepositoSeleccionadoChange: (value: string) => void;
+  cantidadAprobar: number;
+  onCantidadAprobarChange: (value: number) => void;
 }
 
 const SolicitudDetailModal = ({
@@ -58,7 +62,11 @@ const SolicitudDetailModal = ({
   onRechazar,
   isProcessing,
   motivoRechazo,
-  onMotivoRechazoChange
+  onMotivoRechazoChange,
+  depositoSeleccionado,
+  onDepositoSeleccionadoChange,
+  cantidadAprobar,
+  onCantidadAprobarChange
 }: SolicitudDetailModalProps) => {
   const [nombreOperador, setNombreOperador] = useState<string>('');
   const [rolOperador, setRolOperador] = useState<string>('');
@@ -71,6 +79,10 @@ const SolicitudDetailModal = ({
     (total, item) => total + (item.cantidad_disponible ?? 0),
     0
   );
+
+  const depositoActual = inventario.find(item => item.id_deposito === depositoSeleccionado);
+  const stockDepositoSeleccionado = depositoActual?.cantidad_disponible ?? 0;
+  const maxAprobable = Math.max(0, Math.min(solicitud.cantidad, Math.floor(stockDepositoSeleccionado)));
 
   // Cargar datos del operador/admin que rechazó
   useEffect(() => {
@@ -357,6 +369,41 @@ const SolicitudDetailModal = ({
                 {!inventarioLoading && !inventarioError && inventario.length > 0 && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Bodega para aprobación
+                        </label>
+                        <select
+                          value={depositoSeleccionado}
+                          onChange={(event) => onDepositoSeleccionadoChange(event.target.value)}
+                          className="w-full p-2 border border-gray-300 rounded-lg"
+                          disabled={isProcessing}
+                        >
+                          <option value="">Selecciona una bodega</option>
+                          {inventario.map(item => (
+                            <option key={item.id} value={item.id_deposito}>
+                              {item.deposito} - {item.cantidad_disponible} {item.unidad_simbolo || item.unidad_nombre || solicitud.unidades?.simbolo || 'unidades'}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Cantidad a aprobar
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={Math.max(1, maxAprobable)}
+                          value={cantidadAprobar}
+                          onChange={(event) => onCantidadAprobarChange(Number(event.target.value) || 0)}
+                          className="w-full p-2 border border-gray-300 rounded-lg"
+                          disabled={isProcessing || !depositoSeleccionado}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {inventario.map(item => {
                         const unidad = item.unidad_simbolo || item.unidad_nombre || 'unidades';
                         return (
@@ -391,6 +438,12 @@ const SolicitudDetailModal = ({
                           <span className="text-gray-600">Total disponible: </span>
                           <span className={`font-semibold ${totalDisponible >= solicitud.cantidad ? 'text-green-600' : 'text-red-600'}`}>
                             {totalDisponible} {solicitud.unidades?.simbolo ?? 'unidades'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Disponible en bodega seleccionada: </span>
+                          <span className={`font-semibold ${stockDepositoSeleccionado >= 1 ? 'text-green-600' : 'text-red-600'}`}>
+                            {stockDepositoSeleccionado} {solicitud.unidades?.simbolo ?? 'unidades'}
                           </span>
                         </div>
                         <div className="mt-2">
@@ -466,8 +519,8 @@ const SolicitudDetailModal = ({
                     type="button"
                     onClick={onAprobar}
                     className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                    disabled={isProcessing || inventarioLoading || totalDisponible < solicitud.cantidad}
-                    title={totalDisponible < solicitud.cantidad ? 'Stock insuficiente para aprobar esta solicitud' : ''}
+                    disabled={isProcessing || inventarioLoading || !depositoSeleccionado || cantidadAprobar < 1 || cantidadAprobar > maxAprobable}
+                    title={!depositoSeleccionado ? 'Selecciona una bodega para aprobar' : (cantidadAprobar > maxAprobable ? 'La cantidad supera el stock disponible en la bodega seleccionada' : '')}
                   >
                     <CheckCircle className="w-4 h-4" />
                     <span>Aprobar Solicitud</span>

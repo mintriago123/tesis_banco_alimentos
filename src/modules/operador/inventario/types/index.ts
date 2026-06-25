@@ -78,6 +78,7 @@ export type SupabaseDepositoRelation = {
 
 export type SupabaseProductoRelation = {
   id_producto?: string | null;
+  id_usuario?: string | null;
   nombre_producto?: string | null;
   descripcion?: string | null;
   unidad_medida?: string | null;

@@ -38,8 +38,7 @@ interface DonationsTableProps {
 
 const estadoIcons: Record<DonationEstado, JSX.Element> = {
   Pendiente: <Clock className="w-4 h-4" />,
-  Recogida: <Truck className="w-4 h-4" />,
-  Entregada: <CheckCircle className="w-4 h-4" />,
+  Aprobada: <CheckCircle className="w-4 h-4" />,
   Cancelada: <XCircle className="w-4 h-4" />
 };
 
@@ -223,26 +222,17 @@ const DonationsTable = ({
                       </button>
                       <button
                         type="button"
-                        onClick={() => onChangeEstado(donation, 'Recogida')}
-                        disabled={isProcessing || donation.estado === 'Recogida'}
-                        className="px-2 py-1 text-xs border border-blue-200 text-blue-600 rounded hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Recogida
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onChangeEstado(donation, 'Entregada')}
-                        disabled={isProcessing || donation.estado === 'Entregada'}
+                        onClick={() => onChangeEstado(donation, 'Aprobada')}
+                        disabled={isProcessing || donation.estado === 'Aprobada'}
                         className="px-2 py-1 text-xs border border-green-200 text-green-600 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Entregada
+                        Aprobada
                       </button>
                       <button
                         type="button"
                         onClick={() => onChangeEstado(donation, 'Cancelada')}
-                        disabled={isProcessing || donation.estado === 'Cancelada' || donation.estado === 'Entregada'}
+                        disabled={isProcessing || donation.estado === 'Cancelada'}
                         className="px-2 py-1 text-xs border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={donation.estado === 'Entregada' ? 'No se puede cancelar una donación entregada' : ''}
                       >
                         Cancelada
                       </button>

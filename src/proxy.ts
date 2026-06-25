@@ -86,6 +86,7 @@ export async function proxy(request: NextRequest) {
       if (!isAuthenticated || !user) {
         const url = new URL('/auth/iniciar-sesion', request.url);
         url.searchParams.set('callbackUrl', pathname);
+        url.searchParams.set('error', 'unauthorized');
         return NextResponse.redirect(url);
       }
 
@@ -112,45 +113,53 @@ export async function proxy(request: NextRequest) {
           // Verificar autorización por rol
           if (pathname.startsWith('/admin') && rolUsuario !== 'ADMINISTRADOR') {
             // Redirigir al dashboard correspondiente según el rol
+            const url = new URL('/auth/iniciar-sesion', request.url);
+            url.searchParams.set('error', 'forbidden');
             if (rolUsuario === 'OPERADOR') {
-              return NextResponse.redirect(new URL('/operador/dashboard', request.url));
+              return NextResponse.redirect(url);
             } else if (rolUsuario === 'DONANTE') {
-              return NextResponse.redirect(new URL('/donante/dashboard', request.url));
+              return NextResponse.redirect(url);
             } else {
-              return NextResponse.redirect(new URL('/user/dashboard', request.url));
+              return NextResponse.redirect(url);
             }
           }
 
           if (pathname.startsWith('/operador') && rolUsuario !== 'OPERADOR') {
             // Redirigir al dashboard correspondiente según el rol
+            const url = new URL('/auth/iniciar-sesion', request.url);
+            url.searchParams.set('error', 'forbidden');
             if (rolUsuario === 'ADMINISTRADOR') {
-              return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+              return NextResponse.redirect(url);
             } else if (rolUsuario === 'DONANTE') {
-              return NextResponse.redirect(new URL('/donante/dashboard', request.url));
+              return NextResponse.redirect(url);
             } else {
-              return NextResponse.redirect(new URL('/user/dashboard', request.url));
+              return NextResponse.redirect(url);
             }
           }
 
           if (pathname.startsWith('/donante') && rolUsuario !== 'DONANTE') {
             // Redirigir al dashboard correspondiente según el rol
+            const url = new URL('/auth/iniciar-sesion', request.url);
+            url.searchParams.set('error', 'forbidden');
             if (rolUsuario === 'ADMINISTRADOR') {
-              return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+              return NextResponse.redirect(url);
             } else if (rolUsuario === 'OPERADOR') {
-              return NextResponse.redirect(new URL('/operador/dashboard', request.url));
+              return NextResponse.redirect(url);
             } else {
-              return NextResponse.redirect(new URL('/user/dashboard', request.url));
+              return NextResponse.redirect(url);
             }
           }
 
           if (pathname.startsWith('/user') && rolUsuario !== 'SOLICITANTE') {
             // Redirigir al dashboard correspondiente según el rol
+            const url = new URL('/auth/iniciar-sesion', request.url);
+            url.searchParams.set('error', 'forbidden');
             if (rolUsuario === 'ADMINISTRADOR') {
-              return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+              return NextResponse.redirect(url);
             } else if (rolUsuario === 'OPERADOR') {
-              return NextResponse.redirect(new URL('/operador/dashboard', request.url));
+              return NextResponse.redirect(url);
             } else if (rolUsuario === 'DONANTE') {
-              return NextResponse.redirect(new URL('/donante/dashboard', request.url));
+              return NextResponse.redirect(url);
             }
           }
 

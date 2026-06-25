@@ -159,11 +159,27 @@ DECLARE
   v_producto_id uuid;
   v_deposito_id uuid;
 BEGIN
-  IF NEW.estado = 'Entregada' THEN
-    -- Obtener el primer depósito disponible
-    SELECT id_deposito INTO v_deposito_id
-    FROM public.depositos
+  -- Procesar solo cuando la donación se marca como Aprobada por primera vez.
+  -- Esto evita reincrementos de inventario en updates posteriores.
+  IF (
+    (TG_OP = 'INSERT' AND NEW.estado = 'Aprobada') OR
+    (TG_OP = 'UPDATE' AND NEW.estado = 'Aprobada' AND COALESCE(OLD.estado, '') <> 'Aprobada')
+  ) THEN
+    -- Obtener depósito configurado para el donante.
+    -- Si no existe mapeo, usar un depósito por defecto para mantener compatibilidad.
+    SELECT dd.id_deposito INTO v_deposito_id
+    FROM public.donante_depositos dd
+    WHERE dd.donante_id = NEW.user_id
+      AND dd.activo = true
+    ORDER BY dd.es_principal DESC, dd.created_at ASC
     LIMIT 1;
+
+    IF v_deposito_id IS NULL THEN
+      SELECT id_deposito INTO v_deposito_id
+      FROM public.depositos
+      ORDER BY nombre ASC
+      LIMIT 1;
+    END IF;
     
     IF v_deposito_id IS NULL THEN
       RAISE EXCEPTION 'No hay depósitos disponibles';
@@ -174,7 +190,8 @@ BEGIN
     SELECT id_producto INTO v_producto_id
     FROM public.productos_donados
     WHERE lower(TRIM(BOTH FROM nombre_producto)) = lower(TRIM(BOTH FROM NEW.tipo_producto))
-      AND unidad_id = NEW.unidad_id;
+      AND unidad_id = NEW.unidad_id
+      AND id_usuario = NEW.user_id;
     
     IF v_producto_id IS NOT NULL THEN
       -- Si existe, actualizar la cantidad
@@ -1201,11 +1218,72 @@ ALTER SEQUENCE "public"."conversiones_id_seq" OWNED BY "public"."conversiones"."
 CREATE TABLE IF NOT EXISTS "public"."depositos" (
     "id_deposito" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "nombre" "text" NOT NULL,
-    "descripcion" "text"
+  "descripcion" "text",
+  CONSTRAINT "depositos_pkey" PRIMARY KEY ("id_deposito")
 );
 
 
 ALTER TABLE "public"."depositos" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."usuarios" (
+  "id" "uuid" NOT NULL,
+  "rol" "text",
+  "tipo_persona" "text",
+  "nombre" "text",
+  "ruc" "text",
+  "cedula" "text",
+  "direccion" "text",
+  "telefono" "text",
+  "created_at" timestamp with time zone DEFAULT "now"(),
+  "updated_at" timestamp with time zone DEFAULT "now"(),
+  "representante" "text",
+  "estado" character varying(20) DEFAULT 'activo'::character varying,
+  "email" "text",
+  "recibir_notificaciones" boolean DEFAULT true,
+  "fecha_fin_bloqueo" timestamp with time zone,
+  "motivo_bloqueo" "text",
+  "latitud" double precision,
+  "longitud" double precision,
+  CONSTRAINT "usuarios_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "usuarios_estado_check" CHECK (("estado"::"text" = ANY (ARRAY[('activo'::character varying)::"text", ('bloqueado'::character varying)::"text", ('desactivado'::character varying)::"text"]))),
+  CONSTRAINT "usuarios_rol_check" CHECK (("rol" = ANY (ARRAY['ADMINISTRADOR'::"text", 'DONANTE'::"text", 'SOLICITANTE'::"text", 'OPERADOR'::"text"])))
+);
+
+
+ALTER TABLE "public"."usuarios" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."usuarios"."fecha_fin_bloqueo" IS 'Fecha y hora en que termina el bloqueo temporal del usuario. NULL si el bloqueo es permanente o el usuario no está bloqueado';
+
+
+
+COMMENT ON COLUMN "public"."usuarios"."motivo_bloqueo" IS 'Motivo por el cual el usuario está bloqueado o desactivado';
+
+
+
+COMMENT ON COLUMN "public"."usuarios"."latitud" IS 'Latitud de la ubicación del usuario (coordenada geográfica)';
+
+
+
+COMMENT ON COLUMN "public"."usuarios"."longitud" IS 'Longitud de la ubicación del usuario (coordenada geográfica)';
+
+
+CREATE TABLE IF NOT EXISTS "public"."donante_depositos" (
+  "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+  "donante_id" "uuid" NOT NULL,
+  "id_deposito" "uuid" NOT NULL,
+  "es_principal" boolean DEFAULT true NOT NULL,
+  "activo" boolean DEFAULT true NOT NULL,
+  "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+  CONSTRAINT "donante_depositos_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "donante_depositos_donante_deposito_key" UNIQUE ("donante_id", "id_deposito"),
+  CONSTRAINT "donante_depositos_donante_id_fkey" FOREIGN KEY ("donante_id") REFERENCES "public"."usuarios"("id") ON DELETE CASCADE,
+  CONSTRAINT "donante_depositos_id_deposito_fkey" FOREIGN KEY ("id_deposito") REFERENCES "public"."depositos"("id_deposito") ON DELETE RESTRICT
+);
+
+
+ALTER TABLE "public"."donante_depositos" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."detalles_solicitud" (
@@ -1258,7 +1336,7 @@ CREATE TABLE IF NOT EXISTS "public"."donaciones" (
     "fecha_cancelacion" timestamp with time zone,
     CONSTRAINT "check_observaciones_cancelacion" CHECK ((("motivo_cancelacion" IS NULL) OR ("motivo_cancelacion" <> 'otro'::"text") OR (("motivo_cancelacion" = 'otro'::"text") AND ("observaciones_cancelacion" IS NOT NULL) AND ("length"(TRIM(BOTH FROM "observaciones_cancelacion")) > 0)))),
     CONSTRAINT "donaciones_cantidad_check" CHECK (("cantidad" > (0)::numeric)),
-    CONSTRAINT "donaciones_estado_check" CHECK (("estado" = ANY (ARRAY['Pendiente'::"text", 'Recogida'::"text", 'Entregada'::"text", 'Cancelada'::"text"]))),
+    CONSTRAINT "donaciones_estado_check" CHECK (("estado" = ANY (ARRAY['Pendiente'::"text", 'Aprobada'::"text", 'Cancelada'::"text"]))),
     CONSTRAINT "donaciones_motivo_cancelacion_check" CHECK (("motivo_cancelacion" = ANY (ARRAY['error_donante'::"text", 'no_disponible'::"text", 'calidad_inadecuada'::"text", 'logistica_imposible'::"text", 'duplicado'::"text", 'solicitud_donante'::"text", 'otro'::"text"])))
 );
 
@@ -1328,7 +1406,8 @@ CREATE TABLE IF NOT EXISTS "public"."inventario" (
     "id_deposito" "uuid" NOT NULL,
     "id_producto" "uuid" NOT NULL,
     "cantidad_disponible" numeric DEFAULT 0 NOT NULL,
-    "fecha_actualizacion" timestamp without time zone DEFAULT "now"()
+  "fecha_actualizacion" timestamp without time zone DEFAULT "now"(),
+  CONSTRAINT "inventario_pkey" PRIMARY KEY ("id_inventario")
 );
 
 
@@ -1345,7 +1424,8 @@ CREATE TABLE IF NOT EXISTS "public"."movimiento_inventario_cabecera" (
     "id_donante" "uuid" NOT NULL,
     "id_solicitante" "uuid" NOT NULL,
     "estado_movimiento" "text" NOT NULL,
-    "observaciones" "text",
+  "observaciones" "text",
+  CONSTRAINT "movimiento_inventario_cabecera_pkey" PRIMARY KEY ("id_movimiento"),
     CONSTRAINT "movimiento_inventario_cabecera_estado_movimiento_check" CHECK (("estado_movimiento" = ANY (ARRAY['pendiente'::"text", 'completado'::"text", 'donado'::"text"])))
 );
 
@@ -1409,7 +1489,8 @@ CREATE TABLE IF NOT EXISTS "public"."productos_donados" (
     "unidad_medida" "text",
     "fecha_caducidad" timestamp with time zone,
     "alimento_id" bigint,
-    "unidad_id" bigint
+  "unidad_id" bigint,
+  CONSTRAINT "productos_donados_pkey" PRIMARY KEY ("id_producto")
 );
 
 
@@ -1445,6 +1526,7 @@ CREATE TABLE IF NOT EXISTS "public"."solicitudes" (
     "codigo_comprobante" "text",
     "cantidad_entregada" numeric(10,2) DEFAULT 0,
     "tiene_entregas_parciales" boolean DEFAULT false,
+    CONSTRAINT "solicitudes_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "solicitudes_estado_check" CHECK (("estado" = ANY (ARRAY['pendiente'::"text", 'aprobada'::"text", 'rechazada'::"text", 'entregada'::"text"])))
 );
 
@@ -1484,7 +1566,8 @@ CREATE TABLE IF NOT EXISTS "public"."tipos_magnitud" (
     "id" bigint NOT NULL,
     "nombre" "text" NOT NULL,
     "descripcion" "text",
-    "created_at" timestamp with time zone DEFAULT "now"()
+  "created_at" timestamp with time zone DEFAULT "now"(),
+  CONSTRAINT "tipos_magnitud_pkey" PRIMARY KEY ("id")
 );
 
 
@@ -1512,7 +1595,8 @@ CREATE TABLE IF NOT EXISTS "public"."unidades" (
     "simbolo" "text" NOT NULL,
     "tipo_magnitud_id" bigint NOT NULL,
     "es_base" boolean DEFAULT false,
-    "created_at" timestamp with time zone DEFAULT "now"()
+  "created_at" timestamp with time zone DEFAULT "now"(),
+  CONSTRAINT "unidades_pkey" PRIMARY KEY ("id")
 );
 
 
@@ -1531,49 +1615,6 @@ ALTER SEQUENCE "public"."unidades_id_seq" OWNER TO "postgres";
 
 
 ALTER SEQUENCE "public"."unidades_id_seq" OWNED BY "public"."unidades"."id";
-
-
-
-CREATE TABLE IF NOT EXISTS "public"."usuarios" (
-    "id" "uuid" NOT NULL,
-    "rol" "text",
-    "tipo_persona" "text",
-    "nombre" "text",
-    "ruc" "text",
-    "cedula" "text",
-    "direccion" "text",
-    "telefono" "text",
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"(),
-    "representante" "text",
-    "estado" character varying(20) DEFAULT 'activo'::character varying,
-    "email" "text",
-    "recibir_notificaciones" boolean DEFAULT true,
-    "fecha_fin_bloqueo" timestamp with time zone,
-    "motivo_bloqueo" "text",
-    "latitud" double precision,
-    "longitud" double precision,
-    CONSTRAINT "usuarios_estado_check" CHECK ((("estado")::"text" = ANY (ARRAY[('activo'::character varying)::"text", ('bloqueado'::character varying)::"text", ('desactivado'::character varying)::"text"]))),
-    CONSTRAINT "usuarios_rol_check" CHECK (("rol" = ANY (ARRAY['ADMINISTRADOR'::"text", 'DONANTE'::"text", 'SOLICITANTE'::"text", 'OPERADOR'::"text"])))
-);
-
-
-ALTER TABLE "public"."usuarios" OWNER TO "postgres";
-
-
-COMMENT ON COLUMN "public"."usuarios"."fecha_fin_bloqueo" IS 'Fecha y hora en que termina el bloqueo temporal del usuario. NULL si el bloqueo es permanente o el usuario no está bloqueado';
-
-
-
-COMMENT ON COLUMN "public"."usuarios"."motivo_bloqueo" IS 'Motivo por el cual el usuario está bloqueado o desactivado';
-
-
-
-COMMENT ON COLUMN "public"."usuarios"."latitud" IS 'Latitud de la ubicación del usuario (coordenada geográfica)';
-
-
-
-COMMENT ON COLUMN "public"."usuarios"."longitud" IS 'Longitud de la ubicación del usuario (coordenada geográfica)';
 
 
 
@@ -1819,11 +1860,6 @@ ALTER TABLE ONLY "public"."conversiones"
 
 
 
-ALTER TABLE ONLY "public"."depositos"
-    ADD CONSTRAINT "depositos_pkey" PRIMARY KEY ("id_deposito");
-
-
-
 ALTER TABLE ONLY "public"."detalles_solicitud"
     ADD CONSTRAINT "detalles_solicitud_pkey" PRIMARY KEY ("id_detalle");
 
@@ -1844,16 +1880,6 @@ ALTER TABLE ONLY "public"."inventario"
 
 
 
-ALTER TABLE ONLY "public"."inventario"
-    ADD CONSTRAINT "inventario_pkey" PRIMARY KEY ("id_inventario");
-
-
-
-ALTER TABLE ONLY "public"."movimiento_inventario_cabecera"
-    ADD CONSTRAINT "movimiento_inventario_cabecera_pkey" PRIMARY KEY ("id_movimiento");
-
-
-
 ALTER TABLE ONLY "public"."movimiento_inventario_detalle"
     ADD CONSTRAINT "movimiento_inventario_detalle_pkey" PRIMARY KEY ("id_detalle");
 
@@ -1864,33 +1890,8 @@ ALTER TABLE ONLY "public"."notificaciones"
 
 
 
-ALTER TABLE ONLY "public"."productos_donados"
-    ADD CONSTRAINT "productos_donados_pkey" PRIMARY KEY ("id_producto");
-
-
-
-ALTER TABLE ONLY "public"."solicitudes"
-    ADD CONSTRAINT "solicitudes_pkey" PRIMARY KEY ("id");
-
-
-
 ALTER TABLE ONLY "public"."tipos_magnitud"
     ADD CONSTRAINT "tipos_magnitud_nombre_key" UNIQUE ("nombre");
-
-
-
-ALTER TABLE ONLY "public"."tipos_magnitud"
-    ADD CONSTRAINT "tipos_magnitud_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."unidades"
-    ADD CONSTRAINT "unidades_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."usuarios"
-    ADD CONSTRAINT "usuarios_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1955,6 +1956,15 @@ CREATE INDEX "idx_detalles_id_solicitud" ON "public"."detalles_solicitud" USING 
 
 
 CREATE INDEX "idx_detalles_solicitud_id_producto" ON "public"."detalles_solicitud" USING "btree" ("id_producto");
+
+
+CREATE INDEX "idx_donante_depositos_donante" ON "public"."donante_depositos" USING "btree" ("donante_id");
+
+
+CREATE INDEX "idx_donante_depositos_deposito" ON "public"."donante_depositos" USING "btree" ("id_deposito");
+
+
+CREATE UNIQUE INDEX "idx_donante_deposito_principal_activo" ON "public"."donante_depositos" USING "btree" ("donante_id") WHERE (("es_principal" = true) AND ("activo" = true));
 
 
 
@@ -2046,7 +2056,7 @@ CREATE INDEX "idx_productos_id_usuario" ON "public"."productos_donados" USING "b
 
 
 
-CREATE UNIQUE INDEX "idx_productos_nombre_unidad" ON "public"."productos_donados" USING "btree" ("lower"(TRIM(BOTH FROM "nombre_producto")), "unidad_id");
+CREATE UNIQUE INDEX "idx_productos_donante_nombre_unidad" ON "public"."productos_donados" USING "btree" (COALESCE("id_usuario", '00000000-0000-0000-0000-000000000000'::"uuid"), "lower"(TRIM(BOTH FROM "nombre_producto")), "unidad_id");
 
 
 
@@ -3210,6 +3220,12 @@ GRANT ALL ON SEQUENCE "public"."conversiones_id_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."depositos" TO "anon";
 GRANT ALL ON TABLE "public"."depositos" TO "authenticated";
 GRANT ALL ON TABLE "public"."depositos" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."donante_depositos" TO "anon";
+GRANT ALL ON TABLE "public"."donante_depositos" TO "authenticated";
+GRANT ALL ON TABLE "public"."donante_depositos" TO "service_role";
 
 
 

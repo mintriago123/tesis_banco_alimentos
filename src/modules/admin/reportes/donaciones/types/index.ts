@@ -2,7 +2,7 @@
  * @fileoverview Tipos compartidos para el módulo de reportes de donaciones.
  */
 
-export type DonationEstado = 'Pendiente' | 'Recogida' | 'Entregada' | 'Cancelada';
+export type DonationEstado = 'Pendiente' | 'Aprobada' | 'Cancelada';
 
 export type DonationPersonType = 'Natural' | 'Juridica';
 
@@ -62,8 +62,7 @@ export interface Donation {
 export interface DonationEstadoFilter {
   todos: boolean;
   Pendiente: boolean;
-  Recogida: boolean;
-  Entregada: boolean;
+  Aprobada: boolean;
   Cancelada: boolean;
 }
 
@@ -82,8 +81,7 @@ export interface DonationFilters {
 export interface DonationCounters {
   total: number;
   pendientes: number;
-  recogidas: number;
-  entregadas: number;
+  aprobadas: number;
   canceladas: number;
 }
 

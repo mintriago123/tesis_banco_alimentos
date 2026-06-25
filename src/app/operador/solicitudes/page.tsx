@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import Toast from '@/app/components/ui/Toast';
@@ -52,6 +52,8 @@ export default function OperadorSolicitudesPage() {
   const [mostrarDialogoRechazo, setMostrarDialogoRechazo] = useState(false);
   const [solicitudParaRechazar, setSolicitudParaRechazar] = useState<Solicitud | null>(null);
   const [abrirEnModoDonacion, setAbrirEnModoDonacion] = useState(false);
+  const [depositoSeleccionado, setDepositoSeleccionado] = useState('');
+  const [cantidadAprobar, setCantidadAprobar] = useState(0);
 
   const {
     solicitudes,
@@ -94,6 +96,8 @@ export default function OperadorSolicitudesPage() {
     setComentarioAdmin('');
     setMotivoRechazo('');
     setAbrirEnModoDonacion(false);
+    setDepositoSeleccionado('');
+    setCantidadAprobar(0);
     resetInventario();
   }, [resetInventario]);
 
@@ -107,11 +111,18 @@ export default function OperadorSolicitudesPage() {
       return false;
     }
 
-    // Si se va a aprobar, verificar stock disponible primero
+    // Para aprobar, forzar flujo por modal con selección de bodega/cantidad
     if (estado === 'aprobada') {
+      setSolicitudSeleccionada(solicitud);
+      setComentarioAdmin(solicitud.comentario_admin ?? '');
+      setMotivoRechazo('');
+      setAbrirEnModoDonacion(true);
+      setDepositoSeleccionado('');
+      setCantidadAprobar(Math.max(1, Math.floor(solicitud.cantidad)));
+      setMostrarModal(true);
       await loadInventario(solicitud.tipo_alimento);
-      // Esperar un momento para que se cargue el inventario
-      await new Promise(resolve => setTimeout(resolve, 500));
+      showWarning('Selecciona la bodega y la cantidad a aprobar para continuar.');
+      return false;
     }
 
     const prompts: Record<'aprobada' | 'rechazada', {
@@ -182,9 +193,9 @@ export default function OperadorSolicitudesPage() {
 
   const handleMarcarEntregada = useCallback(async (solicitud: Solicitud) => {
     const confirmed = await confirm({
-      title: `Marcar como entregada`,
-      description: `¿Estás seguro de marcar esta solicitud como entregada? Esta acción NO se puede revertir.`,
-      confirmLabel: 'Marcar como entregada',
+      title: `Marcar como entregada con comprobante`,
+      description: `Para marcarla como entregada deberás ingresar el código del comprobante aprobado.`,
+      confirmLabel: 'Continuar',
       cancelLabel: 'Cancelar',
       variant: 'warning'
     });
@@ -193,7 +204,17 @@ export default function OperadorSolicitudesPage() {
       return;
     }
 
-    const result = await updateEstado(solicitud, 'entregada');
+    const codigoVerificacion = window.prompt(
+      `Escanea o ingresa el código del comprobante para ${solicitud.usuarios?.nombre ?? 'esta solicitud'}`,
+      solicitud.codigo_comprobante ?? ''
+    );
+
+    if (!codigoVerificacion) {
+      showError('Debes ingresar el código del comprobante para continuar');
+      return;
+    }
+
+    const result = await updateEstado(solicitud, 'entregada', undefined, undefined, undefined, codigoVerificacion);
 
     if (!result.success) {
       showError(result.message);
@@ -209,6 +230,8 @@ export default function OperadorSolicitudesPage() {
     setComentarioAdmin(solicitud.comentario_admin ?? '');
     setMotivoRechazo('');
     setAbrirEnModoDonacion(abrirModoDonacion);
+    setDepositoSeleccionado('');
+    setCantidadAprobar(Math.max(1, Math.floor(solicitud.cantidad)));
     setMostrarModal(true);
     
     // Cargar inventario
@@ -221,11 +244,77 @@ export default function OperadorSolicitudesPage() {
     }
   }, [loadInventario]);
 
+  useEffect(() => {
+    if (!mostrarModal || !solicitudSeleccionada || inventario.length === 0 || depositoSeleccionado) {
+      return;
+    }
+
+    setDepositoSeleccionado(inventario[0].id_deposito);
+  }, [mostrarModal, solicitudSeleccionada, inventario, depositoSeleccionado]);
+
   const handleModalAprobar = useCallback(async () => {
     if (!solicitudSeleccionada) return;
-    const success = await handleEstadoChange(solicitudSeleccionada, 'aprobada', comentarioAdmin);
-    if (success) closeModal();
-  }, [solicitudSeleccionada, comentarioAdmin, handleEstadoChange, closeModal]);
+
+    if (!depositoSeleccionado) {
+      showError('Debes seleccionar una bodega para aprobar.');
+      return;
+    }
+
+    const deposito = inventario.find(item => item.id_deposito === depositoSeleccionado);
+    const maxAprobable = Math.min(
+      solicitudSeleccionada.cantidad,
+      Math.floor(deposito?.cantidad_disponible ?? 0)
+    );
+
+    if (maxAprobable <= 0) {
+      showError('La bodega seleccionada no tiene stock disponible.');
+      return;
+    }
+
+    if (cantidadAprobar < 1 || cantidadAprobar > maxAprobable) {
+      showError(`La cantidad debe estar entre 1 y ${maxAprobable}.`);
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const operadorId = user?.id;
+    const porcentaje = Math.round((cantidadAprobar / solicitudSeleccionada.cantidad) * 100);
+    const result = await procesarDonacion(
+      solicitudSeleccionada,
+      cantidadAprobar,
+      porcentaje,
+      comentarioAdmin,
+      operadorId,
+      depositoSeleccionado
+    );
+
+    if (!result.success) {
+      showError(result.message);
+      return;
+    }
+
+    if (result.warning) {
+      showWarning(result.message);
+    } else {
+      showSuccess(result.message);
+    }
+
+    closeModal();
+    await refetch();
+  }, [
+    solicitudSeleccionada,
+    depositoSeleccionado,
+    inventario,
+    cantidadAprobar,
+    supabase,
+    procesarDonacion,
+    comentarioAdmin,
+    showError,
+    showWarning,
+    showSuccess,
+    closeModal,
+    refetch
+  ]);
 
   const handleModalRechazar = useCallback(async () => {
     if (!solicitudSeleccionada) return;
@@ -250,7 +339,12 @@ export default function OperadorSolicitudesPage() {
 
     if (!confirmed) return;
 
-    const result = await procesarDonacion(solicitudSeleccionada, cantidad, porcentaje, comentario, operadorId);
+    if (!depositoSeleccionado) {
+      showError('Debes seleccionar una bodega para procesar la donación.');
+      return;
+    }
+
+    const result = await procesarDonacion(solicitudSeleccionada, cantidad, porcentaje, comentario, operadorId, depositoSeleccionado);
 
     if (!result.success) {
       showError(result.message);
@@ -265,7 +359,7 @@ export default function OperadorSolicitudesPage() {
 
     closeModal();
     await refetch();
-  }, [solicitudSeleccionada, procesarDonacion, showError, showSuccess, showWarning, closeModal, refetch, confirm, supabase]);
+  }, [solicitudSeleccionada, procesarDonacion, showError, showSuccess, showWarning, closeModal, refetch, confirm, supabase, depositoSeleccionado]);
 
   const handleToggleEstado = useCallback((estado: keyof typeof filters.estados) => {
     toggleEstadoFilter(estado);
@@ -377,6 +471,10 @@ export default function OperadorSolicitudesPage() {
             onMotivoRechazoChange={setMotivoRechazo}
             onDonar={handleDonacion}
             abrirEnModoDonacion={abrirEnModoDonacion}
+            depositoSeleccionado={depositoSeleccionado}
+            onDepositoSeleccionadoChange={setDepositoSeleccionado}
+            cantidadAprobar={cantidadAprobar}
+            onCantidadAprobarChange={setCantidadAprobar}
           />
         )}
 

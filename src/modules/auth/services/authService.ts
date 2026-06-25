@@ -115,6 +115,17 @@ export class AuthService {
       });
 
       if (error) {
+        const esCorreoYaRegistrado =
+          error.status === 422 &&
+          /already|registered|exists|ya\s+registrad/i.test(error.message);
+
+        if (esCorreoYaRegistrado) {
+          return {
+            success: false,
+            error: 'Este correo ya está registrado. Intenta iniciar sesión o recupera tu contraseña.',
+          };
+        }
+
         return { success: false, error: error.message };
       }
 

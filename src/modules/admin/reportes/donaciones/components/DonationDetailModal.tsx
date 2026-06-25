@@ -32,28 +32,52 @@ interface DonationDetailModalProps {
   onClose: () => void;
 }
 
-const ESTADO_INFO = {
+type ModalDonationEstado = DonationEstado | 'Recogida' | 'Entregada' | 'Desconocido';
+
+const ESTADO_INFO: Record<ModalDonationEstado, { icon: React.ReactNode; label: string; description: string }> = {
   Pendiente: {
     icon: <Clock className="w-5 h-5" />,
     label: 'Pendiente',
-    description: 'Esperando recolección'
+    description: 'Esperando aprobación'
   },
-  Recogida: {
-    icon: <Truck className="w-5 h-5" />,
-    label: 'Recogida',
-    description: 'En proceso de transporte'
-  },
-  Entregada: {
+  Aprobada: {
     icon: <CheckCircle className="w-5 h-5" />,
-    label: 'Entregada',
-    description: 'Completada exitosamente'
+    label: 'Aprobada',
+    description: 'Donación aprobada e integrada al inventario'
   },
   Cancelada: {
     icon: <XCircle className="w-5 h-5" />,
     label: 'Cancelada',
     description: 'Donación cancelada'
+  },
+  Recogida: {
+    icon: <Truck className="w-5 h-5" />,
+    label: 'Recogida',
+    description: 'Estado legado, equivalente a aprobada'
+  },
+  Entregada: {
+    icon: <CheckCircle className="w-5 h-5" />,
+    label: 'Entregada',
+    description: 'Estado legado, equivalente a aprobada'
+  },
+  Desconocido: {
+    icon: <AlertCircle className="w-5 h-5" />,
+    label: 'Estado desconocido',
+    description: 'Revise la consistencia del estado de la donación'
   }
-} as const;
+};
+
+const normalizeDonationEstado = (rawEstado: string): ModalDonationEstado => {
+  const normalized = rawEstado.trim().toLowerCase();
+
+  if (normalized === 'pendiente') return 'Pendiente';
+  if (normalized === 'aprobada' || normalized === 'aprobado') return 'Aprobada';
+  if (normalized === 'cancelada' || normalized === 'cancelado') return 'Cancelada';
+  if (normalized === 'recogida' || normalized === 'recogido') return 'Recogida';
+  if (normalized === 'entregada' || normalized === 'entregado') return 'Entregada';
+
+  return 'Desconocido';
+};
 
 const DonationDetailModal = ({ donation, isOpen, onClose }: DonationDetailModalProps) => {
   if (!isOpen || !donation) return null;
@@ -64,7 +88,15 @@ const DonationDetailModal = ({ donation, isOpen, onClose }: DonationDetailModalP
     }
   };
 
-  const estadoInfo = ESTADO_INFO[donation.estado];
+  const rawEstado = String((donation as Donation & { estado?: string }).estado ?? '');
+  const modalEstado = normalizeDonationEstado(rawEstado);
+  const estadoInfo = ESTADO_INFO[modalEstado];
+  const estadoColor =
+    modalEstado === 'Aprobada' || modalEstado === 'Recogida' || modalEstado === 'Entregada'
+      ? DONATION_STATE_COLORS.Aprobada
+      : modalEstado === 'Cancelada'
+        ? DONATION_STATE_COLORS.Cancelada
+        : DONATION_STATE_COLORS.Pendiente;
   
   let expiryStatus = 'normal';
   if (donation.fecha_vencimiento) {
@@ -99,7 +131,7 @@ const DonationDetailModal = ({ donation, isOpen, onClose }: DonationDetailModalP
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
           {/* Estado */}
-          <div className={`mb-6 p-4 rounded-xl border-2 ${DONATION_STATE_COLORS[donation.estado]}`}>
+          <div className={`mb-6 p-4 rounded-xl border-2 ${estadoColor}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 {estadoInfo.icon}

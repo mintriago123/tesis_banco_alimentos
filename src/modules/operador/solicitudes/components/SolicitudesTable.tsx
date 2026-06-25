@@ -117,7 +117,7 @@ const SolicitudesTable = ({
               type="button"
               onClick={() => onMarcarEntregada(solicitud)}
               className={`bg-blue-600 hover:bg-blue-700 ${baseButtonClasses}`}
-              title="Marcar como entregada"
+              title="Marcar como entregada con comprobante"
               disabled={isProcessing}
             >
               <Package className="w-3 h-3 sm:w-4 sm:h-4" />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import Toast from '@/app/components/ui/Toast';
@@ -49,6 +49,8 @@ export default function SolicitudesPage() {
   const [motivoRechazo, setMotivoRechazo] = useState('');
   const [mostrarDialogoRechazo, setMostrarDialogoRechazo] = useState(false);
   const [solicitudParaRechazar, setSolicitudParaRechazar] = useState<Solicitud | null>(null);
+  const [depositoSeleccionado, setDepositoSeleccionado] = useState('');
+  const [cantidadAprobar, setCantidadAprobar] = useState(0);
 
   const {
     solicitudes,
@@ -66,7 +68,7 @@ export default function SolicitudesPage() {
     refetch
   } = useSolicitudesData(supabase);
 
-  const { processingId, updateEstado, revertir } = useSolicitudActions(supabase);
+  const { processingId, updateEstado, revertir, procesarDonacion } = useSolicitudActions(supabase);
 
   const {
     inventario,
@@ -90,6 +92,8 @@ export default function SolicitudesPage() {
     setSolicitudSeleccionada(null);
     setComentarioAdmin('');
     setMotivoRechazo('');
+    setDepositoSeleccionado('');
+    setCantidadAprobar(0);
     resetInventario();
   }, [resetInventario]);
 
@@ -103,11 +107,17 @@ export default function SolicitudesPage() {
       return false;
     }
 
-    // Si se va a aprobar, verificar stock disponible primero
+    // Para aprobar, forzar flujo por modal con selección de bodega/cantidad
     if (estado === 'aprobada') {
-      await loadInventario(solicitud.tipo_alimento);
-      // Esperar un momento para que se cargue el inventario
-      await new Promise(resolve => setTimeout(resolve, 500));
+      setSolicitudSeleccionada(solicitud);
+      setComentarioAdmin(solicitud.comentario_admin ?? '');
+      setMotivoRechazo('');
+      setDepositoSeleccionado('');
+      setCantidadAprobar(Math.max(1, Math.floor(solicitud.cantidad)));
+      setMostrarModal(true);
+      void loadInventario(solicitud.tipo_alimento);
+      showWarning('Selecciona la bodega y la cantidad a aprobar para continuar.');
+      return false;
     }
 
     const prompts: Record<'aprobada' | 'rechazada', {
@@ -166,15 +176,25 @@ export default function SolicitudesPage() {
     resetInventario();
     await refetch();
     return true;
-  }, [updateEstado, refetch, showError, showSuccess, showWarning, confirm, loadInventario, resetInventario, supabase]);
+  }, [updateEstado, refetch, showError, showSuccess, showWarning, confirm, resetInventario, supabase, loadInventario]);
 
   const handleOpenModal = useCallback((solicitud: Solicitud) => {
     setSolicitudSeleccionada(solicitud);
     setComentarioAdmin(solicitud.comentario_admin ?? '');
     setMotivoRechazo('');
+    setDepositoSeleccionado('');
+    setCantidadAprobar(Math.max(1, Math.floor(solicitud.cantidad)));
     setMostrarModal(true);
     void loadInventario(solicitud.tipo_alimento);
   }, [loadInventario]);
+
+  useEffect(() => {
+    if (!mostrarModal || !solicitudSeleccionada || inventario.length === 0 || depositoSeleccionado) {
+      return;
+    }
+
+    setDepositoSeleccionado(inventario[0].id_deposito);
+  }, [mostrarModal, solicitudSeleccionada, inventario, depositoSeleccionado]);
 
   const handleRevertir = useCallback(async (solicitud: Solicitud) => {
     const confirmed = await confirm({
@@ -202,9 +222,9 @@ export default function SolicitudesPage() {
 
   const handleMarcarEntregada = useCallback(async (solicitud: Solicitud) => {
     const confirmed = await confirm({
-      title: `Marcar como entregada`,
-      description: `¿Estás seguro de marcar esta solicitud como entregada? Esta acción NO se puede revertir.`,
-      confirmLabel: 'Marcar como entregada',
+      title: `Marcar como entregada con comprobante`,
+      description: `Debes escanear o ingresar el código del comprobante antes de completar la entrega.`,
+      confirmLabel: 'Continuar',
       cancelLabel: 'Cancelar',
       variant: 'warning'
     });
@@ -213,7 +233,17 @@ export default function SolicitudesPage() {
       return;
     }
 
-    const result = await updateEstado(solicitud, 'entregada');
+    const codigoVerificacion = window.prompt(
+      `Escanea o ingresa el código del comprobante para ${solicitud.usuarios?.nombre ?? 'esta solicitud'}`,
+      solicitud.codigo_comprobante ?? ''
+    );
+
+    if (!codigoVerificacion) {
+      showError('Debes ingresar el código del comprobante para continuar');
+      return;
+    }
+
+    const result = await updateEstado(solicitud, 'entregada', undefined, undefined, undefined, codigoVerificacion);
 
     if (!result.success) {
       showError(result.message);
@@ -226,9 +256,68 @@ export default function SolicitudesPage() {
 
   const handleModalAprobar = useCallback(async () => {
     if (!solicitudSeleccionada) return;
-    const success = await handleEstadoChange(solicitudSeleccionada, 'aprobada', comentarioAdmin);
-    if (success) closeModal();
-  }, [solicitudSeleccionada, comentarioAdmin, handleEstadoChange, closeModal]);
+
+    if (!depositoSeleccionado) {
+      showError('Debes seleccionar una bodega para aprobar.');
+      return;
+    }
+
+    const deposito = inventario.find(item => item.id_deposito === depositoSeleccionado);
+    const maxAprobable = Math.min(
+      solicitudSeleccionada.cantidad,
+      Math.floor(deposito?.cantidad_disponible ?? 0)
+    );
+
+    if (maxAprobable <= 0) {
+      showError('La bodega seleccionada no tiene stock disponible.');
+      return;
+    }
+
+    if (cantidadAprobar < 1 || cantidadAprobar > maxAprobable) {
+      showError(`La cantidad debe estar entre 1 y ${maxAprobable}.`);
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const operadorId = user?.id;
+    const porcentaje = Math.round((cantidadAprobar / solicitudSeleccionada.cantidad) * 100);
+
+    const result = await procesarDonacion(
+      solicitudSeleccionada,
+      cantidadAprobar,
+      porcentaje,
+      comentarioAdmin,
+      operadorId,
+      depositoSeleccionado
+    );
+
+    if (!result.success) {
+      showError(result.message);
+      return;
+    }
+
+    if (result.warning) {
+      showWarning(result.message);
+    } else {
+      showSuccess(result.message);
+    }
+
+    closeModal();
+    await refetch();
+  }, [
+    solicitudSeleccionada,
+    depositoSeleccionado,
+    inventario,
+    cantidadAprobar,
+    comentarioAdmin,
+    supabase,
+    procesarDonacion,
+    showError,
+    showWarning,
+    showSuccess,
+    closeModal,
+    refetch
+  ]);
 
   const handleModalRechazar = useCallback(async () => {
     if (!solicitudSeleccionada) return;
@@ -348,6 +437,10 @@ export default function SolicitudesPage() {
           isProcessing={processingId === solicitudSeleccionada.id}
           motivoRechazo={motivoRechazo}
           onMotivoRechazoChange={setMotivoRechazo}
+          depositoSeleccionado={depositoSeleccionado}
+          onDepositoSeleccionadoChange={setDepositoSeleccionado}
+          cantidadAprobar={cantidadAprobar}
+          onCantidadAprobarChange={setCantidadAprobar}
         />
       )}
 

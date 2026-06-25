@@ -2,7 +2,7 @@
  * @fileoverview Encabezado con métricas principales de donaciones.
  */
 
-import { PackageSearch, Package, PackageCheck, PackageMinus, PackageX } from 'lucide-react';
+import { Package, PackageCheck, PackageMinus, PackageX } from 'lucide-react';
 import StatCard from '@/modules/admin/shared/components/StatCard';
 import type { DonationCounters } from '../types';
 
@@ -15,7 +15,7 @@ const DonationsHeader = ({ counters }: DonationsHeaderProps) => (
     <div className="rounded-2xl border border-rose-100 bg-rose-500/10 p-5 shadow-sm">
       <div className="flex items-center gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/15 text-rose-500">
-          <PackageSearch className="h-6 w-6" aria-hidden="true" />
+          <Package className="h-6 w-6" aria-hidden="true" />
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-rose-500">Visión general</p>
@@ -26,7 +26,7 @@ const DonationsHeader = ({ counters }: DonationsHeaderProps) => (
       </div>
     </div>
 
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard
         label="Donaciones"
         value={counters.total}
@@ -39,21 +39,14 @@ const DonationsHeader = ({ counters }: DonationsHeaderProps) => (
         value={counters.pendientes}
         accent="yellow"
         icon={<PackageMinus className="h-5 w-5" />}
-        sublabel="Programadas para recoger"
+        sublabel="Esperando aprobación"
       />
       <StatCard
-        label="Recogidas"
-        value={counters.recogidas}
-        accent="blue"
-        icon={<PackageSearch className="h-5 w-5" />}
-        sublabel="En tránsito"
-      />
-      <StatCard
-        label="Entregadas"
-        value={counters.entregadas}
+        label="Aprobadas"
+        value={counters.aprobadas}
         accent="green"
         icon={<PackageCheck className="h-5 w-5" />}
-        sublabel="Sumadas al inventario"
+        sublabel="Integradas al inventario"
       />
       <StatCard
         label="Canceladas"

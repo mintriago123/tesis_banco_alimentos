@@ -6,7 +6,7 @@ import type { DatosComprobante } from '@/lib/comprobante/types';
 import { formatearFecha, formatearFechaSolo } from '@/lib/comprobante/comprobanteService';
 
 interface DonacionEmailTemplateInput {
-  estado: 'Recogida' | 'Entregada' | 'Cancelada';
+  estado: 'Aprobada' | 'Cancelada';
   comprobante: DatosComprobante;
   qrImageBase64?: string;
   baseUrl: string;

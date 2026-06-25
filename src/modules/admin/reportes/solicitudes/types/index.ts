@@ -71,6 +71,7 @@ export interface SolicitudCounters {
 
 export interface InventarioDisponible {
   id: string;
+  id_deposito: string;
   tipo_alimento: string;
   cantidad_disponible: number;
   deposito: string;
@@ -161,6 +162,7 @@ export interface SupabaseSolicitudRow {
 
 export interface SupabaseInventarioDisponibleRow {
   id_inventario: string | number;
+  id_deposito: string;
   cantidad_disponible: number | null;
   fecha_actualizacion: string | null;
   productos_donados: { 

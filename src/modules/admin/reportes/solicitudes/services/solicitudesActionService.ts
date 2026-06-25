@@ -41,7 +41,10 @@ export const createSolicitudesActionService = (supabaseClient: SupabaseClient) =
     nuevoEstado: 'aprobada' | 'rechazada' | 'entregada',
     comentarioAdmin?: string,
     motivoRechazo?: string,
-    operadorId?: string
+    operadorId?: string,
+    codigoComprobanteVerificado?: string,
+    depositoId?: string,
+    cantidadAprobada?: number
   ): Promise<ServiceResult<SolicitudActionResponse>> => {
     try {
       logger.info(`Actualizando estado de solicitud ${solicitud.id} a ${nuevoEstado}`);
@@ -56,14 +59,18 @@ export const createSolicitudesActionService = (supabaseClient: SupabaseClient) =
         });
       }
 
+      const cantidadObjetivo = Math.max(1, Math.min(cantidadAprobada ?? solicitud.cantidad, solicitud.cantidad));
+
       // Validar stock disponible antes de aprobar
       if (nuevoEstado === 'aprobada' && solicitud.estado === 'pendiente') {
-        const validacionStock = await validarStockDisponible(solicitud);
+        const validacionStock = depositoId
+          ? await validarStockDisponiblePorDeposito(solicitud, depositoId, cantidadObjetivo)
+          : await validarStockDisponible(solicitud);
         if (!validacionStock.suficiente) {
           logger.warn(`Stock insuficiente para aprobar solicitud ${solicitud.id}`, validacionStock);
           return {
             success: false,
-            error: `No hay suficiente inventario disponible. Solicitado: ${solicitud.cantidad} ${solicitud.unidades?.simbolo ?? 'unidades'}, Disponible: ${validacionStock.disponible} ${solicitud.unidades?.simbolo ?? 'unidades'}`,
+            error: `No hay suficiente inventario disponible. Solicitado: ${cantidadObjetivo} ${solicitud.unidades?.simbolo ?? 'unidades'}, Disponible: ${validacionStock.disponible} ${solicitud.unidades?.simbolo ?? 'unidades'}`,
             errorDetails: validacionStock
           };
         }
@@ -94,6 +101,39 @@ export const createSolicitudesActionService = (supabaseClient: SupabaseClient) =
       if (nuevoEstado === 'aprobada') {
         updateData.operador_aprobacion_id = operadorId || null;
         updateData.fecha_aprobacion = new Date().toISOString();
+      }
+
+      if (nuevoEstado === 'entregada') {
+        const codigoEsperado = solicitud.codigo_comprobante?.trim().toUpperCase();
+        const codigoIngresado = codigoComprobanteVerificado?.trim().toUpperCase();
+
+        if (!codigoEsperado) {
+          return {
+            success: false,
+            error: 'La solicitud no tiene un comprobante aprobado asociado'
+          };
+        }
+
+        if (!codigoIngresado) {
+          return {
+            success: false,
+            error: 'Debes escanear o ingresar el código del comprobante para marcar la entrega'
+          };
+        }
+
+        if (codigoIngresado !== codigoEsperado) {
+          return {
+            success: false,
+            error: 'El código del comprobante no coincide con la solicitud'
+          };
+        }
+
+        if (solicitud.estado !== 'aprobada') {
+          return {
+            success: false,
+            error: 'Solo se pueden marcar como entregadas las solicitudes aprobadas'
+          };
+        }
       }
 
       const { error: updateError } = await supabaseClient
@@ -130,10 +170,15 @@ export const createSolicitudesActionService = (supabaseClient: SupabaseClient) =
           logger.error('Error actualizando código de comprobante', updateCodigoError);
         }
 
-        const resultadoInventario = await descontarDelInventario(solicitud);
-        await registrarMovimientoSolicitud(solicitud, resultadoInventario);
+        const solicitudConCantidad = {
+          ...solicitud,
+          cantidad: cantidadObjetivo
+        };
 
-        const mensaje = buildResultadoMensaje(solicitud, resultadoInventario);
+        const resultadoInventario = await descontarDelInventario(solicitudConCantidad, depositoId);
+        await registrarMovimientoSolicitud(solicitudConCantidad, resultadoInventario);
+
+        const mensaje = buildResultadoMensaje(solicitudConCantidad, resultadoInventario);
         await notificarCambioEstado(solicitud, nuevoEstado, mensaje, comentarioAdmin, motivoRechazo, codigoComprobante);
         return {
           success: true,
@@ -707,7 +752,63 @@ export const createSolicitudesActionService = (supabaseClient: SupabaseClient) =
     }
   };
 
-  const descontarDelInventario = async (solicitud: Solicitud): Promise<ResultadoInventario> => {
+  const validarStockDisponiblePorDeposito = async (
+    solicitud: Solicitud,
+    depositoId: string,
+    cantidadObjetivo: number
+  ): Promise<{ suficiente: boolean; disponible: number; solicitado: number }> => {
+    try {
+      const productosCoincidentes = await buscarProductosCoincidentes(solicitud.tipo_alimento);
+
+      if (!productosCoincidentes || productosCoincidentes.length === 0) {
+        return {
+          suficiente: false,
+          disponible: 0,
+          solicitado: cantidadObjetivo
+        };
+      }
+
+      let totalDisponible = 0;
+
+      for (const producto of productosCoincidentes) {
+        const { data, error } = await supabaseClient
+          .from('inventario')
+          .select('cantidad_disponible')
+          .eq('id_producto', producto.id_producto)
+          .eq('id_deposito', depositoId)
+          .gt('cantidad_disponible', 0);
+
+        if (error || !data) continue;
+
+        const stockProducto = data.reduce((sum, item) => sum + (item.cantidad_disponible ?? 0), 0);
+
+        let stockConvertido = stockProducto;
+        if (producto.unidad_id && solicitud.unidad_id && producto.unidad_id !== solicitud.unidad_id) {
+          const factorConversion = await obtenerFactorConversion(producto.unidad_id, solicitud.unidad_id);
+          if (factorConversion !== null) {
+            stockConvertido = stockProducto * factorConversion;
+          }
+        }
+
+        totalDisponible += stockConvertido;
+      }
+
+      return {
+        suficiente: totalDisponible >= cantidadObjetivo,
+        disponible: totalDisponible,
+        solicitado: cantidadObjetivo
+      };
+    } catch (error) {
+      logger.error('Error validando stock por depósito', error);
+      return {
+        suficiente: false,
+        disponible: 0,
+        solicitado: cantidadObjetivo
+      };
+    }
+  };
+
+  const descontarDelInventario = async (solicitud: Solicitud, depositoId?: string): Promise<ResultadoInventario> => {
     try {
       const productosCoincidentes = await buscarProductosCoincidentes(solicitud.tipo_alimento);
 
@@ -721,7 +822,7 @@ export const createSolicitudesActionService = (supabaseClient: SupabaseClient) =
         };
       }
 
-      return procesarDescuentoInventario(productosCoincidentes, solicitud);
+      return procesarDescuentoInventario(productosCoincidentes, solicitud, depositoId);
     } catch (error) {
       logger.error('Error descontando inventario', error);
       return {
@@ -979,14 +1080,18 @@ export const createSolicitudesActionService = (supabaseClient: SupabaseClient) =
     }
   };
 
-  const procesarDescuentoInventario = async (productos: ProductoInventario[], solicitud: Solicitud): Promise<ResultadoInventario> => {
+  const procesarDescuentoInventario = async (
+    productos: ProductoInventario[],
+    solicitud: Solicitud,
+    depositoId?: string
+  ): Promise<ResultadoInventario> => {
     let cantidadRestante = solicitud.cantidad;
     let productosActualizados = 0;
     const detalleEntregado: InventarioDescontado[] = [];
 
     for (const producto of productos) {
       if (cantidadRestante <= 0) break;
-      const resultadoProducto = await descontarDeProducto(producto, cantidadRestante, solicitud);
+      const resultadoProducto = await descontarDeProducto(producto, cantidadRestante, solicitud, depositoId);
 
       cantidadRestante = resultadoProducto.cantidadRestante;
       productosActualizados += resultadoProducto.productosActualizados;
@@ -1012,14 +1117,20 @@ export const createSolicitudesActionService = (supabaseClient: SupabaseClient) =
   const descontarDeProducto = async (
     producto: ProductoInventario,
     cantidadNecesaria: number,
-    solicitud: Solicitud
+    solicitud: Solicitud,
+    depositoId?: string
   ): Promise<DescuentoProductoResult> => {
-    const { data, error } = await supabaseClient
+    let query = supabaseClient
       .from('inventario')
       .select('id_inventario, cantidad_disponible, id_deposito')
       .eq('id_producto', producto.id_producto)
-      .gt('cantidad_disponible', 0)
-      .order('fecha_actualizacion', { ascending: true });
+      .gt('cantidad_disponible', 0);
+
+    if (depositoId) {
+      query = query.eq('id_deposito', depositoId);
+    }
+
+    const { data, error } = await query.order('fecha_actualizacion', { ascending: true });
 
     if (error || !data || data.length === 0) {
       logger.info(`Sin stock disponible para ${producto.nombre_producto}`);
@@ -1178,50 +1289,26 @@ export const createSolicitudesActionService = (supabaseClient: SupabaseClient) =
     cantidadDonar: number,
     porcentaje: number,
     comentario?: string,
-    operadorId?: string
+    operadorId?: string,
+    depositoId?: string
   ): Promise<ServiceResult<SolicitudActionResponse>> => {
     try {
       logger.info(`Procesando donación para solicitud ${solicitud.id}`, { cantidadDonar, porcentaje });
 
-      // Validar stock disponible PRIMERO
-      const validacionStock = await validarStockDisponible(solicitud);
-      
-      // Si NO hay stock disponible (0 unidades), rechazar automáticamente la solicitud
-      if (validacionStock.disponible === 0) {
-        logger.warn(`Rechazando automáticamente solicitud ${solicitud.id} por falta de stock`);
-        
-        // Obtener el ID del operador actual
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        const operadorIdActual = user?.id;
-        
-        // Rechazar la solicitud automáticamente
-        const { error: rechazoError } = await supabaseClient
-          .from('solicitudes')
-          .update({
-            estado: 'rechazada',
-            fecha_respuesta: new Date().toISOString(),
-            comentario_admin: 'Solicitud rechazada automáticamente por falta de inventario disponible',
-            motivo_rechazo: 'Sin stock disponible',
-            operador_rechazo_id: operadorIdActual,
-            fecha_rechazo: new Date().toISOString()
-          })
-          .eq('id', solicitud.id);
-
-        if (!rechazoError) {
-          // Notificar al usuario del rechazo
-          await notificarCambioEstado(
-            solicitud, 
-            'rechazada', 
-            undefined, 
-            'Solicitud rechazada automáticamente por falta de inventario disponible',
-            'Sin stock disponible',
-            null
-          );
-        }
-
+      if (!depositoId) {
         return {
           success: false,
-          error: `No hay stock disponible de "${solicitud.tipo_alimento}". La solicitud ha sido rechazada automáticamente.`
+          error: 'Debes seleccionar una bodega para aprobar la solicitud'
+        };
+      }
+
+      // Validar stock disponible solo en la bodega seleccionada
+      const validacionStock = await validarStockDisponiblePorDeposito(solicitud, depositoId, cantidadDonar);
+
+      if (validacionStock.disponible === 0) {
+        return {
+          success: false,
+          error: `La bodega seleccionada no tiene stock disponible para "${solicitud.tipo_alimento}".`
         };
       }
 
@@ -1293,7 +1380,7 @@ export const createSolicitudesActionService = (supabaseClient: SupabaseClient) =
 
       // Descontar del inventario solo la cantidad donada
       const solicitudTemporal = { ...solicitud, cantidad: cantidadDonar };
-      const resultadoInventario = await descontarDelInventario(solicitudTemporal);
+      const resultadoInventario = await descontarDelInventario(solicitudTemporal, depositoId);
       await registrarMovimientoSolicitud(solicitudTemporal, resultadoInventario);
 
       // Notificar al usuario SIEMPRE (tanto para entregas completas como parciales)

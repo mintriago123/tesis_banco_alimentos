@@ -77,16 +77,10 @@ export default function DonationsReportPage() {
         confirmLabel: 'Mover a pendiente',
         variant: 'warning'
       },
-      Recogida: {
-        title: `Confirmar recogida de ${donation.tipo_producto}`,
-        description: `Se notificará al equipo logístico que la donación de ${donation.nombre_donante || 'el donante'} está lista para recogerse.`,
-        confirmLabel: 'Marcar como recogida',
-        variant: 'warning'
-      },
-      Entregada: {
-        title: `Confirmar entrega de ${donation.tipo_producto}`,
-        description: 'La donación se marcará como entregada y el impacto quedará registrado.',
-        confirmLabel: 'Marcar como entregada',
+      Aprobada: {
+        title: `Confirmar aprobación de ${donation.tipo_producto}`,
+        description: 'La donación se aprobará e integrará automáticamente al inventario de bodega del donante.',
+        confirmLabel: 'Marcar como aprobada',
         variant: 'default'
       }
     };

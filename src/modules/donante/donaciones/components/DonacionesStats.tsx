@@ -18,22 +18,12 @@ export function DonacionesStats({ stats }: DonacionesStatsProps) {
         </div>
       </div>
 
-      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-        <div className="flex items-center">
-          <Calendar className="w-8 h-8 text-blue-600" />
-          <div className="ml-3">
-            <p className="text-sm font-medium text-blue-600">Recogidas</p>
-            <p className="text-2xl font-bold text-blue-800">{stats.recogidas}</p>
-          </div>
-        </div>
-      </div>
-
       <div className="bg-green-50 p-4 rounded-lg border border-green-200">
         <div className="flex items-center">
           <CheckCircle className="w-8 h-8 text-green-600" />
           <div className="ml-3">
-            <p className="text-sm font-medium text-green-600">Entregadas</p>
-            <p className="text-2xl font-bold text-green-800">{stats.entregadas}</p>
+            <p className="text-sm font-medium text-green-600">Aprobadas</p>
+            <p className="text-2xl font-bold text-green-800">{stats.aprobadas}</p>
           </div>
         </div>
       </div>

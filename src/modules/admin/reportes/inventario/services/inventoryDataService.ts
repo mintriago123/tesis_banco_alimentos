@@ -33,6 +33,7 @@ export const createInventoryDataService = (supabaseClient: SupabaseClient) => {
           ),
           productos:productos_donados!inventario_id_producto_fkey(
             id_producto,
+            id_usuario,
             nombre_producto,
             descripcion,
             unidad_medida,
@@ -63,7 +64,9 @@ export const createInventoryDataService = (supabaseClient: SupabaseClient) => {
         };
       }
 
-      const inventario = ((data ?? []) as SupabaseInventarioRow[]).map(mapInventarioRowToDomain);
+      const inventarioRows = (data ?? []) as SupabaseInventarioRow[];
+      const donorDepositsByDonorId = await fetchDonorDepositsByDonorId(supabaseClient, inventarioRows);
+      const inventario = inventarioRows.map(row => mapInventarioRowToDomain(row, donorDepositsByDonorId));
 
       return {
         success: true,
@@ -123,9 +126,112 @@ const normalizeRelation = <T>(value: T | T[] | null | undefined): T | null => {
   return (value ?? null) as T | null;
 };
 
-const mapInventarioRowToDomain = (row: SupabaseInventarioRow): InventarioItem => {
+type SupabaseDonanteDepositoRow = {
+  donante_id?: string | null;
+  depositos?: {
+    id_deposito?: string | null;
+    nombre?: string | null;
+    descripcion?: string | null;
+  } | {
+    id_deposito?: string | null;
+    nombre?: string | null;
+    descripcion?: string | null;
+  }[] | null;
+};
+
+type SupabaseUsuarioDonanteRow = {
+  id?: string | null;
+  nombre?: string | null;
+};
+
+const fetchDonorDepositsByDonorId = async (
+  supabaseClient: SupabaseClient,
+  inventarioRows: SupabaseInventarioRow[]
+): Promise<Map<string, Deposito>> => {
+  const donorIds = Array.from(new Set(
+    inventarioRows
+      .map(row => normalizeRelation(row.productos)?.id_usuario)
+      .filter((id): id is string => Boolean(id))
+  ));
+
+  if (donorIds.length === 0) {
+    return new Map<string, Deposito>();
+  }
+
+  const donorNamesResponse = await supabaseClient
+    .from('usuarios')
+    .select('id, nombre')
+    .in('id', donorIds);
+
+  const donorNamesById = new Map<string, string>();
+  if (donorNamesResponse.error) {
+    logger.error('Error consultando nombres de donantes', donorNamesResponse.error);
+  } else {
+    for (const donorRow of ((donorNamesResponse.data ?? []) as SupabaseUsuarioDonanteRow[])) {
+      const donorId = donorRow.id ?? null;
+      const donorName = donorRow.nombre?.trim() ?? '';
+
+      if (!donorId || donorName.length === 0) {
+        continue;
+      }
+
+      donorNamesById.set(donorId, donorName);
+    }
+  }
+
+  const { data, error } = await supabaseClient
+    .from('donante_depositos')
+    .select(`
+      donante_id,
+      depositos:depositos!donante_depositos_id_deposito_fkey(
+        id_deposito,
+        nombre,
+        descripcion
+      )
+    `)
+    .in('donante_id', donorIds)
+    .eq('activo', true)
+    .order('es_principal', { ascending: false })
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    logger.error('Error consultando depósitos por donante', error);
+    return new Map<string, Deposito>();
+  }
+
+  const donorDepositMap = new Map<string, Deposito>();
+
+  for (const row of ((data ?? []) as SupabaseDonanteDepositoRow[])) {
+    const donorId = row.donante_id ?? null;
+    const deposito = normalizeRelation(row.depositos);
+
+    if (!donorId || !deposito?.id_deposito || donorDepositMap.has(donorId)) {
+      continue;
+    }
+
+    const donorName = donorNamesById.get(donorId);
+    const displayDepositName = donorName
+      ? `Depósito de ${donorName}`
+      : (deposito.nombre ?? 'Sin depósito');
+
+    donorDepositMap.set(donorId, {
+      id_deposito: deposito.id_deposito,
+      nombre: displayDepositName,
+      descripcion: deposito.descripcion ?? null
+    });
+  }
+
+  return donorDepositMap;
+};
+
+const mapInventarioRowToDomain = (
+  row: SupabaseInventarioRow,
+  donorDepositsByDonorId: Map<string, Deposito>
+): InventarioItem => {
   const deposito = normalizeRelation(row.depositos);
   const producto = normalizeRelation(row.productos);
+  const donorId = producto?.id_usuario ?? null;
+  const donorDeposit = donorId ? donorDepositsByDonorId.get(donorId) : undefined;
 
   // Normalizar la información de unidad
   const unidadInfo = producto?.unidades;
@@ -141,14 +247,14 @@ const mapInventarioRowToDomain = (row: SupabaseInventarioRow): InventarioItem =>
 
   return {
     id_inventario: row.id_inventario,
-    id_deposito: row.id_deposito,
+    id_deposito: donorDeposit?.id_deposito ?? deposito?.id_deposito ?? row.id_deposito,
     id_producto: row.id_producto,
     cantidad_disponible: row.cantidad_disponible ?? 0,
     fecha_actualizacion: row.fecha_actualizacion ?? null,
     deposito: {
-      id_deposito: deposito?.id_deposito ?? row.id_deposito,
-      nombre: deposito?.nombre ?? 'Sin depósito',
-      descripcion: deposito?.descripcion ?? null
+      id_deposito: donorDeposit?.id_deposito ?? deposito?.id_deposito ?? row.id_deposito,
+      nombre: donorDeposit?.nombre ?? deposito?.nombre ?? 'Sin depósito',
+      descripcion: donorDeposit?.descripcion ?? deposito?.descripcion ?? null
     },
     producto: {
       id_producto: producto?.id_producto ?? row.id_producto,

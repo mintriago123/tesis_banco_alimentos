@@ -68,7 +68,6 @@ const cloneInitialFilters = (): InventarioFilters => ({
 
 export const useInventoryData = (supabaseClient: SupabaseClient): UseInventoryDataResult => {
   const [inventario, setInventario] = useState<InventarioItem[]>([]);
-  const [depositos, setDepositos] = useState<Deposito[]>([]);
   const [filters, setFilters] = useState<InventarioFilters>(() => cloneInitialFilters());
   const [loadingState, setLoadingState] = useState<LoadingState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
@@ -93,17 +92,23 @@ export const useInventoryData = (supabaseClient: SupabaseClient): UseInventoryDa
     }
   }, [dataService]);
 
-  const loadDepositos = useCallback(async () => {
-    const result = await dataService.fetchDepositos();
-    if (result.success && result.data) {
-      setDepositos(result.data);
-    }
-  }, [dataService]);
-
   useEffect(() => {
     void loadInventario();
-    void loadDepositos();
-  }, [loadInventario, loadDepositos]);
+  }, [loadInventario]);
+
+  const depositos = useMemo<Deposito[]>(() => {
+    const uniqueById = new Map<string, Deposito>();
+
+    for (const item of inventario) {
+      const deposito = item.deposito;
+      if (!uniqueById.has(deposito.id_deposito)) {
+        uniqueById.set(deposito.id_deposito, deposito);
+      }
+    }
+
+    return Array.from(uniqueById.values())
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+  }, [inventario]);
 
   const filteredInventario = useMemo(
     () => applyFilters(inventario, filters),

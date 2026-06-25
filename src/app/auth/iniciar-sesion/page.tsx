@@ -57,13 +57,19 @@ function FormularioIniciarSesion() {
     
     if (timeoutParam) {
       console.log('✅ Configurando mensaje de timeout');
-      setMensajeInicial('Tu sesión se cerró automáticamente por inactividad (1 minuto sin actividad).');
+      setMensajeInicial('Tu sesión expiró por inactividad. Inicia sesión nuevamente para continuar.');
     } else if (errorParam === 'blocked') {
       console.log('✅ Configurando mensaje de cuenta bloqueada');
       setMensajeInicial('Tu cuenta ha sido bloqueada. Contacta al administrador.');
     } else if (errorParam === 'deactivated') {
       console.log('✅ Configurando mensaje de cuenta desactivada');
       setMensajeInicial('Tu cuenta ha sido desactivada. Contacta al administrador.');
+    } else if (errorParam === 'unauthorized') {
+      console.log('✅ Configurando mensaje de acceso no autenticado');
+      setMensajeInicial('Necesitas iniciar sesión para acceder a esta sección.');
+    } else if (errorParam === 'forbidden') {
+      console.log('✅ Configurando mensaje de acceso no autorizado');
+      setMensajeInicial('No tienes permisos para acceder a esta sección.');
     } else if (registroExitoso) {
       console.log('✅ Configurando mensaje de registro exitoso');
       setMensajeInicial(AUTH_CONSTANTS.MENSAJES.REGISTRO_EXITOSO);

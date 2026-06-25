@@ -88,11 +88,8 @@ export const buildDonationCounters = (donations: Donation[]): DonationCounters =
       case 'Pendiente':
         acc.pendientes += 1;
         break;
-      case 'Recogida':
-        acc.recogidas += 1;
-        break;
-      case 'Entregada':
-        acc.entregadas += 1;
+      case 'Aprobada':
+        acc.aprobadas += 1;
         break;
       case 'Cancelada':
         acc.canceladas += 1;
@@ -104,8 +101,7 @@ export const buildDonationCounters = (donations: Donation[]): DonationCounters =
   }, {
     total: 0,
     pendientes: 0,
-    recogidas: 0,
-    entregadas: 0,
+    aprobadas: 0,
     canceladas: 0
   });
 };

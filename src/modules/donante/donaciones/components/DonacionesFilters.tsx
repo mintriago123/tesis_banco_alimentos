@@ -22,8 +22,7 @@ export function DonacionesFilters({
         >
           <option value="todos">Todos los estados</option>
           <option value="Pendiente">Pendientes</option>
-          <option value="Recogida">Recogidas</option>
-          <option value="Entregada">Entregadas</option>
+          <option value="Aprobada">Aprobadas</option>
           <option value="Cancelada">Canceladas</option>
         </select>
         <span className="text-sm text-gray-500">

@@ -22,9 +22,7 @@ export function DonacionesTable({
     switch (estado) {
       case 'Pendiente':
         return base + 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'Recogida':
-        return base + 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'Entregada':
+      case 'Aprobada':
         return base + 'bg-green-100 text-green-800 border-green-300';
       case 'Cancelada':
         return base + 'bg-red-100 text-red-800 border-red-300';
@@ -37,9 +35,7 @@ export function DonacionesTable({
     switch (estado) {
       case 'Pendiente':
         return <Clock className="w-4 h-4" />;
-      case 'Recogida':
-        return <Calendar className="w-4 h-4" />;
-      case 'Entregada':
+      case 'Aprobada':
         return <CheckCircle className="w-4 h-4" />;
       case 'Cancelada':
         return <XCircle className="w-4 h-4" />;

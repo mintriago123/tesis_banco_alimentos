@@ -110,7 +110,7 @@ export const useDonationsData = (supabaseClient: SupabaseClient): UseDonationsDa
         [estado]: !prev.estado[estado]
       } as DonationEstadoFilter;
 
-      const anyActive = (['Pendiente', 'Recogida', 'Entregada', 'Cancelada'] as Array<keyof DonationEstadoFilter>)
+      const anyActive = (['Pendiente', 'Aprobada', 'Cancelada'] as Array<keyof DonationEstadoFilter>)
         .filter(key => key !== 'todos')
         .some(key => updated[key]);
 

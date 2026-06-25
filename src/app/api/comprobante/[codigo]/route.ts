@@ -21,6 +21,65 @@ function esCodigoLegible(codigo: string): boolean {
   return /^(SOL|DON)-[A-Z0-9]+-[A-Z0-9]+$/i.test(codigo);
 }
 
+type AccesoUsuario = {
+  id: string;
+  rol: string | null;
+};
+
+async function obtenerAccesoUsuario(supabase: any): Promise<{
+  usuario: AccesoUsuario | null;
+  errorResponse?: NextResponse;
+}> {
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return {
+      usuario: null,
+      errorResponse: NextResponse.json(
+        { error: 'Necesitas iniciar sesión para ver este comprobante' },
+        { status: 401 }
+      )
+    };
+  }
+
+  const { data: perfil, error: perfilError } = await supabase
+    .from('usuarios')
+    .select('rol')
+    .eq('id', user.id)
+    .single();
+
+  if (perfilError || !perfil) {
+    return {
+      usuario: null,
+      errorResponse: NextResponse.json(
+        { error: 'No tienes permisos para ver este comprobante' },
+        { status: 403 }
+      )
+    };
+  }
+
+  return {
+    usuario: {
+      id: user.id,
+      rol: perfil.rol ?? null
+    }
+  };
+}
+
+function puedeVerComprobante(usuario: AccesoUsuario, tipo: 'solicitud' | 'donacion', registro: { user_id?: string | null; usuario_id?: string | null }): boolean {
+  const rol = String(usuario.rol ?? '').toUpperCase();
+
+  if (rol === 'ADMINISTRADOR' || rol === 'OPERADOR') {
+    return true;
+  }
+
+  if (tipo === 'donacion') {
+    return registro.user_id === usuario.id;
+  }
+
+  return registro.usuario_id === usuario.id;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ codigo: string }> }
@@ -36,10 +95,23 @@ export async function GET(
     }
 
     const supabase = await createServerSupabaseClient();
+    const acceso = await obtenerAccesoUsuario(supabase);
+
+    if (acceso.errorResponse) {
+      return acceso.errorResponse;
+    }
+
+    const usuario = acceso.usuario;
+    if (!usuario) {
+      return NextResponse.json(
+        { error: 'Necesitas iniciar sesión para ver este comprobante' },
+        { status: 401 }
+      );
+    }
 
     // Verificar si es un código legible (SOL-xxx o DON-xxx)
     if (esCodigoLegible(codigo)) {
-      return await buscarPorCodigoLegible(supabase, codigo);
+      return await buscarPorCodigoLegible(supabase, codigo, usuario);
     }
 
     // Si no es código legible, intentar decodificar como payload QR
@@ -53,9 +125,9 @@ export async function GET(
 
     // Obtener datos según el tipo del payload QR
     if (payload.t === 'S') {
-      return await obtenerSolicitudPorId(supabase, payload.p, payload.c, payload.f);
+      return await obtenerSolicitudPorId(supabase, payload.p, payload.c, payload.f, usuario);
     } else {
-      return await obtenerDonacionPorId(supabase, parseInt(payload.p), payload.c, payload.f);
+      return await obtenerDonacionPorId(supabase, parseInt(payload.p), payload.c, payload.f, usuario);
     }
   } catch (error) {
     console.error('Error procesando comprobante:', error);
@@ -69,7 +141,7 @@ export async function GET(
 /**
  * Busca un comprobante por código legible (SOL-xxx o DON-xxx)
  */
-async function buscarPorCodigoLegible(supabase: any, codigo: string) {
+async function buscarPorCodigoLegible(supabase: any, codigo: string, usuario: AccesoUsuario) {
   const esSolicitud = codigo.toUpperCase().startsWith('SOL-');
 
   if (esSolicitud) {
@@ -99,6 +171,13 @@ async function buscarPorCodigoLegible(supabase: any, codigo: string) {
       );
     }
 
+    if (!puedeVerComprobante(usuario, 'solicitud', solicitud)) {
+      return NextResponse.json(
+        { error: 'No tienes permisos para ver este comprobante' },
+        { status: 403 }
+      );
+    }
+
     return generarRespuestaSolicitud(solicitud, codigo);
   } else {
     // Buscar en donaciones
@@ -115,6 +194,13 @@ async function buscarPorCodigoLegible(supabase: any, codigo: string) {
       );
     }
 
+    if (!puedeVerComprobante(usuario, 'donacion', donacion)) {
+      return NextResponse.json(
+        { error: 'No tienes permisos para ver este comprobante' },
+        { status: 403 }
+      );
+    }
+
     return generarRespuestaDonacion(donacion, codigo);
   }
 }
@@ -122,7 +208,7 @@ async function buscarPorCodigoLegible(supabase: any, codigo: string) {
 /**
  * Obtiene solicitud por ID (usado para payload QR)
  */
-async function obtenerSolicitudPorId(supabase: any, id: string, codigoComprobante: string, fecha: string) {
+async function obtenerSolicitudPorId(supabase: any, id: string, codigoComprobante: string, fecha: string, usuario: AccesoUsuario) {
   const { data: solicitud, error } = await supabase
     .from('solicitudes')
     .select(`
@@ -148,13 +234,20 @@ async function obtenerSolicitudPorId(supabase: any, id: string, codigoComprobant
     );
   }
 
+  if (!puedeVerComprobante(usuario, 'solicitud', solicitud)) {
+    return NextResponse.json(
+      { error: 'No tienes permisos para ver este comprobante' },
+      { status: 403 }
+    );
+  }
+
   return generarRespuestaSolicitud(solicitud, codigoComprobante, fecha);
 }
 
 /**
  * Obtiene donación por ID (usado para payload QR)
  */
-async function obtenerDonacionPorId(supabase: any, id: number, codigoComprobante: string, fecha: string) {
+async function obtenerDonacionPorId(supabase: any, id: number, codigoComprobante: string, fecha: string, usuario: AccesoUsuario) {
   const { data: donacion, error } = await supabase
     .from('donaciones')
     .select('*')
@@ -165,6 +258,13 @@ async function obtenerDonacionPorId(supabase: any, id: number, codigoComprobante
     return NextResponse.json(
       { error: 'Donación no encontrada' },
       { status: 404 }
+    );
+  }
+
+  if (!puedeVerComprobante(usuario, 'donacion', donacion)) {
+    return NextResponse.json(
+      { error: 'No tienes permisos para ver este comprobante' },
+      { status: 403 }
     );
   }
 

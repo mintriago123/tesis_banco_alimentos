@@ -184,8 +184,8 @@ export default function ValidarComprobantePage() {
 
     const confirmado = window.confirm(
       result.tipo === 'solicitud'
-        ? '¿Confirmar que los alimentos han sido entregados al beneficiario?'
-        : '¿Confirmar que la donación ha sido recibida e ingresada al inventario?'
+        ? '¿Confirmar que los alimentos han sido entregados al beneficiario? Debes validar el código del comprobante.'
+        : '¿Confirmar que la donación ha sido aprobada e integrada al inventario?'
     );
 
     if (!confirmado) return;
@@ -194,6 +194,21 @@ export default function ValidarComprobantePage() {
 
     try {
       if (result.tipo === 'solicitud') {
+        const codigoVerificacion = window.prompt(
+          'Escanea o ingresa el código del comprobante para marcar la entrega',
+          result.codigo_comprobante
+        );
+
+        if (!codigoVerificacion) {
+          alert('Debes ingresar el código del comprobante para continuar');
+          return;
+        }
+
+        if (codigoVerificacion.trim().toUpperCase() !== result.codigo_comprobante.trim().toUpperCase()) {
+          alert('El código del comprobante no coincide');
+          return;
+        }
+
         const { error } = await supabase
           .from('solicitudes')
           .update({ estado: 'entregada', fecha_respuesta: new Date().toISOString() })
@@ -204,11 +219,11 @@ export default function ValidarComprobantePage() {
       } else {
         const { error } = await supabase
           .from('donaciones')
-          .update({ estado: 'Entregada', actualizado_en: new Date().toISOString() })
+          .update({ estado: 'Aprobada', actualizado_en: new Date().toISOString() })
           .eq('id', result.id);
 
         if (error) throw error;
-        setResult({ ...result, estado: 'Entregada' });
+        setResult({ ...result, estado: 'Aprobada' });
       }
 
       alert('Estado actualizado exitosamente');
@@ -422,14 +437,14 @@ export default function ValidarComprobantePage() {
                 </button>
                 
                 {((result.tipo === 'solicitud' && result.estado === 'aprobada') ||
-                  (result.tipo === 'donacion' && result.estado === 'Recogida')) && (
+                  (result.tipo === 'donacion' && result.estado === 'Pendiente')) && (
                   <button
                     onClick={handleMarcarEntregada}
                     disabled={loading}
                     className="flex-1 py-3 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     <CheckCircle className="h-5 w-5" />
-                    Marcar como Entregada
+                    {result.tipo === 'solicitud' ? 'Marcar como Entregada' : 'Aprobar Donación'}
                   </button>
                 )}
               </div>

@@ -59,6 +59,10 @@ interface SolicitudDetailModalProps {
   onMotivoRechazoChange?: (value: string) => void;
   onDonar?: (cantidad: number, porcentaje: number, comentario: string) => void;
   abrirEnModoDonacion?: boolean;
+  depositoSeleccionado: string;
+  onDepositoSeleccionadoChange: (value: string) => void;
+  cantidadAprobar: number;
+  onCantidadAprobarChange: (value: number) => void;
 }
 
 const SolicitudDetailModal = ({
@@ -78,7 +82,9 @@ const SolicitudDetailModal = ({
   motivoRechazo = '',
   onMotivoRechazoChange,
   onDonar,
-  abrirEnModoDonacion = false
+  abrirEnModoDonacion = false,
+  depositoSeleccionado,
+  onDepositoSeleccionadoChange
 }: SolicitudDetailModalProps) => {
   const { supabase } = useSupabase();
   const [cantidadDonar, setCantidadDonar] = useState<number>(0);
@@ -105,17 +111,21 @@ const SolicitudDetailModal = ({
     0
   );
 
+  const depositoActual = inventario.find(item => item.id_deposito === depositoSeleccionado);
+  const stockDepositoSeleccionado = depositoActual?.cantidad_disponible ?? 0;
+  const maxDisponibleDeposito = Math.max(0, Math.min(solicitud.cantidad, Math.floor(stockDepositoSeleccionado)));
+
   // Actualizar cantidad a donar cuando cambie el inventario disponible
   useEffect(() => {
     // Calcular la cantidad máxima que se puede donar
-    const maxDisponible = Math.min(solicitud.cantidad, totalDisponible);
+    const maxDisponible = maxDisponibleDeposito;
     const cantidadInicial = Math.floor(maxDisponible);
     
     // Solo actualizar si es diferente de 0 o si el inventario ha sido cargado
     if (!inventarioLoading && cantidadInicial >= 0) {
       setCantidadDonar(cantidadInicial);
     }
-  }, [totalDisponible, solicitud.cantidad, inventarioLoading]);
+  }, [maxDisponibleDeposito, inventarioLoading]);
 
   const handleDonacionSubmit = () => {
     if (onDonar && cantidadDonar > 0 && cantidadDonar <= solicitud.cantidad) {
@@ -128,12 +138,12 @@ const SolicitudDetailModal = ({
   const handleCantidadChange = (value: string) => {
     // Solo aceptar números enteros
     const cantidad = parseInt(value) || 0;
-    const maxDisponible = Math.min(solicitud.cantidad, totalDisponible);
+    const maxDisponible = maxDisponibleDeposito;
     setCantidadDonar(Math.min(Math.max(0, cantidad), maxDisponible));
   };
 
   const setearMaximo = () => {
-    const maxDisponible = Math.min(solicitud.cantidad, totalDisponible);
+    const maxDisponible = maxDisponibleDeposito;
     setCantidadDonar(Math.floor(maxDisponible)); // Redondear hacia abajo para asegurar entero
   };
 
@@ -391,6 +401,30 @@ const SolicitudDetailModal = ({
                         </span>
                       </div>
                       <div className="mt-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Bodega para aprobación
+                        </label>
+                        <select
+                          value={depositoSeleccionado}
+                          onChange={(event) => onDepositoSeleccionadoChange(event.target.value)}
+                          className="w-full p-2 border border-gray-300 rounded-lg"
+                          disabled={isProcessing}
+                        >
+                          <option value="">Selecciona una bodega</option>
+                          {inventario.map(item => (
+                            <option key={item.id} value={item.id_deposito}>
+                              {item.deposito} - {formatQuantity(item.cantidad_disponible)} {item.unidad_simbolo || item.unidad_nombre || solicitud.unidades?.simbolo || 'unidades'}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Disponible en bodega seleccionada: </span>
+                        <span className={`font-semibold ${stockDepositoSeleccionado > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatQuantity(stockDepositoSeleccionado)} {solicitud.unidades?.simbolo ?? 'unidades'}
+                        </span>
+                      </div>
+                      <div className="mt-2">
                         {totalDisponible >= solicitud.cantidad ? (
                           <div className="flex items-center text-green-600 text-sm">
                             <CheckCircle className="w-4 h-4 mr-1" />
@@ -536,14 +570,14 @@ const SolicitudDetailModal = ({
               </h3>
 
               {/* Alerta de sin stock */}
-              {!inventarioLoading && totalDisponible === 0 && (
+              {!inventarioLoading && depositoSeleccionado !== '' && stockDepositoSeleccionado === 0 && (
                 <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4">
                   <div className="flex items-start gap-3">
                     <XCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-1" />
                     <div className="flex-1">
                       <h4 className="font-bold text-red-900 mb-2">Sin Stock Disponible</h4>
                       <p className="text-sm text-red-800 mb-3">
-                        No hay inventario disponible de "{solicitud.tipo_alimento}". No se puede procesar ninguna donación para esta solicitud.
+                        La bodega seleccionada no tiene inventario disponible de "{solicitud.tipo_alimento}". Selecciona otra bodega o rechaza la solicitud.
                       </p>
                       <button
                         type="button"
@@ -566,9 +600,11 @@ const SolicitudDetailModal = ({
                   type="button"
                   onClick={() => setModoDonacion(true)}
                   className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                  disabled={totalDisponible === 0}
+                  disabled={!depositoSeleccionado || stockDepositoSeleccionado === 0}
                 >
-                  {totalDisponible === 0 ? 'Sin Stock Disponible - No se puede procesar' : 'Procesar Donación'}
+                  {!depositoSeleccionado
+                    ? 'Selecciona una bodega para procesar'
+                    : (stockDepositoSeleccionado === 0 ? 'Sin Stock en esta bodega' : 'Procesar Donación')}
                 </button>
               ) : (
                 <div className="space-y-4">
@@ -582,8 +618,8 @@ const SolicitudDetailModal = ({
                       </div>
                       <div>
                         <span className="text-gray-600">Disponible en stock:</span>
-                        <p className={`font-semibold text-lg ${totalDisponible >= solicitud.cantidad ? 'text-green-600' : 'text-orange-600'}`}>
-                          {Math.floor(totalDisponible)} {solicitud.unidades?.simbolo ?? 'unidades'}
+                        <p className={`font-semibold text-lg ${maxDisponibleDeposito >= solicitud.cantidad ? 'text-green-600' : 'text-orange-600'}`}>
+                          {Math.floor(maxDisponibleDeposito)} {solicitud.unidades?.simbolo ?? 'unidades'}
                         </p>
                       </div>
                       {(solicitud.cantidad_entregada && solicitud.cantidad_entregada > 0) && (
@@ -612,7 +648,7 @@ const SolicitudDetailModal = ({
                       <input
                         type="number"
                         min="1"
-                        max={Math.floor(Math.min(solicitud.cantidad, totalDisponible))}
+                        max={Math.max(1, Math.floor(maxDisponibleDeposito))}
                         step="1"
                         value={cantidadDonar}
                         onChange={(e) => handleCantidadChange(e.target.value)}
@@ -644,7 +680,7 @@ const SolicitudDetailModal = ({
                     <button
                       type="button"
                       onClick={handleDonacionSubmit}
-                      disabled={isProcessing || cantidadDonar <= 0 || cantidadDonar > Math.min(solicitud.cantidad, totalDisponible)}
+                      disabled={isProcessing || cantidadDonar <= 0 || cantidadDonar > maxDisponibleDeposito}
                       className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
                     >
                       {isProcessing ? 'Procesando...' : `Confirmar Donación de ${cantidadDonar} ${solicitud.unidades?.simbolo ?? 'unidades'}`}

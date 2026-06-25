@@ -24,7 +24,7 @@ export interface Donacion {
   observaciones?: string;
   impacto_estimado_personas?: number;
   impacto_equivalente?: string;
-  estado: 'Pendiente' | 'Recogida' | 'Entregada' | 'Cancelada';
+  estado: 'Pendiente' | 'Aprobada' | 'Cancelada';
   creado_en: string;
   actualizado_en: string;
   codigo_comprobante?: string;
@@ -33,8 +33,7 @@ export interface Donacion {
 export interface DonacionEstadisticas {
   total: number;
   pendientes: number;
-  recogidas: number;
-  entregadas: number;
+  aprobadas: number;
   canceladas: number;
   impactoTotal: number;
 }

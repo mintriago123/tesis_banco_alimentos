@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import type { DatosComprobante } from '@/lib/comprobante/types';
 
 interface ComprobanteResponse {
@@ -17,12 +17,11 @@ interface ComprobanteResponse {
 
 export default function ComprobantePage() {
   const params = useParams();
+  const router = useRouter();
   const codigo = params.codigo as string;
   const [data, setData] = useState<ComprobanteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [firmaEntrega, setFirmaEntrega] = useState('');
-  const [firmaRecepcion, setFirmaRecepcion] = useState('');
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -32,6 +31,12 @@ export default function ComprobantePage() {
         const result = await response.json();
 
         if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            const errorCode = response.status === 401 ? 'unauthorized' : 'forbidden';
+            router.replace(`/auth/iniciar-sesion?error=${errorCode}&callbackUrl=${encodeURIComponent(`/comprobante/${codigo}`)}`);
+            return;
+          }
+
           setError(result.error || 'Error al cargar el comprobante');
           return;
         }
@@ -47,7 +52,7 @@ export default function ComprobantePage() {
     if (codigo) {
       fetchComprobante();
     }
-  }, [codigo]);
+  }, [codigo, router]);
 
   const handlePrint = () => {
     window.print();
@@ -87,7 +92,9 @@ export default function ComprobantePage() {
   
   // Determinar si está aprobada o rechazada/cancelada
   const estadoLower = comprobante.pedido.estado.toLowerCase();
-  const esAprobada = ['aprobada', 'aprobado', 'entregada', 'entregado', 'recogida', 'recogido'].includes(estadoLower);
+  const esAprobada = esSolicitud 
+    ? ['aprobada', 'aprobado', 'entregada', 'entregado'].includes(estadoLower)
+    : ['aprobada', 'aprobado'].includes(estadoLower);
   const esRechazada = ['rechazada', 'rechazado', 'cancelada', 'cancelado'].includes(estadoLower);
   const esPendiente = ['pendiente'].includes(estadoLower);
 
@@ -269,66 +276,11 @@ export default function ComprobantePage() {
               </div>
             </div>
 
-            {/* Firmas */}
-            <div className="grid md:grid-cols-2 gap-8 pt-4">
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 mb-2">
-                  Firma del {esSolicitud ? 'Beneficiario (Quien Recibe)' : 'Donante (Quien Entrega)'}
-                </h4>
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 h-32 flex flex-col justify-end">
-                  <input
-                    type="text"
-                    value={firmaRecepcion}
-                    onChange={(e) => setFirmaRecepcion(e.target.value)}
-                    placeholder="Nombre y firma..."
-                    className="border-t border-gray-300 pt-2 text-center text-sm text-gray-600 bg-transparent focus:outline-none no-print"
-                  />
-                  <div className="border-t border-gray-300 pt-2 text-center text-sm text-gray-600 print:block hidden">
-                    {firmaRecepcion || '____________________________'}
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 mt-2 text-center">
-                  Cédula: {comprobante.usuario.documento || '________________'}
-                </p>
-              </div>
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 mb-2">
-                  Firma del Operador (Quien {esSolicitud ? 'Entrega' : 'Recibe'})
-                </h4>
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 h-32 flex flex-col justify-end">
-                  <input
-                    type="text"
-                    value={firmaEntrega}
-                    onChange={(e) => setFirmaEntrega(e.target.value)}
-                    placeholder="Nombre y firma..."
-                    className="border-t border-gray-300 pt-2 text-center text-sm text-gray-600 bg-transparent focus:outline-none no-print"
-                  />
-                  <div className="border-t border-gray-300 pt-2 text-center text-sm text-gray-600 print:block hidden">
-                    {firmaEntrega || '____________________________'}
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 mt-2 text-center">
-                  Cédula: ________________
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer - Color según estado */}
-          <div className={`${
-            esRechazada 
-              ? 'bg-red-50 border-t border-red-200' 
-              : esAprobada 
-                ? 'bg-green-50 border-t border-green-200' 
-                : 'bg-yellow-50 border-t border-yellow-200'
-          } px-8 py-6`}>
-            <div className="flex justify-between items-center text-sm text-gray-600">
-              <p>© {new Date().getFullYear()} Banco de Alimentos - ULEAM</p>
-              <p className={`font-semibold ${
-                esRechazada ? 'text-red-600' : esAprobada ? 'text-green-600' : 'text-yellow-600'
-              }`}>
-                {esRechazada ? '❌ SOLICITUD RECHAZADA' : esAprobada ? '✓ DOCUMENTO VÁLIDO' : '⏳ PENDIENTE DE APROBACIÓN'}
-              </p>
+            {/* Pie de página */}
+            <div className="mt-4 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">
+              <p>Este documento es un comprobante electrónico válido emitido por el Banco de Alimentos.</p>
+              <p>Para verificar su autenticidad, escanee el código QR o visite nuestro sitio web.</p>
+              <p className="font-mono text-xs mt-1">{comprobante.codigoComprobante}</p>
             </div>
           </div>
         </div>

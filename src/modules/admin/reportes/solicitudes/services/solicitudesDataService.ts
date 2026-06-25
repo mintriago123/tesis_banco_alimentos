@@ -91,6 +91,7 @@ export const createSolicitudesDataService = (supabaseClient: SupabaseClient) => 
         .from('inventario')
         .select(`
           id_inventario,
+          id_deposito,
           cantidad_disponible,
           fecha_actualizacion,
           productos_donados!inner(
@@ -223,6 +224,7 @@ const mapInventarioDisponibleRowToDomain = (
 
   return {
     id: String(row.id_inventario),
+    id_deposito: row.id_deposito,
     tipo_alimento: producto?.nombre_producto ?? 'Producto desconocido',
     cantidad_disponible: row.cantidad_disponible ?? 0,
     deposito: deposito?.nombre ?? 'Depósito desconocido',
