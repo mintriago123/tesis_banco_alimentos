@@ -9,7 +9,6 @@ import {
   StepHeader,
   StepNavigation,
   ProductSelector,
-  CustomProductForm,
   ImpactCalculator,
   ImpactEquivalenceTable,
   DonationSummary,
@@ -57,23 +56,19 @@ export default function NuevaDonacionPage() {
     mostrarDropdown,
     alimentoSeleccionado,
     filtroCategoria,
-    mostrarFormularioNuevoProducto,
-    nuevoProducto,
     manejarBusquedaAlimento,
     manejarFocusInput,
     manejarSeleccionProducto,
-    manejarSeleccionPersonalizado,
     limpiarSeleccion,
     manejarCambioCategoria,
     manejarBlurContainer,
-    manejarCambioNuevoProducto,
   } = useProductSelector(
     alimentos,
-    (id: string, nombrePersonalizado?: string) => {
+    (id: string) => {
       setFormulario(prev => ({
         ...prev,
         tipo_producto: id,
-        producto_personalizado_nombre: nombrePersonalizado || prev.producto_personalizado_nombre
+        unidad_id: ''
       }));
     },
     limpiarMensaje
@@ -83,7 +78,6 @@ export default function NuevaDonacionPage() {
   const [formulario, setFormulario] = useState({
     // Paso 1: Información del producto
     tipo_producto: '',
-    producto_personalizado_nombre: '',
     cantidad: '',
     unidad_id: '',
     fecha_vencimiento: '',
@@ -109,11 +103,6 @@ export default function NuevaDonacionPage() {
 
   // Obtener unidades disponibles para el alimento seleccionado
   const getUnidadesDisponibles = () => {
-    if (formulario.tipo_producto === 'personalizado') {
-      // Para productos personalizados, mostrar todas las unidades
-      return unidades;
-    }
-
     if (!formulario.tipo_producto) {
       return [];
     }
@@ -136,13 +125,6 @@ export default function NuevaDonacionPage() {
 
   // Obtener información del producto seleccionado
   const getProductoSeleccionado = () => {
-    if (formulario.tipo_producto === 'personalizado') {
-      return {
-        nombre: formulario.producto_personalizado_nombre,
-        categoria: nuevoProducto.categoria
-      };
-    }
-
     const alimento = alimentos.find(a => a.id.toString() === formulario.tipo_producto);
     return alimento ? { nombre: alimento.nombre, categoria: alimento.categoria } : null;
   };
@@ -176,11 +158,9 @@ export default function NuevaDonacionPage() {
           setMensajeValidacion('Por favor, completa la información del producto.');
           return false;
         }
-        if (formulario.tipo_producto === 'personalizado') {
-          if (!formulario.producto_personalizado_nombre.trim() || !nuevoProducto.categoria.trim()) {
-            setMensajeValidacion('Por favor, completa la información del producto personalizado.');
-            return false;
-          }
+        if (!alimentos.some(alimento => alimento.id.toString() === formulario.tipo_producto)) {
+          setMensajeValidacion('Selecciona un alimento existente del catálogo.');
+          return false;
         }
         if (parseFloat(formulario.cantidad) <= 0) {
           setMensajeValidacion('La cantidad debe ser mayor a 0.');
@@ -223,7 +203,6 @@ export default function NuevaDonacionPage() {
 
     const exito = await enviarDonacion(
       formulario,
-      nuevoProducto,
       impacto,
       productoInfo,
       unidadInfo,
@@ -234,7 +213,6 @@ export default function NuevaDonacionPage() {
       // Reiniciar formulario
       setFormulario({
         tipo_producto: '',
-        producto_personalizado_nombre: '',
         cantidad: '',
         unidad_id: '',
         fecha_vencimiento: '',
@@ -287,18 +265,8 @@ export default function NuevaDonacionPage() {
                   cargando={cargandoAlimentos}
                   alimentosFiltrados={alimentosFiltrados}
                   onSeleccionarProducto={manejarSeleccionProducto}
-                  onSeleccionarPersonalizado={manejarSeleccionPersonalizado}
                 />
               </div>
-
-              {mostrarFormularioNuevoProducto && (
-                <CustomProductForm
-                  nombre={nuevoProducto.nombre}
-                  categoria={nuevoProducto.categoria}
-                  categoriasDisponibles={categoriasUnicas}
-                  onChange={manejarCambioNuevoProducto}
-                />
-              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>

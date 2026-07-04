@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import { useToast } from '@/modules/shared';
+import { createCatalogoSolicitudesService, type SolicitudAltaAlimento } from '@/modules/catalogo-solicitudes';
 import CatalogHeader from '@/modules/admin/catalogo/components/CatalogHeader';
 import CatalogFilters from '@/modules/admin/catalogo/components/CatalogFilters';
 import CatalogTable from '@/modules/admin/catalogo/components/CatalogTable';
@@ -11,6 +12,7 @@ import CategoriesSection from '@/modules/admin/catalogo/components/CategoriesSec
 import FoodModal from '@/modules/admin/catalogo/components/FoodModal';
 import DeleteConfirmModal from '@/modules/admin/catalogo/components/DeleteConfirmModal';
 import CategoryDeleteModal from '@/modules/admin/catalogo/components/CategoryDeleteModal';
+import SolicitudesAltaSection from '@/modules/admin/catalogo/components/SolicitudesAltaSection';
 import { useCatalogData } from '@/modules/admin/catalogo/hooks/useCatalogData';
 import type { FoodFormValues, FoodRecord } from '@/modules/admin/catalogo/types';
 import { Plus } from 'lucide-react';
@@ -18,6 +20,7 @@ import { Plus } from 'lucide-react';
 export default function AdminCatalogPage() {
   const { supabase } = useSupabase();
   const { toasts, showSuccess, showError, hideToast } = useToast();
+  const solicitudesService = useMemo(() => createCatalogoSolicitudesService(supabase), [supabase]);
 
   const {
     filteredFoods,
@@ -36,9 +39,13 @@ export default function AdminCatalogPage() {
     updateFood,
     deleteFood,
     checkFoodUsage,
-    deleteCategory
+    deleteCategory,
+    refreshCatalog
   } = useCatalogData(supabase);
 
+  const [activeView, setActiveView] = useState<'catalogo' | 'solicitudes'>('catalogo');
+  const [solicitudes, setSolicitudes] = useState<SolicitudAltaAlimento[]>([]);
+  const [loadingSolicitudes, setLoadingSolicitudes] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [selectedFood, setSelectedFood] = useState<FoodRecord | null>(null);
@@ -46,6 +53,23 @@ export default function AdminCatalogPage() {
   const [usageInfo, setUsageInfo] = useState<{ totalDonaciones: number; totalProductos: number } | null>(null);
   const [categoryDeleteOpen, setCategoryDeleteOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<{ nombre: string; cantidad: number } | null>(null);
+
+  const loadSolicitudes = useCallback(async () => {
+    setLoadingSolicitudes(true);
+    const result = await solicitudesService.listarSolicitudes();
+
+    if (result.success && result.data) {
+      setSolicitudes(result.data);
+    } else {
+      console.error(result.error ?? 'No fue posible cargar las solicitudes de alta', result.errorDetails);
+    }
+
+    setLoadingSolicitudes(false);
+  }, [solicitudesService]);
+
+  useEffect(() => {
+    void loadSolicitudes();
+  }, [loadSolicitudes]);
 
   const openCreateModal = () => {
     setSelectedFood(null);
@@ -163,22 +187,37 @@ export default function AdminCatalogPage() {
       <div className="p-6 space-y-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <CatalogHeader stats={stats} />
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="inline-flex items-center gap-2 self-end rounded-xl bg-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-600"
-          >
-            <Plus className="h-4 w-4" /> Registrar alimento
-          </button>
+          {activeView === 'catalogo' && (
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="inline-flex items-center gap-2 self-end rounded-xl bg-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-600"
+            >
+              <Plus className="h-4 w-4" /> Registrar alimento
+            </button>
+          )}
         </div>
 
-        <CatalogFilters
-          filters={filters}
-          categories={categories}
-          onSearchChange={setSearch}
-          onCategoryChange={setCategory}
-          onReset={resetFilters}
-        />
+        <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setActiveView('catalogo')}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+              activeView === 'catalogo' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            Catálogo
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('solicitudes')}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+              activeView === 'solicitudes' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            Solicitudes de alta
+          </button>
+        </div>
 
         {error && (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-600">
@@ -186,29 +225,53 @@ export default function AdminCatalogPage() {
           </div>
         )}
 
-        {loading && !filteredFoods.length ? (
-          <div className="space-y-3 rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-sm">
-            <div className="h-5 w-32 animate-pulse rounded bg-slate-200" />
-            {Array.from({ length: 6 }).map(() => {
-              const id =
-                typeof crypto !== 'undefined' && 'randomUUID' in crypto
-                  ? crypto.randomUUID()
-                  : Math.random().toString(36).slice(2);
-              return <div key={id} className="h-12 animate-pulse rounded-xl bg-slate-100" />;
-            })}
-          </div>
+        {activeView === 'solicitudes' ? (
+          <SolicitudesAltaSection
+            supabase={supabase}
+            solicitudes={solicitudes}
+            unidades={unidades}
+            categories={categories}
+            loading={loadingSolicitudes}
+            onRefresh={loadSolicitudes}
+            onCatalogRefresh={refreshCatalog}
+            onSuccess={showSuccess}
+            onError={showError}
+          />
         ) : (
           <>
-            <CatalogTable
-              foods={filteredFoods}
-              onEdit={openEditModal}
-              onDelete={openDeleteModal}
+            <CatalogFilters
+              filters={filters}
+              categories={categories}
+              onSearchChange={setSearch}
+              onCategoryChange={setCategory}
+              onReset={resetFilters}
             />
-            
-            <CategoriesSection
-              categories={categoriesWithCount}
-              onDeleteCategory={openCategoryDeleteModal}
-            />
+
+            {loading && !filteredFoods.length ? (
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-sm">
+                <div className="h-5 w-32 animate-pulse rounded bg-slate-200" />
+                {Array.from({ length: 6 }).map(() => {
+                  const id =
+                    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                      ? crypto.randomUUID()
+                      : Math.random().toString(36).slice(2);
+                  return <div key={id} className="h-12 animate-pulse rounded-xl bg-slate-100" />;
+                })}
+              </div>
+            ) : (
+              <>
+                <CatalogTable
+                  foods={filteredFoods}
+                  onEdit={openEditModal}
+                  onDelete={openDeleteModal}
+                />
+                
+                <CategoriesSection
+                  categories={categoriesWithCount}
+                  onDeleteCategory={openCategoryDeleteModal}
+                />
+              </>
+            )}
           </>
         )}
       </div>

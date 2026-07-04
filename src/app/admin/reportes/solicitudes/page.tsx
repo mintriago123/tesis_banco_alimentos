@@ -113,9 +113,9 @@ export default function SolicitudesPage() {
       setComentarioAdmin(solicitud.comentario_admin ?? '');
       setMotivoRechazo('');
       setDepositoSeleccionado('');
-      setCantidadAprobar(Math.max(1, Math.floor(solicitud.cantidad)));
+      setCantidadAprobar(Math.max(0.01, solicitud.cantidad));
       setMostrarModal(true);
-      void loadInventario(solicitud.tipo_alimento);
+      void loadInventario(solicitud);
       showWarning('Selecciona la bodega y la cantidad a aprobar para continuar.');
       return false;
     }
@@ -183,9 +183,9 @@ export default function SolicitudesPage() {
     setComentarioAdmin(solicitud.comentario_admin ?? '');
     setMotivoRechazo('');
     setDepositoSeleccionado('');
-    setCantidadAprobar(Math.max(1, Math.floor(solicitud.cantidad)));
+    setCantidadAprobar(Math.max(0.01, solicitud.cantidad));
     setMostrarModal(true);
-    void loadInventario(solicitud.tipo_alimento);
+    void loadInventario(solicitud);
   }, [loadInventario]);
 
   useEffect(() => {
@@ -265,7 +265,7 @@ export default function SolicitudesPage() {
     const deposito = inventario.find(item => item.id_deposito === depositoSeleccionado);
     const maxAprobable = Math.min(
       solicitudSeleccionada.cantidad,
-      Math.floor(deposito?.cantidad_disponible ?? 0)
+      deposito?.cantidad_disponible ?? 0
     );
 
     if (maxAprobable <= 0) {
@@ -273,8 +273,8 @@ export default function SolicitudesPage() {
       return;
     }
 
-    if (cantidadAprobar < 1 || cantidadAprobar > maxAprobable) {
-      showError(`La cantidad debe estar entre 1 y ${maxAprobable}.`);
+    if (cantidadAprobar <= 0 || cantidadAprobar > maxAprobable) {
+      showError(`La cantidad debe estar entre 0.01 y ${maxAprobable.toFixed(2).replace(/\.?0+$/, '')}.`);
       return;
     }
 

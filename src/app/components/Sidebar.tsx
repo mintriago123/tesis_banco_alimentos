@@ -173,6 +173,13 @@ const menuItems: MenuItem[] = [
     description: 'Registrar nueva donación',
     donanteOnly: true
   },
+  {
+    name: 'Solicitar Alimento',
+    href: '/donante/solicitar-alimento',
+    icon: ClipboardDocumentListIcon,
+    description: 'Proponer un alimento para el catálogo',
+    donanteOnly: true
+  },
   // {
   //   name: 'Solicitudes Activas',
   //   href: '/donante/solicitudes',

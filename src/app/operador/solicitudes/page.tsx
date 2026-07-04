@@ -118,9 +118,9 @@ export default function OperadorSolicitudesPage() {
       setMotivoRechazo('');
       setAbrirEnModoDonacion(true);
       setDepositoSeleccionado('');
-      setCantidadAprobar(Math.max(1, Math.floor(solicitud.cantidad)));
+      setCantidadAprobar(Math.max(0.01, solicitud.cantidad));
       setMostrarModal(true);
-      await loadInventario(solicitud.tipo_alimento);
+      await loadInventario(solicitud);
       showWarning('Selecciona la bodega y la cantidad a aprobar para continuar.');
       return false;
     }
@@ -231,11 +231,11 @@ export default function OperadorSolicitudesPage() {
     setMotivoRechazo('');
     setAbrirEnModoDonacion(abrirModoDonacion);
     setDepositoSeleccionado('');
-    setCantidadAprobar(Math.max(1, Math.floor(solicitud.cantidad)));
+    setCantidadAprobar(Math.max(0.01, solicitud.cantidad));
     setMostrarModal(true);
     
     // Cargar inventario
-    await loadInventario(solicitud.tipo_alimento);
+    await loadInventario(solicitud);
     
     // Si se abre en modo donación y es una solicitud pendiente, validar stock
     if (abrirModoDonacion && solicitud.estado === 'pendiente') {
@@ -263,7 +263,7 @@ export default function OperadorSolicitudesPage() {
     const deposito = inventario.find(item => item.id_deposito === depositoSeleccionado);
     const maxAprobable = Math.min(
       solicitudSeleccionada.cantidad,
-      Math.floor(deposito?.cantidad_disponible ?? 0)
+      deposito?.cantidad_disponible ?? 0
     );
 
     if (maxAprobable <= 0) {
@@ -271,8 +271,8 @@ export default function OperadorSolicitudesPage() {
       return;
     }
 
-    if (cantidadAprobar < 1 || cantidadAprobar > maxAprobable) {
-      showError(`La cantidad debe estar entre 1 y ${maxAprobable}.`);
+    if (cantidadAprobar <= 0 || cantidadAprobar > maxAprobable) {
+      showError(`La cantidad debe estar entre 0.01 y ${maxAprobable.toFixed(2).replace(/\.?0+$/, '')}.`);
       return;
     }
 
