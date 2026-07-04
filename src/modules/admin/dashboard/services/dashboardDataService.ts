@@ -1,9 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
+  ActivityPoint,
   DashboardData,
   DashboardCounts,
+  InventoryRisk,
   RoleDistributionItem,
   RequestStatusItem,
+  TopCategoryItem,
+  TopCategories,
   UserTypeItem
 } from '../types';
 
@@ -14,37 +18,139 @@ interface UsuariosRow {
 
 interface SolicitudesRow {
   estado: 'pendiente' | 'aprobada' | 'rechazada' | 'entregada';
+  created_at: string | null;
+  fecha_respuesta: string | null;
+  tipo_alimento: string | null;
 }
 
-const MAX_ROWS = 1000;
+interface DonacionesRow {
+  estado: 'Pendiente' | 'Aprobada' | 'Cancelada';
+  creado_en: string | null;
+  categoria_comida: string | null;
+}
+
+interface InventoryRiskRow {
+  cantidad_disponible: number | null;
+  productos:
+    | {
+      fecha_caducidad?: string | null;
+      alimentos?: { categoria?: string | null } | { categoria?: string | null }[] | null;
+    }
+    | {
+      fecha_caducidad?: string | null;
+      alimentos?: { categoria?: string | null } | { categoria?: string | null }[] | null;
+    }[]
+    | null;
+}
+
+const REQUEST_STATUS_DEFAULTS: Record<SolicitudesRow['estado'], number> = {
+  pendiente: 0,
+  aprobada: 0,
+  rechazada: 0,
+  entregada: 0
+};
+
+const ROLE_DEFAULTS: Record<UsuariosRow['rol'], number> = {
+  ADMINISTRADOR: 0,
+  DONANTE: 0,
+  SOLICITANTE: 0
+};
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const LOW_STOCK_THRESHOLD = 10;
+const TOP_CATEGORIES_LIMIT = 5;
 
 export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
   const fetchDashboardData = async (): Promise<DashboardData> => {
-    const [usuariosResult, solicitudesResult] = await Promise.all([
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const thirtyDaysAgo = startOfDay(subtractDays(now, 29));
+    const pendingOverdueThreshold = new Date(now.getTime() - DAY_IN_MS);
+    const next7Days = addDays(now, 7);
+    const next30Days = addDays(now, 30);
+
+    const [
+      usuariosCountResult,
+      usuariosResult,
+      solicitudesCountResult,
+      solicitudesResult,
+      solicitudesMesResult,
+      pendientesVencidasResult,
+      donacionesCountResult,
+      donacionesResult,
+      donacionesMesResult,
+      inventoryRiskResult
+    ] = await Promise.all([
       supabaseClient
         .from('usuarios')
-        .select('rol, tipo_persona', { count: 'exact' })
-        .range(0, MAX_ROWS - 1)
+        .select('*', { count: 'exact', head: true })
+        .throwOnError(),
+      supabaseClient
+        .from('usuarios')
+        .select('rol, tipo_persona')
         .throwOnError(),
       supabaseClient
         .from('solicitudes')
-        .select('estado', { count: 'exact' })
-        .range(0, MAX_ROWS - 1)
+        .select('*', { count: 'exact', head: true })
+        .throwOnError(),
+      supabaseClient
+        .from('solicitudes')
+        .select('estado, created_at, fecha_respuesta, tipo_alimento')
+        .throwOnError(),
+      supabaseClient
+        .from('solicitudes')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', startOfMonth.toISOString())
+        .throwOnError(),
+      supabaseClient
+        .from('solicitudes')
+        .select('*', { count: 'exact', head: true })
+        .eq('estado', 'pendiente')
+        .lt('created_at', pendingOverdueThreshold.toISOString())
+        .throwOnError(),
+      supabaseClient
+        .from('donaciones')
+        .select('*', { count: 'exact', head: true })
+        .throwOnError(),
+      supabaseClient
+        .from('donaciones')
+        .select('estado, creado_en, categoria_comida')
+        .throwOnError(),
+      supabaseClient
+        .from('donaciones')
+        .select('*', { count: 'exact', head: true })
+        .gte('creado_en', startOfMonth.toISOString())
+        .throwOnError(),
+      supabaseClient
+        .from('inventario')
+        .select(`
+          cantidad_disponible,
+          productos:productos_donados!inventario_id_producto_fkey(
+            fecha_caducidad,
+            alimentos:alimentos(
+              categoria
+            )
+          )
+        `)
+        .gt('cantidad_disponible', 0)
         .throwOnError()
     ]);
 
     const usuarios = (usuariosResult.data ?? []) as UsuariosRow[];
     const solicitudes = (solicitudesResult.data ?? []) as SolicitudesRow[];
+    const donaciones = (donacionesResult.data ?? []) as DonacionesRow[];
+    const inventoryRows = (inventoryRiskResult.data ?? []) as InventoryRiskRow[];
 
-    const totalUsuarios = usuariosResult.count ?? usuarios.length;
-    const totalSolicitudes = solicitudesResult.count ?? solicitudes.length;
+    const totalUsuarios = usuariosCountResult.count ?? usuarios.length;
+    const totalSolicitudes = solicitudesCountResult.count ?? solicitudes.length;
+    const totalDonaciones = donacionesCountResult.count ?? donaciones.length;
 
     const roleCounts = usuarios.reduce(
       (acc, usuario) => {
         acc[usuario.rol] = (acc[usuario.rol] ?? 0) + 1;
         return acc;
       },
-      { ADMINISTRADOR: 0, DONANTE: 0, SOLICITANTE: 0 } as Record<UsuariosRow['rol'], number>
+      { ...ROLE_DEFAULTS }
     );
 
     const userTypeCounts = usuarios.reduce(
@@ -65,19 +171,72 @@ export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
         acc[solicitud.estado] = (acc[solicitud.estado] ?? 0) + 1;
         return acc;
       },
-      { pendiente: 0, aprobada: 0, rechazada: 0, entregada: 0 } as Record<SolicitudesRow['estado'], number>
+      { ...REQUEST_STATUS_DEFAULTS }
     );
 
     const tasaAprobacionBase = requestCounts.aprobada + requestCounts.rechazada;
+    const solicitudesResueltas = solicitudes.filter(isResolvedRequest);
+    const tiempoRespuestaPromedioHoras = roundToOneDecimal(
+      solicitudesResueltas.length > 0
+        ? solicitudesResueltas.reduce((sum, solicitud) => {
+          const createdAt = toDateOrNull(solicitud.created_at);
+          const responseAt = toDateOrNull(solicitud.fecha_respuesta);
+
+          if (!createdAt || !responseAt) {
+            return sum;
+          }
+
+          return sum + ((responseAt.getTime() - createdAt.getTime()) / (60 * 60 * 1000));
+        }, 0) / solicitudesResueltas.length
+        : 0
+    );
 
     const counts: DashboardCounts = {
       totalUsuarios,
       totalSolicitudes,
+      totalDonaciones,
       tasaAprobacion: tasaAprobacionBase > 0
         ? Math.round((requestCounts.aprobada / tasaAprobacionBase) * 100)
         : 0,
-      pendientes: requestCounts.pendiente
+      pendientes: requestCounts.pendiente,
+      solicitudesMes: solicitudesMesResult.count ?? 0,
+      donacionesMes: donacionesMesResult.count ?? 0,
+      pendientesVencidas: pendientesVencidasResult.count ?? 0,
+      tiempoRespuestaPromedioHoras
     };
+
+    const inventoryRisk: InventoryRisk = inventoryRows.reduce(
+      (acc, row) => {
+        const cantidadDisponible = Number(row.cantidad_disponible ?? 0);
+        const producto = normalizeRelation(row.productos);
+        const fechaCaducidad = toDateOrNull(producto?.fecha_caducidad ?? null);
+
+        if (cantidadDisponible > 0 && cantidadDisponible <= LOW_STOCK_THRESHOLD) {
+          acc.stockBajo += 1;
+        }
+
+        if (!fechaCaducidad) {
+          return acc;
+        }
+
+        if (fechaCaducidad < now) {
+          acc.vencidos += 1;
+        } else if (fechaCaducidad <= next7Days) {
+          acc.porVencer7Dias += 1;
+          acc.porVencer30Dias += 1;
+        } else if (fechaCaducidad <= next30Days) {
+          acc.porVencer30Dias += 1;
+        }
+
+        return acc;
+      },
+      {
+        stockBajo: 0,
+        vencidos: 0,
+        porVencer7Dias: 0,
+        porVencer30Dias: 0
+      } satisfies InventoryRisk
+    );
 
     const roleDistribution: RoleDistributionItem[] = (
       Object.entries(roleCounts) as Array<[UsuariosRow['rol'], number]>
@@ -129,8 +288,31 @@ export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
       }
     ];
 
+    const activity = {
+      solicitudesUltimos30Dias: buildDailyActivitySeries(
+        solicitudes,
+        'created_at',
+        thirtyDaysAgo,
+        now
+      ),
+      donacionesUltimos30Dias: buildDailyActivitySeries(
+        donaciones,
+        'creado_en',
+        thirtyDaysAgo,
+        now
+      )
+    };
+
+    const topCategories: TopCategories = {
+      solicitadas: buildTopCategories(solicitudes, row => row.tipo_alimento),
+      donadas: buildTopCategories(donaciones, row => row.categoria_comida)
+    };
+
     return {
       counts,
+      inventoryRisk,
+      activity,
+      topCategories,
       roleDistribution,
       requestStatus,
       userTypes
@@ -140,4 +322,103 @@ export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
   return {
     fetchDashboardData
   };
+};
+
+const addDays = (date: Date, days: number) => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+};
+
+const subtractDays = (date: Date, days: number) => addDays(date, -days);
+
+const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const formatDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const toDateOrNull = (value: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const parsedDate = new Date(value);
+  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+};
+
+const normalizeRelation = <T>(value: T | T[] | null | undefined): T | null => {
+  if (Array.isArray(value)) {
+    return (value[0] ?? null) as T | null;
+  }
+
+  return (value ?? null) as T | null;
+};
+
+const isResolvedRequest = (solicitud: SolicitudesRow) => (
+  ['aprobada', 'rechazada', 'entregada'].includes(solicitud.estado) &&
+  Boolean(toDateOrNull(solicitud.fecha_respuesta)) &&
+  Boolean(toDateOrNull(solicitud.created_at))
+);
+
+const roundToOneDecimal = (value: number) => Math.round(value * 10) / 10;
+
+const buildDailyActivitySeries = <T extends Record<string, string | null>>(
+  rows: T[],
+  dateField: keyof T,
+  startDate: Date,
+  endDate: Date
+): ActivityPoint[] => {
+  const totalsByDate = new Map<string, number>();
+
+  rows.forEach(row => {
+    const date = toDateOrNull(row[dateField] ?? null);
+
+    if (!date || date < startDate || date > endDate) {
+      return;
+    }
+
+    const dateKey = formatDateKey(date);
+    totalsByDate.set(dateKey, (totalsByDate.get(dateKey) ?? 0) + 1);
+  });
+
+  const points: ActivityPoint[] = [];
+  const cursor = startOfDay(startDate);
+  const lastDate = startOfDay(endDate);
+
+  while (cursor <= lastDate) {
+    const key = formatDateKey(cursor);
+    points.push({
+      fecha: key,
+      total: totalsByDate.get(key) ?? 0
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return points;
+};
+
+const buildTopCategories = <T>(
+  rows: T[],
+  getCategory: (row: T) => string | null
+): TopCategoryItem[] => {
+  const counts = rows.reduce((acc, row) => {
+    const rawCategory = getCategory(row);
+    const category = rawCategory?.trim();
+
+    if (!category) {
+      return acc;
+    }
+
+    acc.set(category, (acc.get(category) ?? 0) + 1);
+    return acc;
+  }, new Map<string, number>());
+
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'es'))
+    .slice(0, TOP_CATEGORIES_LIMIT)
+    .map(([label, total]) => ({ label, total }));
 };

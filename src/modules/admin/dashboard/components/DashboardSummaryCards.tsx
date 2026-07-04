@@ -1,4 +1,4 @@
-import { Gauge, Hourglass, Users, ClipboardCheck } from 'lucide-react';
+import { ClipboardCheck, HandHeart, Hourglass, Users } from 'lucide-react';
 import StatCard from '@/modules/admin/shared/components/StatCard';
 import type { DashboardCounts } from '../types';
 
@@ -16,25 +16,25 @@ const DashboardSummaryCards = ({ counts }: DashboardSummaryCardsProps) => (
       sublabel="Activos en la plataforma"
     />
     <StatCard
-      label="Solicitudes"
-      value={counts.totalSolicitudes}
-      accent="blue"
-      icon={<ClipboardCheck className="h-5 w-5" />}
-      sublabel="Historial acumulado"
-    />
-    <StatCard
-      label="Tasa de aprobación"
-      value={`${counts.tasaAprobacion}%`}
-      accent="green"
-      icon={<Gauge className="h-5 w-5" />}
-      sublabel="vs. solicitudes rechazadas"
-    />
-    <StatCard
-      label="Pendientes"
+      label="Solicitudes pendientes"
       value={counts.pendientes}
-      accent="yellow"
+      accent="blue"
       icon={<Hourglass className="h-5 w-5" />}
-      sublabel="En revisión por el equipo"
+      sublabel={`${counts.totalSolicitudes} acumuladas en total`}
+    />
+    <StatCard
+      label="Solicitudes del mes"
+      value={counts.solicitudesMes}
+      accent="green"
+      icon={<ClipboardCheck className="h-5 w-5" />}
+      sublabel={`${counts.tasaAprobacion}% de aprobación histórica`}
+    />
+    <StatCard
+      label="Donaciones del mes"
+      value={counts.donacionesMes}
+      accent="yellow"
+      icon={<HandHeart className="h-5 w-5" />}
+      sublabel={`${counts.totalDonaciones} registradas en total`}
     />
   </div>
 );
