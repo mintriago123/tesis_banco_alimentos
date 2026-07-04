@@ -3,9 +3,9 @@
 // Obtener datos básicos del usuario (nombre, cédula, teléfono)
 // ============================================================================
 
-import { useState, useEffect } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
-import { UserProfile, LoadingState } from '../types';
+import { useState, useEffect, useMemo } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { UserProfile, LoadingState } from '../types';
 import { PerfilService } from '../services/perfilService';
 
 interface UseDatosBasicosUsuarioResult {
@@ -25,7 +25,7 @@ export function useDatosBasicosUsuario(
   const [loading, setLoading] = useState<LoadingState>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  const service = new PerfilService(supabase);
+  const service = useMemo(() => new PerfilService(supabase), [supabase]);
 
   useEffect(() => {
     const fetchDatosBasicos = async () => {
@@ -47,7 +47,7 @@ export function useDatosBasicosUsuario(
     };
 
     fetchDatosBasicos();
-  }, [usuarioId, supabase]);
+  }, [usuarioId, service]);
 
   return {
     userData,

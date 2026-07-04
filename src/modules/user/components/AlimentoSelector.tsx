@@ -4,7 +4,7 @@
 // ============================================================================
 
 import React from 'react';
-import { ShoppingBasket, X, Search, AlertCircle } from 'lucide-react';
+import { ShoppingBasket, X, AlertCircle } from 'lucide-react';
 import { Alimento } from '../types';
 import { MESSAGES } from '../constants';
 

@@ -2,13 +2,19 @@
 // Service: Solicitudes
 // ============================================================================
 
-import { SupabaseClient } from '@supabase/supabase-js';
-import {
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type {
   Solicitud,
   SolicitudFormData,
   SolicitudEditData,
   FiltroEstadoSolicitud,
 } from '../types';
+
+type SolicitudWithUnidad = Solicitud & {
+  unidades?: {
+    simbolo?: string | null;
+  } | null;
+};
 
 export class SolicitudesService {
   constructor(private supabase: SupabaseClient) {}
@@ -19,7 +25,7 @@ export class SolicitudesService {
   async getSolicitudesByUsuario(
     usuarioId: string,
     filtroEstado?: FiltroEstadoSolicitud
-  ): Promise<{ data: Solicitud[] | null; error: any }> {
+  ): Promise<{ data: SolicitudWithUnidad[] | null; error: unknown }> {
     try {
       let query = this.supabase
         .from('solicitudes')
@@ -41,9 +47,9 @@ export class SolicitudesService {
       
       // Log de depuración para ver datos de solicitudes rechazadas
       if (data) {
-        const rechazadas = data.filter((s: any) => s.estado === 'rechazada');
+        const rechazadas = (data as SolicitudWithUnidad[]).filter((s) => s.estado === 'rechazada');
         if (rechazadas.length > 0) {
-          console.log('📋 Solicitudes rechazadas obtenidas desde BD:', rechazadas.map((s: any) => ({
+          console.log('📋 Solicitudes rechazadas obtenidas desde BD:', rechazadas.map((s) => ({
             id: s.id,
             motivo_rechazo: s.motivo_rechazo,
             fecha_rechazo: s.fecha_rechazo,
@@ -65,7 +71,7 @@ export class SolicitudesService {
   async createSolicitud(
     usuarioId: string,
     solicitudData: SolicitudFormData
-  ): Promise<{ data: Solicitud | null; error: any }> {
+  ): Promise<{ data: Solicitud | null; error: unknown }> {
     try {
       console.log('[SolicitudesService] Intentando crear solicitud:', {
         usuarioId,
@@ -109,7 +115,7 @@ export class SolicitudesService {
   async updateSolicitud(
     solicitudId: string,
     updateData: SolicitudEditData
-  ): Promise<{ data: Solicitud | null; error: any }> {
+  ): Promise<{ data: Solicitud | null; error: unknown }> {
     try {
       const { data, error } = await this.supabase
         .from('solicitudes')
@@ -127,7 +133,7 @@ export class SolicitudesService {
   /**
    * Eliminar una solicitud
    */
-  async deleteSolicitud(id: string): Promise<{ error: any }> {
+  async deleteSolicitud(id: string): Promise<{ error: unknown }> {
     try {
       const { error } = await this.supabase
         .from('solicitudes')
@@ -145,7 +151,7 @@ export class SolicitudesService {
    */
   async getSolicitudById(
     solicitudId: string
-  ): Promise<{ data: Solicitud | null; error: any }> {
+  ): Promise<{ data: Solicitud | null; error: unknown }> {
     try {
       const { data, error } = await this.supabase
         .from('solicitudes')

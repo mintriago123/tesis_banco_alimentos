@@ -3,9 +3,9 @@
 // Manejo de alimentos con búsqueda y filtros
 // ============================================================================
 
-import { useState, useEffect, useCallback } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
-import { Alimento, LoadingState, UnidadAlimento } from '../types';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Alimento, LoadingState, UnidadAlimento } from '../types';
 import { AlimentosService } from '../services/alimentosService';
 
 interface UseAlimentosResult {
@@ -33,7 +33,7 @@ export function useAlimentos(
   const [busqueda, setBusqueda] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
 
-  const service = new AlimentosService(supabase);
+  const service = useMemo(() => new AlimentosService(supabase), [supabase]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -92,7 +92,7 @@ export function useAlimentos(
     };
 
     fetchData();
-  }, [supabase]);
+  }, [supabase, service]);
 
   const filtrarAlimentos = useCallback(
     (termino: string, categoria: string = filtroCategoria) => {

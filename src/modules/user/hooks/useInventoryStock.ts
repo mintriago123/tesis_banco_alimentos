@@ -10,6 +10,24 @@ import { convertirEntreUnidades } from '@/lib/unidadConversion';
 
 type LoadingState = 'idle' | 'loading' | 'success' | 'error';
 
+type UnidadRelation = {
+  nombre?: string | null;
+  simbolo?: string | null;
+} | null;
+
+type ConversionRow = {
+  factor_conversion: number | string | null;
+  unidad_origen: UnidadRelation | UnidadRelation[];
+  unidad_destino: UnidadRelation | UnidadRelation[];
+};
+
+const singleRelation = <T>(relation: T | T[] | null | undefined): T | null => {
+  if (Array.isArray(relation)) {
+    return relation[0] ?? null;
+  }
+  return relation ?? null;
+};
+
 interface UseInventoryStockResult {
   stockInfo: StockSummary | null;
   loadingState: LoadingState;
@@ -45,13 +63,18 @@ export const useInventoryStock = (supabaseClient: SupabaseClient): UseInventoryS
           `);
 
         if (data) {
-          const conversionesData = data.map(row => ({
-            unidad_origen: (row.unidad_origen as any)?.nombre || '',
-            simbolo_origen: (row.unidad_origen as any)?.simbolo || '',
-            unidad_destino: (row.unidad_destino as any)?.nombre || '',
-            simbolo_destino: (row.unidad_destino as any)?.simbolo || '',
+          const conversionesData = (data as ConversionRow[]).map(row => {
+            const unidadOrigen = singleRelation(row.unidad_origen);
+            const unidadDestino = singleRelation(row.unidad_destino);
+
+            return {
+            unidad_origen: unidadOrigen?.nombre || '',
+            simbolo_origen: unidadOrigen?.simbolo || '',
+            unidad_destino: unidadDestino?.nombre || '',
+            simbolo_destino: unidadDestino?.simbolo || '',
             factor_conversion: Number(row.factor_conversion) || 0
-          }));
+            };
+          });
           setConversiones(conversionesData);
         }
       } catch (error) {

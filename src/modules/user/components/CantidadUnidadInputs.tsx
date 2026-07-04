@@ -29,7 +29,6 @@ export function CantidadUnidadInputs({
   isStockSufficient,
   onCantidadChange,
   onUnidadChange,
-  onUseMaxStock,
 }: CantidadUnidadInputsProps) {
   const cantidadNum = parseFloat(cantidad) || 0;
   const unidadSeleccionada = unidades.find(u => u.id === parseInt(unidadId));

@@ -11,7 +11,6 @@ import {
   XCircle,
   Package,
   ShoppingBasket,
-  Hash,
   Calendar,
   MapPin,
   MessageCircle,
@@ -34,7 +33,7 @@ export function SolicitudDetalleModal({
   isOpen,
   onClose,
 }: SolicitudDetalleModalProps) {
-  const { formatDateTime, formatDate } = useDateFormatter();
+  const { formatDateTime } = useDateFormatter();
 
   if (!isOpen) return null;
 

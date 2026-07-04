@@ -38,7 +38,6 @@ export function InventarioInfo({
   simboloUnidad,
   isStockSufficient,
   getStockMessage,
-  onUseMaxStock,
 }: InventarioInfoProps) {
   if (!stockInfo && loadingState === 'idle') return null;
 

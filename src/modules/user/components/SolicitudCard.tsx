@@ -154,7 +154,7 @@ export function SolicitudCard({
               rolOperador: 'STAFF',
             });
           }
-        } catch (error) {
+        } catch {
           console.warn('⚠️ Excepción al cargar datos del operador');
           setDatosRechazo({
             nombreOperador: 'Personal Administrativo',
@@ -200,7 +200,7 @@ export function SolicitudCard({
               rolOperador: 'STAFF',
             });
           }
-        } catch (error) {
+        } catch {
           console.warn('⚠️ Excepción al cargar datos del aprobador');
           setDatosAprobacion({
             nombreOperador: 'Personal Administrativo',
