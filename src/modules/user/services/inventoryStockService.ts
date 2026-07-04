@@ -31,6 +31,37 @@ export interface ServiceResult<T> {
   error?: string;
 }
 
+type UnidadRelation = {
+  nombre?: string | null;
+  simbolo?: string | null;
+} | null;
+
+type ConversionRow = {
+  factor_conversion: number | string | null;
+  unidad_origen: UnidadRelation | UnidadRelation[];
+  unidad_destino: UnidadRelation | UnidadRelation[];
+};
+
+type StockInventarioRow = {
+  id_inventario: string;
+  cantidad_disponible: number | null;
+  fecha_actualizacion: string | null;
+  productos_donados: {
+    nombre_producto?: string | null;
+    unidades?: UnidadRelation | UnidadRelation[];
+  } | null;
+  depositos: {
+    nombre?: string | null;
+  } | null;
+};
+
+const singleRelation = <T>(relation: T | T[] | null | undefined): T | null => {
+  if (Array.isArray(relation)) {
+    return relation[0] ?? null;
+  }
+  return relation ?? null;
+};
+
 const logger = {
   info: (message: string, details?: unknown) => console.info(`[InventoryStockService] ${message}`, details),
   error: (message: string, error?: unknown) => console.error(`[InventoryStockService] ${message}`, error)
@@ -55,13 +86,18 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
         return [];
       }
 
-      return data.map(row => ({
-        unidad_origen: (row.unidad_origen as any)?.nombre || '',
-        simbolo_origen: (row.unidad_origen as any)?.simbolo || '',
-        unidad_destino: (row.unidad_destino as any)?.nombre || '',
-        simbolo_destino: (row.unidad_destino as any)?.simbolo || '',
+      return (data as ConversionRow[]).map(row => {
+        const unidadOrigen = singleRelation(row.unidad_origen);
+        const unidadDestino = singleRelation(row.unidad_destino);
+
+        return {
+        unidad_origen: unidadOrigen?.nombre || '',
+        simbolo_origen: unidadOrigen?.simbolo || '',
+        unidad_destino: unidadDestino?.nombre || '',
+        simbolo_destino: unidadDestino?.simbolo || '',
         factor_conversion: Number(row.factor_conversion) || 0
-      }));
+        };
+      });
     } catch (err) {
       logger.error('Excepción obteniendo conversiones', err);
       return [];
@@ -142,8 +178,9 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
       }
 
       // Procesar los datos
-      const stockInfoRaw: StockInfo[] = data.map(row => {
-        const unidad = (row.productos_donados as any)?.unidades;
+      const stockInfoRaw: StockInfo[] = (data as StockInventarioRow[]).map(row => {
+        const producto = singleRelation(row.productos_donados);
+        const unidad = singleRelation(producto?.unidades);
         const cantidad = row.cantidad_disponible ?? 0;
         
         // Convertir cantidad a unidad más legible
@@ -157,10 +194,10 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
         return {
           id_inventario: row.id_inventario,
           cantidad_disponible: cantidad,
-          deposito: (row.depositos as any)?.nombre ?? 'Sin depósito',
+          deposito: singleRelation(row.depositos)?.nombre ?? 'Sin depósito',
           fecha_actualizacion: row.fecha_actualizacion,
-          unidad_nombre: unidad?.nombre,
-          unidad_simbolo: unidad?.simbolo,
+          unidad_nombre: unidad?.nombre ?? undefined,
+          unidad_simbolo: unidad?.simbolo ?? undefined,
           cantidad_formateada: cantidadFormateada
         };
       });

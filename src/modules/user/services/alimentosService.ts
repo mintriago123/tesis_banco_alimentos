@@ -2,8 +2,8 @@
 // Service: Alimentos
 // ============================================================================
 
-import { SupabaseClient } from '@supabase/supabase-js';
-import { Alimento } from '../types';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Alimento } from '../types';
 
 export class AlimentosService {
   constructor(private supabase: SupabaseClient) {}
@@ -11,7 +11,7 @@ export class AlimentosService {
   /**
    * Obtener todos los alimentos disponibles
    */
-  async getAlimentos(): Promise<{ data: Alimento[] | null; error: any }> {
+  async getAlimentos(): Promise<{ data: Alimento[] | null; error: unknown }> {
     try {
       const { data, error } = await this.supabase
         .from('alimentos')
@@ -35,7 +35,7 @@ export class AlimentosService {
    */
   async getAlimentoById(
     alimentoId: number
-  ): Promise<{ data: Alimento | null; error: any }> {
+  ): Promise<{ data: Alimento | null; error: unknown }> {
     try {
       const { data, error } = await this.supabase
         .from('alimentos')
@@ -52,7 +52,7 @@ export class AlimentosService {
   /**
    * Obtener categorías únicas de alimentos
    */
-  async getCategorias(): Promise<{ data: string[] | null; error: any }> {
+  async getCategorias(): Promise<{ data: string[] | null; error: unknown }> {
     try {
       const { data, error } = await this.supabase
         .from('alimentos')
@@ -72,7 +72,7 @@ export class AlimentosService {
   /**
    * Obtener categorías únicas solo de productos con stock disponible
    */
-  async getCategoriasConStock(): Promise<{ data: string[] | null; error: any }> {
+  async getCategoriasConStock(): Promise<{ data: string[] | null; error: unknown }> {
     try {
       // Primero obtener productos con stock
       const { data: inventarioData, error: inventarioError } = await this.supabase
@@ -143,7 +143,7 @@ export class AlimentosService {
   /**
    * Obtener alimentos que tienen stock disponible
    */
-  async getAlimentosConStock(): Promise<{ data: Alimento[] | null; error: any }> {
+  async getAlimentosConStock(): Promise<{ data: Alimento[] | null; error: unknown }> {
     try {
       // Paso 1: Obtener productos con stock
       const { data: inventarioData, error: inventarioError } = await this.supabase

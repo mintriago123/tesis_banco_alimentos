@@ -2,8 +2,8 @@
 // Service: Unidades
 // ============================================================================
 
-import { SupabaseClient } from '@supabase/supabase-js';
-import { Unidad } from '../types';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Unidad } from '../types';
 
 export class UnidadesService {
   constructor(private supabase: SupabaseClient) {}
@@ -11,7 +11,7 @@ export class UnidadesService {
   /**
    * Obtener todas las unidades de medida
    */
-  async getUnidades(): Promise<{ data: Unidad[] | null; error: any }> {
+  async getUnidades(): Promise<{ data: Unidad[] | null; error: unknown }> {
     try {
       const { data, error } = await this.supabase
         .from('unidades')
@@ -35,7 +35,7 @@ export class UnidadesService {
    */
   async getUnidadById(
     unidadId: number
-  ): Promise<{ data: Unidad | null; error: any }> {
+  ): Promise<{ data: Unidad | null; error: unknown }> {
     try {
       const { data, error } = await this.supabase
         .from('unidades')
