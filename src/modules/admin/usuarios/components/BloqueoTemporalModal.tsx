@@ -160,7 +160,7 @@ export default function BloqueoTemporalModal({
           <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
             <p className="text-xs text-amber-800">
               <strong>Nota:</strong> El usuario no podrá iniciar sesión hasta que expire el tiempo de bloqueo. 
-              Para un bloqueo permanente, usa la opción "Desactivar".
+              Para un bloqueo permanente, usa la opción &quot;Desactivar&quot;.
             </p>
           </div>
         </div>

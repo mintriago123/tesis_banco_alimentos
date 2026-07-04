@@ -42,7 +42,7 @@ export default function ComprobantePage() {
         }
 
         setData(result);
-      } catch (err) {
+      } catch {
         setError('Error de conexión');
       } finally {
         setLoading(false);
@@ -96,7 +96,6 @@ export default function ComprobantePage() {
     ? ['aprobada', 'aprobado', 'entregada', 'entregado'].includes(estadoLower)
     : ['aprobada', 'aprobado'].includes(estadoLower);
   const esRechazada = ['rechazada', 'rechazado', 'cancelada', 'cancelado'].includes(estadoLower);
-  const esPendiente = ['pendiente'].includes(estadoLower);
 
   return (
     <>

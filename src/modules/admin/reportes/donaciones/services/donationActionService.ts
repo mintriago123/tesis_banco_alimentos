@@ -6,7 +6,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   Donation,
   DonationEstado,
-  DonationInventoryIntegrationResult,
   ServiceResult,
   MotivoCancelacion
 } from '../types';
@@ -37,8 +36,6 @@ const logger = {
     }
   }
 };
-
-const NO_ROWS_CODE = 'PGRST116';
 
 // Cache para prevenir procesamiento simultáneo de la misma donación
 const processingCache = new Map<number, Promise<ServiceResult<{ message: string; warning?: boolean }>>>();
@@ -381,7 +378,15 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
       const { data: { user } } = await supabaseClient.auth.getUser();
       
       // Preparar datos de actualización
-      const updateData: any = {
+      const updateData: {
+        estado: string;
+        actualizado_en: string;
+        codigo_comprobante?: string;
+        motivo_cancelacion?: string;
+        observaciones_cancelacion?: string | null;
+        usuario_cancelacion_id?: string | null;
+        fecha_cancelacion?: string;
+      } = {
         estado: nuevoEstado,
         actualizado_en: new Date().toISOString(),
         ...(codigoComprobante && { codigo_comprobante: codigoComprobante })

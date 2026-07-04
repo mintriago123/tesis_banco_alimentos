@@ -105,7 +105,7 @@ export default function NuevaDonacionPage() {
         direccion_entrega: userProfile.direccion
       }));
     }
-  }, [userProfile]);
+  }, [userProfile, formulario.direccion_entrega]);
 
   // Obtener unidades disponibles para el alimento seleccionado
   const getUnidadesDisponibles = () => {

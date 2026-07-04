@@ -61,8 +61,6 @@ const SolicitudDetailModal = ({
   onAprobar,
   onRechazar,
   isProcessing,
-  motivoRechazo,
-  onMotivoRechazoChange,
   depositoSeleccionado,
   onDepositoSeleccionadoChange,
   cantidadAprobar,
@@ -351,7 +349,7 @@ const SolicitudDetailModal = ({
             {solicitud.estado === 'pendiente' && (
               <div className="bg-white p-4 rounded-lg border">
                 <h4 className="font-semibold text-gray-900 mb-3">
-                  Inventario disponible para "{solicitud.tipo_alimento}"
+                  Inventario disponible para &quot;{solicitud.tipo_alimento}&quot;
                 </h4>
 
                 {inventarioLoading && (
@@ -468,7 +466,7 @@ const SolicitudDetailModal = ({
                   <div className="text-center py-4">
                     <XCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
                     <p className="text-sm text-gray-600">
-                      No hay stock disponible de "{solicitud.tipo_alimento}" en el inventario
+                      No hay stock disponible de &quot;{solicitud.tipo_alimento}&quot; en el inventario
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
                       La solicitud no puede ser satisfecha en este momento

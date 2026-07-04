@@ -11,7 +11,6 @@ import {
   Eye,
   Package,
   Phone,
-  Truck,
   User,
   XCircle,
   Building,
