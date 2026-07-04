@@ -1,4 +1,5 @@
 export interface DashboardCounts {
+  totalUsuarios: number;
   totalSolicitudes: number;
   totalDonaciones: number;
   donacionesPendientes: number;

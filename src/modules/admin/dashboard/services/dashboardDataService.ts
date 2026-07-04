@@ -194,6 +194,7 @@ export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
     );
 
     const counts: DashboardCounts = {
+      totalUsuarios,
       totalSolicitudes,
       totalDonaciones,
       donacionesPendientes,
@@ -366,7 +367,7 @@ const isResolvedRequest = (solicitud: SolicitudesRow) => (
   Boolean(toDateOrNull(solicitud.created_at))
 );
 
-const buildDailyActivitySeries = <T extends Record<string, string | null>>(
+const buildDailyActivitySeries = <T>(
   rows: T[],
   dateField: keyof T,
   startDate: Date,
@@ -375,7 +376,8 @@ const buildDailyActivitySeries = <T extends Record<string, string | null>>(
   const totalsByDate = new Map<string, number>();
 
   rows.forEach(row => {
-    const date = toDateOrNull(row[dateField] ?? null);
+    const rawDate = row[dateField];
+    const date = toDateOrNull(typeof rawDate === 'string' ? rawDate : null);
 
     if (!date || date < startDate || date > endDate) {
       return;

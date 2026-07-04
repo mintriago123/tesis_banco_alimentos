@@ -7,7 +7,6 @@ import { RefreshCw } from 'lucide-react';
 
 import { useDashboardData } from '@/modules/shared/dashboard';
 import DashboardActivity from '@/modules/admin/dashboard/components/DashboardActivity';
-import DashboardHeader from '@/modules/admin/dashboard/components/DashboardHeader';
 import DashboardRiskCards from '@/modules/admin/dashboard/components/DashboardRiskCards';
 import DashboardSummaryCards from '@/modules/admin/dashboard/components/DashboardSummaryCards';
 import TopCategories from '@/modules/admin/dashboard/components/TopCategories';
@@ -25,9 +24,7 @@ export default function AdminDashboardPage() {
       description="Métricas operativas del Banco de Alimentos"
     >
       <div className="p-6 space-y-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <DashboardHeader description="Indicadores clave del ecosistema de usuarios y solicitudes." />
-
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={refresh}
