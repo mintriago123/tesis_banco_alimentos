@@ -1,13 +1,13 @@
 export interface DashboardCounts {
-  totalUsuarios: number;
   totalSolicitudes: number;
   totalDonaciones: number;
+  donacionesPendientes: number;
   tasaAprobacion: number;
   pendientes: number;
   solicitudesMes: number;
   donacionesMes: number;
   pendientesVencidas: number;
-  tiempoRespuestaPromedioHoras: number;
+  respuestasDentro24Horas: number;
 }
 
 export interface RoleDistributionItem {

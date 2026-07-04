@@ -144,6 +144,7 @@ export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
     const totalUsuarios = usuariosCountResult.count ?? usuarios.length;
     const totalSolicitudes = solicitudesCountResult.count ?? solicitudes.length;
     const totalDonaciones = donacionesCountResult.count ?? donaciones.length;
+    const donacionesPendientes = donaciones.filter(donacion => donacion.estado === 'Pendiente').length;
 
     const roleCounts = usuarios.reduce(
       (acc, usuario) => {
@@ -176,25 +177,26 @@ export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
 
     const tasaAprobacionBase = requestCounts.aprobada + requestCounts.rechazada;
     const solicitudesResueltas = solicitudes.filter(isResolvedRequest);
-    const tiempoRespuestaPromedioHoras = roundToOneDecimal(
+    const respuestasDentro24Horas = Math.round(
       solicitudesResueltas.length > 0
-        ? solicitudesResueltas.reduce((sum, solicitud) => {
+        ? (solicitudesResueltas.reduce((count, solicitud) => {
           const createdAt = toDateOrNull(solicitud.created_at);
           const responseAt = toDateOrNull(solicitud.fecha_respuesta);
 
           if (!createdAt || !responseAt) {
-            return sum;
+            return count;
           }
 
-          return sum + ((responseAt.getTime() - createdAt.getTime()) / (60 * 60 * 1000));
-        }, 0) / solicitudesResueltas.length
+          const responseTimeInHours = (responseAt.getTime() - createdAt.getTime()) / (60 * 60 * 1000);
+          return count + (responseTimeInHours <= 24 ? 1 : 0);
+        }, 0) / solicitudesResueltas.length) * 100
         : 0
     );
 
     const counts: DashboardCounts = {
-      totalUsuarios,
       totalSolicitudes,
       totalDonaciones,
+      donacionesPendientes,
       tasaAprobacion: tasaAprobacionBase > 0
         ? Math.round((requestCounts.aprobada / tasaAprobacionBase) * 100)
         : 0,
@@ -202,7 +204,7 @@ export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
       solicitudesMes: solicitudesMesResult.count ?? 0,
       donacionesMes: donacionesMesResult.count ?? 0,
       pendientesVencidas: pendientesVencidasResult.count ?? 0,
-      tiempoRespuestaPromedioHoras
+      respuestasDentro24Horas
     };
 
     const inventoryRisk: InventoryRisk = inventoryRows.reduce(
@@ -363,8 +365,6 @@ const isResolvedRequest = (solicitud: SolicitudesRow) => (
   Boolean(toDateOrNull(solicitud.fecha_respuesta)) &&
   Boolean(toDateOrNull(solicitud.created_at))
 );
-
-const roundToOneDecimal = (value: number) => Math.round(value * 10) / 10;
 
 const buildDailyActivitySeries = <T extends Record<string, string | null>>(
   rows: T[],

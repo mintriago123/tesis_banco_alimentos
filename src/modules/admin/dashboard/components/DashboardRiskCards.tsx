@@ -7,8 +7,6 @@ interface DashboardRiskCardsProps {
   inventoryRisk: InventoryRisk;
 }
 
-const formatHours = (hours: number) => `${hours.toFixed(1)}h`;
-
 const DashboardRiskCards = ({ counts, inventoryRisk }: DashboardRiskCardsProps) => (
   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
     <StatCard
@@ -19,11 +17,11 @@ const DashboardRiskCards = ({ counts, inventoryRisk }: DashboardRiskCardsProps) 
       sublabel="Solicitudes que requieren atención"
     />
     <StatCard
-      label="Respuesta promedio"
-      value={formatHours(counts.tiempoRespuestaPromedioHoras)}
+      label="Respondidas <24h"
+      value={`${counts.respuestasDentro24Horas}%`}
       accent="blue"
       icon={<Clock3 className="h-5 w-5" />}
-      sublabel="Solo solicitudes resueltas"
+      sublabel="SLA sobre solicitudes resueltas"
     />
     <StatCard
       label="Stock bajo"

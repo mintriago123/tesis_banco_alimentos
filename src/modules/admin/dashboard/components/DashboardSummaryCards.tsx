@@ -9,11 +9,11 @@ interface DashboardSummaryCardsProps {
 const DashboardSummaryCards = ({ counts }: DashboardSummaryCardsProps) => (
   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
     <StatCard
-      label="Usuarios registrados"
-      value={counts.totalUsuarios}
+      label="Donaciones pendientes"
+      value={counts.donacionesPendientes}
       accent="purple"
       icon={<Users className="h-5 w-5" />}
-      sublabel="Activos en la plataforma"
+      sublabel={`${counts.totalDonaciones} registradas en total`}
     />
     <StatCard
       label="Solicitudes pendientes"
@@ -34,7 +34,7 @@ const DashboardSummaryCards = ({ counts }: DashboardSummaryCardsProps) => (
       value={counts.donacionesMes}
       accent="yellow"
       icon={<HandHeart className="h-5 w-5" />}
-      sublabel={`${counts.totalDonaciones} registradas en total`}
+      sublabel="Ingresadas desde el inicio del mes"
     />
   </div>
 );
