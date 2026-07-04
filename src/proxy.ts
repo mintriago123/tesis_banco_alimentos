@@ -2,6 +2,13 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { RUTAS_PUBLICAS } from '@/lib/constantes';
 import { NextResponse, type NextRequest } from 'next/server';
 
+const getErrorCode = (error: unknown): string | undefined => {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    return (error as { code?: string }).code;
+  }
+  return undefined;
+};
+
 export async function proxy(request: NextRequest) {
   const supabaseResponse = NextResponse.next({
     request,
@@ -18,9 +25,9 @@ export async function proxy(request: NextRequest) {
       const result = await supabase.auth.getUser();
       user = result.data.user;
       error = result.error;
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Suprimir logs de errores esperados (refresh token no encontrado)
-      if (err?.code !== 'refresh_token_not_found') {
+      if (getErrorCode(err) !== 'refresh_token_not_found') {
         console.error('Error de autenticación en middleware:', err);
       }
       error = err;
@@ -221,9 +228,10 @@ export async function proxy(request: NextRequest) {
     }
 
     return supabaseResponse;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Suprimir logs de errores esperados
-    if (error?.code !== 'refresh_token_not_found' && error?.code !== 'ECONNRESET') {
+    const errorCode = getErrorCode(error);
+    if (errorCode !== 'refresh_token_not_found' && errorCode !== 'ECONNRESET') {
       console.error('Error inesperado en middleware:', error);
     }
     // Si hay error, permitir el acceso y manejar la autenticación en el cliente
