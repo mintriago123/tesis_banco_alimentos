@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import { createCatalogoSolicitudesService, type SolicitudAltaAlimento } from '@/modules/catalogo-solicitudes';
+import { sendNotification } from '@/modules/shared/services/notificationClient';
 import type { Unidad } from '@/modules/admin/catalogo/types';
 import { CheckCircle2, ClipboardList, Send } from 'lucide-react';
 
@@ -132,6 +133,21 @@ export default function SolicitarAlimentoPage() {
     setSubmitting(false);
 
     if (result.success) {
+      await sendNotification({
+        titulo: `Nueva solicitud de alta: ${nombre.trim()}`,
+        mensaje: `${user.email ?? 'Un donante'} solicitó registrar "${nombre.trim()}" en la categoría "${categoriaFinal.trim()}".`,
+        tipo: 'info',
+        categoria: 'catalogo',
+        rolDestinatario: 'ADMINISTRADOR',
+        urlAccion: '/admin/catalogo',
+        metadatos: {
+          tipo: 'solicitud_alta_alimento',
+          nombre: nombre.trim(),
+          categoria: categoriaFinal.trim(),
+          solicitanteId: user.id
+        }
+      });
+
       setNombre('');
       setCategoria('');
       setCategoriaPersonalizada('');

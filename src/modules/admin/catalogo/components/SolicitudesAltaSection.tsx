@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, X, XCircle } from 'lucide-react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createCatalogoSolicitudesService, type SolicitudAltaAlimento } from '@/modules/catalogo-solicitudes';
+import { sendNotification } from '@/modules/shared/services/notificationClient';
 import type { Unidad } from '../types';
 
 interface SolicitudesAltaSectionProps {
@@ -33,6 +34,39 @@ const estadoStyles: Record<SolicitudAltaAlimento['estado'], string> = {
   aprobada: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   rechazada: 'border-rose-200 bg-rose-50 text-rose-700'
 };
+
+async function notificarRevisionSolicitud(
+  solicitud: SolicitudAltaAlimento,
+  estado: 'aprobada' | 'rechazada',
+  comentarioAdmin?: string
+) {
+  const nombreAlimento = solicitud.nombre.trim();
+  const categoria = solicitud.categoria.trim();
+
+  const titulo =
+    estado === 'aprobada'
+      ? `Solicitud aprobada: ${nombreAlimento}`
+      : `Solicitud rechazada: ${nombreAlimento}`;
+
+  const mensaje =
+    estado === 'aprobada'
+      ? `Tu solicitud para registrar "${nombreAlimento}" en la categoría "${categoria}" fue aprobada y ya está disponible en el catálogo.`
+      : `Tu solicitud para registrar "${nombreAlimento}" en la categoría "${categoria}" fue rechazada.${comentarioAdmin?.trim() ? ` Motivo: ${comentarioAdmin.trim()}` : ''}`;
+
+  await sendNotification({
+    titulo,
+    mensaje,
+    tipo: estado === 'aprobada' ? 'success' : 'error',
+    categoria: 'catalogo',
+    destinatarioId: solicitud.solicitante_id,
+    urlAccion: '/donante/solicitar-alimento',
+    metadatos: {
+      solicitudId: solicitud.id,
+      estado,
+      tipo: 'solicitud_alta_alimento'
+    }
+  });
+}
 
 const ReviewModal = ({
   mode,
@@ -274,13 +308,15 @@ const SolicitudesAltaSection = ({
 
   const handleApprove = async (values: { nombre: string; categoria: string; unidadIds: number[]; unidadPrincipalId?: number }) => {
     if (!selected) return;
+    const solicitud = selected;
 
     const result = await service.aprobarSolicitud({
-      solicitudId: selected.id,
+      solicitudId: solicitud.id,
       ...values
     });
 
     if (result.success) {
+      await notificarRevisionSolicitud(solicitud, 'aprobada');
       onSuccess('Solicitud aprobada y alimento creado');
       closeModal();
       await Promise.all([onRefresh(), onCatalogRefresh()]);
@@ -291,6 +327,7 @@ const SolicitudesAltaSection = ({
 
   const handleReject = async (comentarioAdmin: string) => {
     if (!selected) return;
+    const solicitud = selected;
 
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) {
@@ -299,12 +336,13 @@ const SolicitudesAltaSection = ({
     }
 
     const result = await service.rechazarSolicitud({
-      solicitudId: selected.id,
+      solicitudId: solicitud.id,
       comentarioAdmin,
       adminId: authData.user.id
     });
 
     if (result.success) {
+      await notificarRevisionSolicitud(solicitud, 'rechazada', comentarioAdmin);
       onSuccess('Solicitud rechazada');
       closeModal();
       await onRefresh();
