@@ -108,7 +108,6 @@ export default function UserProfileCard({
   profile,
   onEdit,
   showMap = true,
-  isEditable = false,
 }: UserProfileCardProps) {
   const rol = profile.rol as keyof typeof roleConfig;
   const colors = roleConfig[rol] || roleConfig.SOLICITANTE;

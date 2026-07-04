@@ -22,18 +22,18 @@ export function useDateFormatter() {
 
     let dia = cleanValue.slice(0, 2);
     let mes = cleanValue.slice(2, 4);
-    let anio = cleanValue.slice(4, 8);
+    const anio = cleanValue.slice(4, 8);
 
     // Validar días
     if (dia) {
-      let nDia = parseInt(dia, 10);
+      const nDia = parseInt(dia, 10);
       if (nDia > 31) dia = '31';
       if (nDia < 1 && dia.length === 2) dia = '01';
     }
 
     // Validar meses
     if (mes) {
-      let nMes = parseInt(mes, 10);
+      const nMes = parseInt(mes, 10);
       if (nMes > 12) mes = '12';
       if (nMes < 1 && mes.length === 2) mes = '01';
     }

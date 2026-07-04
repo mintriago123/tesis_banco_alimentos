@@ -4,8 +4,9 @@
 // ============================================================================
 
 import { useState, useEffect, useCallback } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
-import {
+import { useMemo } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type {
   Solicitud,
   SolicitudFormData,
   SolicitudEditData,
@@ -14,6 +15,12 @@ import {
 } from '../types';
 import { SolicitudesService } from '../services/solicitudesService';
 import { MESSAGES } from '../constants';
+
+type SolicitudWithUnidad = Solicitud & {
+  unidades?: {
+    simbolo?: string | null;
+  } | null;
+};
 
 interface UseSolicitudesResult {
   solicitudes: Solicitud[];
@@ -34,7 +41,7 @@ export function useSolicitudes(
   const [loading, setLoading] = useState<LoadingState>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  const service = new SolicitudesService(supabase);
+  const service = useMemo(() => new SolicitudesService(supabase), [supabase]);
 
   const fetchSolicitudes = useCallback(async () => {
     if (!usuarioId) return;
@@ -52,14 +59,14 @@ export function useSolicitudes(
       setLoading('error');
     } else {
       // Mapear datos para incluir el símbolo de unidad
-      const solicitudesMapeadas = (data || []).map((sol: any) => ({
+      const solicitudesMapeadas = (data || []).map((sol: SolicitudWithUnidad) => ({
         ...sol,
         unidad_simbolo: sol.unidades?.simbolo || 'unidades'
       }));
       setSolicitudes(solicitudesMapeadas);
       setLoading('success');
     }
-  }, [usuarioId, filtroEstado]);
+  }, [service, usuarioId, filtroEstado]);
 
   useEffect(() => {
     fetchSolicitudes();

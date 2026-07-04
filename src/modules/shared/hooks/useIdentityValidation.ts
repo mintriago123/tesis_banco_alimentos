@@ -14,6 +14,42 @@ interface IdentityData {
   fechasValidas: string[];
 }
 
+type CedulaApiColumn = {
+  campo?: string;
+  valor?: string;
+};
+
+type CedulaApiResponse = {
+  paquete?: {
+    entidades?: {
+      entidad?: Array<{
+        filas?: {
+          fila?: Array<{
+            columnas?: {
+              columna?: CedulaApiColumn[];
+            };
+          }>;
+        };
+      }>;
+    };
+  };
+};
+
+type RucApiResponse = {
+  'Servicio 5383'?: {
+    'Razon Social'?: string;
+    'Descripcion Ubicacion Geo'?: string;
+  };
+  'Servicio 5387'?: {
+    'Nombre Repre Legal'?: string;
+    'Datos Representante Legal'?: {
+      Cedula?: string;
+      'Fecha Expedicion'?: string;
+      'Fecha Expiracion'?: string;
+    };
+  };
+};
+
 export function useIdentityValidation() {
   const [consultando, setConsultando] = useState(false);
   const [validacionDocumento, setValidacionDocumento] = useState<ValidationResult>({
@@ -24,12 +60,12 @@ export function useIdentityValidation() {
   const [fechasValidasJuridica, setFechasValidasJuridica] = useState<string[]>([]);
 
   // Extrae datos demográficos para persona natural
-  const extraerDatosDemograficos = (apiResponse: any) => {
+  const extraerDatosDemograficos = (apiResponse: CedulaApiResponse) => {
     const entidad = apiResponse?.paquete?.entidades?.entidad?.[0];
     const fila = entidad?.filas?.fila?.[0];
     const columnas = fila?.columnas?.columna;
     const getCampo = (campo: string) =>
-      columnas?.find((col: any) => col.campo === campo)?.valor || '';
+      columnas?.find((col) => col.campo === campo)?.valor || '';
     return {
       nombre: getCampo('nombre'),
       cedula: getCampo('cedula'),
@@ -43,7 +79,7 @@ export function useIdentityValidation() {
   };
 
   // Extrae datos para persona jurídica
-  const extraerDatosRuc = (respuesta: any) => {
+  const extraerDatosRuc = (respuesta: RucApiResponse) => {
     const s5383 = respuesta?.['Servicio 5383'];
     const s5387 = respuesta?.['Servicio 5387'];
     const datosRepre = s5387?.['Datos Representante Legal'];
