@@ -40,7 +40,6 @@ export interface DonacionEstadisticas {
 
 export interface DonacionFormulario {
   tipo_producto: string;
-  producto_personalizado_nombre: string;
   cantidad: string;
   unidad_id: string;
   fecha_vencimiento: string;

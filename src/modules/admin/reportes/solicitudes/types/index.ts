@@ -74,10 +74,15 @@ export interface InventarioDisponible {
   id_deposito: string;
   tipo_alimento: string;
   cantidad_disponible: number;
+  cantidad_disponible_original: number;
   deposito: string;
   fecha_vencimiento?: string | null;
+  unidad_id?: number;
   unidad_nombre?: string;
   unidad_simbolo?: string;
+  unidad_nombre_original?: string;
+  unidad_simbolo_original?: string;
+  fue_convertido?: boolean;
 }
 
 export interface ProductoInventario {
@@ -167,19 +172,25 @@ export interface SupabaseInventarioDisponibleRow {
   fecha_actualizacion: string | null;
   productos_donados: { 
     nombre_producto?: string | null;
+    unidad_id?: number | null;
     unidades?: {
+      id?: number | null;
       nombre?: string | null;
       simbolo?: string | null;
     } | {
+      id?: number | null;
       nombre?: string | null;
       simbolo?: string | null;
     }[] | null;
   } | { 
     nombre_producto?: string | null;
+    unidad_id?: number | null;
     unidades?: {
+      id?: number | null;
       nombre?: string | null;
       simbolo?: string | null;
     } | {
+      id?: number | null;
       nombre?: string | null;
       simbolo?: string | null;
     }[] | null;

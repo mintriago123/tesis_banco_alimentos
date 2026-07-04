@@ -78,9 +78,17 @@ const SolicitudDetailModal = ({
     0
   );
 
+  const formatQuantity = (cantidad: number): string => {
+    if (Number.isInteger(cantidad)) {
+      return cantidad.toString();
+    }
+
+    return cantidad.toFixed(2).replace(/\.?0+$/, '');
+  };
+
   const depositoActual = inventario.find(item => item.id_deposito === depositoSeleccionado);
   const stockDepositoSeleccionado = depositoActual?.cantidad_disponible ?? 0;
-  const maxAprobable = Math.max(0, Math.min(solicitud.cantidad, Math.floor(stockDepositoSeleccionado)));
+  const maxAprobable = Math.max(0, Math.min(solicitud.cantidad, stockDepositoSeleccionado));
 
   // Cargar datos del operador/admin que rechazó
   useEffect(() => {
@@ -380,7 +388,7 @@ const SolicitudDetailModal = ({
                           <option value="">Selecciona una bodega</option>
                           {inventario.map(item => (
                             <option key={item.id} value={item.id_deposito}>
-                              {item.deposito} - {item.cantidad_disponible} {item.unidad_simbolo || item.unidad_nombre || solicitud.unidades?.simbolo || 'unidades'}
+                              {item.deposito} - {formatQuantity(item.cantidad_disponible)} {item.unidad_simbolo || item.unidad_nombre || solicitud.unidades?.simbolo || 'unidades'}
                             </option>
                           ))}
                         </select>
@@ -391,10 +399,11 @@ const SolicitudDetailModal = ({
                         </label>
                         <input
                           type="number"
-                          min={1}
-                          max={Math.max(1, maxAprobable)}
+                          min={0.01}
+                          max={Math.max(0.01, maxAprobable)}
+                          step={0.01}
                           value={cantidadAprobar}
-                          onChange={(event) => onCantidadAprobarChange(Number(event.target.value) || 0)}
+                          onChange={(event) => onCantidadAprobarChange(parseFloat(event.target.value) || 0)}
                           className="w-full p-2 border border-gray-300 rounded-lg"
                           disabled={isProcessing || !depositoSeleccionado}
                         />
@@ -404,6 +413,7 @@ const SolicitudDetailModal = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {inventario.map(item => {
                         const unidad = item.unidad_simbolo || item.unidad_nombre || 'unidades';
+                        const unidadOriginal = item.unidad_simbolo_original || item.unidad_nombre_original || unidad;
                         return (
                           <div key={item.id} className="border rounded-lg p-3">
                             <div className="font-semibold text-gray-900">
@@ -413,8 +423,13 @@ const SolicitudDetailModal = ({
                               Depósito: {item.deposito}
                             </div>
                             <div className="text-sm text-gray-600">
-                              Disponible: <span className="font-medium">{item.cantidad_disponible} {unidad}</span>
+                              Disponible: <span className="font-medium">{formatQuantity(item.cantidad_disponible)} {unidad}</span>
                             </div>
+                            {item.fue_convertido && (
+                              <div className="text-xs text-gray-500">
+                                Equivale a {formatQuantity(item.cantidad_disponible_original)} {unidadOriginal} en inventario
+                              </div>
+                            )}
                             {item.fecha_vencimiento && (
                               <div className="text-xs text-gray-500">
                                 Actualizado: {formatDate(item.fecha_vencimiento)}
@@ -435,13 +450,13 @@ const SolicitudDetailModal = ({
                         <div>
                           <span className="text-gray-600">Total disponible: </span>
                           <span className={`font-semibold ${totalDisponible >= solicitud.cantidad ? 'text-green-600' : 'text-red-600'}`}>
-                            {totalDisponible} {solicitud.unidades?.simbolo ?? 'unidades'}
+                            {formatQuantity(totalDisponible)} {solicitud.unidades?.simbolo ?? 'unidades'}
                           </span>
                         </div>
                         <div>
                           <span className="text-gray-600">Disponible en bodega seleccionada: </span>
-                          <span className={`font-semibold ${stockDepositoSeleccionado >= 1 ? 'text-green-600' : 'text-red-600'}`}>
-                            {stockDepositoSeleccionado} {solicitud.unidades?.simbolo ?? 'unidades'}
+                          <span className={`font-semibold ${stockDepositoSeleccionado > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {formatQuantity(stockDepositoSeleccionado)} {solicitud.unidades?.simbolo ?? 'unidades'}
                           </span>
                         </div>
                         <div className="mt-2">
@@ -453,7 +468,7 @@ const SolicitudDetailModal = ({
                           ) : (
                             <div className="flex items-center text-red-600 text-sm">
                               <XCircle className="w-4 h-4 mr-1" />
-                              Stock insuficiente ({totalDisponible} de {solicitud.cantidad} disponibles)
+                              Stock insuficiente ({formatQuantity(totalDisponible)} de {formatQuantity(solicitud.cantidad)} disponibles)
                             </div>
                           )}
                         </div>
@@ -517,7 +532,7 @@ const SolicitudDetailModal = ({
                     type="button"
                     onClick={onAprobar}
                     className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                    disabled={isProcessing || inventarioLoading || !depositoSeleccionado || cantidadAprobar < 1 || cantidadAprobar > maxAprobable}
+                    disabled={isProcessing || inventarioLoading || !depositoSeleccionado || cantidadAprobar <= 0 || cantidadAprobar > maxAprobable}
                     title={!depositoSeleccionado ? 'Selecciona una bodega para aprobar' : (cantidadAprobar > maxAprobable ? 'La cantidad supera el stock disponible en la bodega seleccionada' : '')}
                   >
                     <CheckCircle className="w-4 h-4" />

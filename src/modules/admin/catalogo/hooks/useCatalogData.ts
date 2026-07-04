@@ -250,6 +250,7 @@ export const useCatalogData = (supabaseClient: SupabaseClient) => {
     updateFood,
     deleteFood,
     checkFoodUsage,
-    deleteCategory
+    deleteCategory,
+    refreshCatalog: loadFoods
   };
 };

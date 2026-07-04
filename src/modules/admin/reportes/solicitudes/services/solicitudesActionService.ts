@@ -59,7 +59,7 @@ export const createSolicitudesActionService = (supabaseClient: SupabaseClient) =
         });
       }
 
-      const cantidadObjetivo = Math.max(1, Math.min(cantidadAprobada ?? solicitud.cantidad, solicitud.cantidad));
+      const cantidadObjetivo = Math.max(0.01, Math.min(cantidadAprobada ?? solicitud.cantidad, solicitud.cantidad));
 
       // Validar stock disponible antes de aprobar
       if (nuevoEstado === 'aprobada' && solicitud.estado === 'pendiente') {
@@ -1312,11 +1312,11 @@ export const createSolicitudesActionService = (supabaseClient: SupabaseClient) =
         };
       }
 
-      // Validar que la cantidad sea válida (mínimo 1 unidad)
-      if (cantidadDonar < 1 || cantidadDonar > solicitud.cantidad) {
+      // Validar que la cantidad sea válida
+      if (cantidadDonar <= 0 || cantidadDonar > solicitud.cantidad) {
         return {
           success: false,
-          error: `La cantidad a donar debe ser al menos 1 unidad y máximo ${solicitud.cantidad} ${solicitud.unidades?.simbolo ?? 'unidades'}`
+          error: `La cantidad a donar debe ser mayor a 0 y máximo ${solicitud.cantidad} ${solicitud.unidades?.simbolo ?? 'unidades'}`
         };
       }
 

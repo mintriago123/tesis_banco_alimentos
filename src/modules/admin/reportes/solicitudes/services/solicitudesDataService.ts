@@ -85,7 +85,7 @@ export const createSolicitudesDataService = (supabaseClient: SupabaseClient) => 
     }
   };
 
-  const fetchInventarioDisponible = async (tipoAlimento: string): Promise<ServiceResult<InventarioDisponible[]>> => {
+  const fetchInventarioDisponible = async (solicitud: Pick<Solicitud, 'tipo_alimento' | 'unidad_id'>): Promise<ServiceResult<InventarioDisponible[]>> => {
     try {
       const { data, error } = await supabaseClient
         .from('inventario')
@@ -96,7 +96,9 @@ export const createSolicitudesDataService = (supabaseClient: SupabaseClient) => 
           fecha_actualizacion,
           productos_donados!inner(
             nombre_producto,
+            unidad_id,
             unidades(
+              id,
               nombre,
               simbolo
             )
@@ -105,7 +107,7 @@ export const createSolicitudesDataService = (supabaseClient: SupabaseClient) => 
             nombre
           )
         `)
-        .ilike('productos_donados.nombre_producto', `%${tipoAlimento}%`)
+        .ilike('productos_donados.nombre_producto', `%${solicitud.tipo_alimento}%`)
         .gt('cantidad_disponible', 0)
         .order('fecha_actualizacion', { ascending: true, nullsFirst: false });
 
@@ -118,8 +120,11 @@ export const createSolicitudesDataService = (supabaseClient: SupabaseClient) => 
         };
       }
 
-      const inventarioFormateado: InventarioDisponible[] = ((data ?? []) as SupabaseInventarioDisponibleRow[])
-        .map(mapInventarioDisponibleRowToDomain);
+      const inventarioFormateado = await Promise.all(
+        ((data ?? []) as SupabaseInventarioDisponibleRow[]).map(row =>
+          mapInventarioDisponibleRowToDomain(supabaseClient, row, solicitud.unidad_id)
+        )
+      );
 
       return {
         success: true,
@@ -216,20 +221,108 @@ const normalizeRelation = <T>(value: T | T[] | null | undefined): T | null => {
 };
 
 const mapInventarioDisponibleRowToDomain = (
-  row: SupabaseInventarioDisponibleRow
-): InventarioDisponible => {
+  supabaseClient: SupabaseClient,
+  row: SupabaseInventarioDisponibleRow,
+  unidadSolicitudId?: number
+): Promise<InventarioDisponible> => {
+  return mapInventarioDisponibleRowToDomainInternal(supabaseClient, row, unidadSolicitudId);
+};
+
+const mapInventarioDisponibleRowToDomainInternal = async (
+  supabaseClient: SupabaseClient,
+  row: SupabaseInventarioDisponibleRow,
+  unidadSolicitudId?: number
+): Promise<InventarioDisponible> => {
   const producto = normalizeRelation(row.productos_donados);
   const deposito = normalizeRelation(row.depositos);
   const unidad = producto?.unidades ? normalizeRelation(producto.unidades) : null;
+  const cantidadOriginal = row.cantidad_disponible ?? 0;
+  const unidadProductoId = producto?.unidad_id ?? undefined;
+
+  let cantidadDisponible = cantidadOriginal;
+  let unidadNombre = unidad?.nombre ?? undefined;
+  let unidadSimbolo = unidad?.simbolo ?? undefined;
+  let fueConvertido = false;
+
+  if (unidadSolicitudId && unidadProductoId && unidadSolicitudId !== unidadProductoId) {
+    const factor = await obtenerFactorConversion(supabaseClient, unidadProductoId, unidadSolicitudId);
+
+    if (factor !== null) {
+      cantidadDisponible = cantidadOriginal * factor;
+      fueConvertido = true;
+
+      const unidadSolicitud = await obtenerUnidadPorId(supabaseClient, unidadSolicitudId);
+      if (unidadSolicitud) {
+        unidadNombre = unidadSolicitud.nombre ?? undefined;
+        unidadSimbolo = unidadSolicitud.simbolo ?? undefined;
+      }
+    }
+  }
 
   return {
     id: String(row.id_inventario),
     id_deposito: row.id_deposito,
     tipo_alimento: producto?.nombre_producto ?? 'Producto desconocido',
-    cantidad_disponible: row.cantidad_disponible ?? 0,
+    cantidad_disponible: cantidadDisponible,
+    cantidad_disponible_original: cantidadOriginal,
     deposito: deposito?.nombre ?? 'Depósito desconocido',
     fecha_vencimiento: row.fecha_actualizacion ?? null,
-    unidad_nombre: unidad?.nombre ?? undefined,
-    unidad_simbolo: unidad?.simbolo ?? undefined
+    unidad_id: unidadProductoId,
+    unidad_nombre: unidadNombre,
+    unidad_simbolo: unidadSimbolo,
+    unidad_nombre_original: unidad?.nombre ?? undefined,
+    unidad_simbolo_original: unidad?.simbolo ?? undefined,
+    fue_convertido: fueConvertido
   };
+};
+
+const obtenerUnidadPorId = async (
+  supabaseClient: SupabaseClient,
+  unidadId: number
+): Promise<{ nombre?: string | null; simbolo?: string | null } | null> => {
+  const { data, error } = await supabaseClient
+    .from('unidades')
+    .select('nombre, simbolo')
+    .eq('id', unidadId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return data;
+};
+
+const obtenerFactorConversion = async (
+  supabaseClient: SupabaseClient,
+  unidadOrigenId: number,
+  unidadDestinoId: number
+): Promise<number | null> => {
+  if (unidadOrigenId === unidadDestinoId) {
+    return 1;
+  }
+
+  const { data: conversionDirecta } = await supabaseClient
+    .from('conversiones')
+    .select('factor_conversion')
+    .eq('unidad_origen_id', unidadOrigenId)
+    .eq('unidad_destino_id', unidadDestinoId)
+    .maybeSingle();
+
+  if (conversionDirecta?.factor_conversion !== undefined && conversionDirecta?.factor_conversion !== null) {
+    return Number(conversionDirecta.factor_conversion);
+  }
+
+  const { data: conversionInversa } = await supabaseClient
+    .from('conversiones')
+    .select('factor_conversion')
+    .eq('unidad_origen_id', unidadDestinoId)
+    .eq('unidad_destino_id', unidadOrigenId)
+    .maybeSingle();
+
+  if (conversionInversa?.factor_conversion !== undefined && conversionInversa?.factor_conversion !== null) {
+    return 1 / Number(conversionInversa.factor_conversion);
+  }
+
+  return null;
 };
