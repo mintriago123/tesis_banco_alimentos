@@ -7,7 +7,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
-import { useSupabase } from '@/app/components/SupabaseProvider';
 import Toast from '@/app/components/ui/Toast';
 import { useToast } from '@/modules/shared';
 import { 
@@ -45,8 +44,7 @@ const motivosColors: Record<MotivoCancelacion, string> = {
 };
 
 export default function HistorialCancelacionesPage() {
-  const { supabase } = useSupabase();
-  const { toasts, showSuccess, showError, hideToast } = useToast();
+  const { toasts, showError, hideToast } = useToast();
   
   const [cancelaciones, setCancelaciones] = useState<DonacionCanceladaDetalle[]>([]);
   const [estadisticas, setEstadisticas] = useState<EstadisticasCancelaciones | null>(null);
@@ -105,20 +103,19 @@ export default function HistorialCancelacionesPage() {
       } else {
         throw new Error(data.error || 'Error desconocido');
       }
-    } catch (err: any) {
-      const errorMsg = err.message || 'Error al cargar cancelaciones';
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Error al cargar cancelaciones';
       setError(errorMsg);
       showError(errorMsg);
       console.error('Error detallado:', err);
     } finally {
       setIsLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [limit, offset, motivoFilter, fechaInicio, fechaFin]); // Removido showError para evitar loop
+  }, [limit, offset, motivoFilter, fechaInicio, fechaFin, showError]);
 
   useEffect(() => {
     cargarCancelaciones(offset === 0); // Cargar estadísticas solo en la primera página
-  }, [cargarCancelaciones]);
+  }, [cargarCancelaciones, offset]);
 
   const handleRefresh = () => {
     setOffset(0);

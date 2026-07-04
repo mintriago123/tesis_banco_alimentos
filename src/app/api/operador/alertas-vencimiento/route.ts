@@ -7,6 +7,21 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 
+type PrioridadAlerta = 'vencido' | 'alta' | 'media' | 'baja';
+
+type AlertaVencimientoRpcRow = {
+  id_inventario: string;
+  id_producto: string;
+  nombre_producto: string;
+  cantidad_disponible: number | string;
+  fecha_caducidad: string;
+  dias_para_vencer: number;
+  id_deposito: string;
+  nombre_deposito: string;
+  unidad_simbolo: string | null;
+  prioridad: PrioridadAlerta;
+};
+
 /**
  * GET /api/operador/alertas-vencimiento
  * Obtiene productos próximos a vencer o vencidos
@@ -59,23 +74,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    let alertas = data || [];
+    let alertas = (data || []) as AlertaVencimientoRpcRow[];
 
     // Aplicar filtros adicionales
     if (solo_vencidos) {
-      alertas = alertas.filter((alerta: any) => alerta.prioridad === 'vencido');
+      alertas = alertas.filter((alerta) => alerta.prioridad === 'vencido');
     }
 
     if (prioridad && prioridad !== 'todos') {
-      alertas = alertas.filter((alerta: any) => alerta.prioridad === prioridad);
+      alertas = alertas.filter((alerta) => alerta.prioridad === prioridad);
     }
 
     // Clasificar alertas por prioridad
     const clasificadas = {
-      vencidos: alertas.filter((a: any) => a.prioridad === 'vencido'),
-      alta: alertas.filter((a: any) => a.prioridad === 'alta'),
-      media: alertas.filter((a: any) => a.prioridad === 'media'),
-      baja: alertas.filter((a: any) => a.prioridad === 'baja')
+      vencidos: alertas.filter((a) => a.prioridad === 'vencido'),
+      alta: alertas.filter((a) => a.prioridad === 'alta'),
+      media: alertas.filter((a) => a.prioridad === 'media'),
+      baja: alertas.filter((a) => a.prioridad === 'baja')
     };
 
     // Calcular estadísticas
@@ -84,11 +99,11 @@ export async function GET(request: NextRequest) {
       total_vencidos: clasificadas.vencidos.length,
       total_proximos: alertas.length - clasificadas.vencidos.length,
       cantidad_total_vencidos: clasificadas.vencidos.reduce(
-        (sum: number, a: any) => sum + Number(a.cantidad_disponible), 
+        (sum, a) => sum + Number(a.cantidad_disponible), 
         0
       ),
       cantidad_total_proximos: clasificadas.alta.concat(clasificadas.media, clasificadas.baja).reduce(
-        (sum: number, a: any) => sum + Number(a.cantidad_disponible), 
+        (sum, a) => sum + Number(a.cantidad_disponible), 
         0
       ),
       por_prioridad: {
@@ -106,7 +121,7 @@ export async function GET(request: NextRequest) {
         solo_vencidos
       },
       estadisticas,
-      alertas: alertas.map((alerta: any) => ({
+      alertas: alertas.map((alerta) => ({
         id_inventario: alerta.id_inventario,
         id_producto: alerta.id_producto,
         nombre_producto: alerta.nombre_producto,

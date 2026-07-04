@@ -7,7 +7,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
-import { useSupabase } from '@/app/components/SupabaseProvider';
 import Toast from '@/app/components/ui/Toast';
 import { useToast } from '@/modules/shared';
 import { 
@@ -19,7 +18,6 @@ import {
   TrendingDown, 
   User,
   Filter,
-  Download,
   BarChart3
 } from 'lucide-react';
 import type { BajaProductoDetalle, MotivoBaja } from '@/modules/operador/bajas/types';
@@ -40,9 +38,18 @@ const motivosColors: Record<MotivoBaja, string> = {
   otro: 'bg-gray-100 text-gray-800 border-gray-300'
 };
 
+type EstadisticaMotivo = {
+  bajas: number;
+  cantidad: number;
+};
+
+type EstadisticasBajas = {
+  total: EstadisticaMotivo;
+  por_motivo: Record<MotivoBaja, EstadisticaMotivo>;
+};
+
 export default function AdminHistorialBajasPage() {
-  const { supabase } = useSupabase();
-  const { toasts, showSuccess, showError, hideToast } = useToast();
+  const { toasts, showError, hideToast } = useToast();
   
   const [bajas, setBajas] = useState<BajaProductoDetalle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,7 +68,7 @@ export default function AdminHistorialBajasPage() {
   const [hasMore, setHasMore] = useState(false);
 
   // Estadísticas
-  const [estadisticas, setEstadisticas] = useState<any>(null);
+  const [estadisticas, setEstadisticas] = useState<EstadisticasBajas | null>(null);
   const [showStats, setShowStats] = useState(true);
 
   const cargarBajas = useCallback(async () => {
@@ -99,13 +106,14 @@ export default function AdminHistorialBajasPage() {
       } else {
         throw new Error(data.error || 'Error desconocido');
       }
-    } catch (err: any) {
-      setError(err.message);
-      showError(err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error al cargar el historial de bajas';
+      setError(errorMessage);
+      showError(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  }, [offset, limit, motivoFilter, fechaInicio, fechaFin]);
+  }, [offset, limit, motivoFilter, fechaInicio, fechaFin, showError]);
 
   const cargarEstadisticas = useCallback(async () => {
     try {

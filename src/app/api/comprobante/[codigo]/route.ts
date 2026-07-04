@@ -7,6 +7,8 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { decodificarQRPayload, formatearFecha, formatearFechaSolo } from '@/lib/comprobante';
 import type { DatosComprobante } from '@/lib/comprobante/types';
 
+type ServerSupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;
+
 const DESCRIPCION_PROYECTO = `
 El Banco de Alimentos es una organización sin fines de lucro dedicada a combatir el hambre 
 y reducir el desperdicio alimentario. Nuestra misión es recolectar alimentos excedentes de 
@@ -26,7 +28,49 @@ type AccesoUsuario = {
   rol: string | null;
 };
 
-async function obtenerAccesoUsuario(supabase: any): Promise<{
+type SolicitudComprobanteRow = {
+  id: string;
+  usuario_id: string;
+  tipo_alimento: string;
+  cantidad: number;
+  estado: string;
+  created_at: string;
+  fecha_respuesta: string | null;
+  comentario_admin: string | null;
+  codigo_comprobante: string | null;
+  unidades?: {
+    id?: number | null;
+    nombre?: string | null;
+    simbolo?: string | null;
+  } | null;
+  usuarios?: {
+    nombre?: string | null;
+    cedula?: string | null;
+    telefono?: string | null;
+    email?: string | null;
+    direccion?: string | null;
+  } | null;
+};
+
+type DonacionComprobanteRow = {
+  id: number;
+  user_id: string | null;
+  codigo_comprobante: string | null;
+  actualizado_en: string | null;
+  creado_en: string;
+  nombre_donante: string;
+  email: string;
+  telefono: string | null;
+  direccion_donante_completa: string | null;
+  cedula_donante: string | null;
+  ruc_donante: string | null;
+  tipo_producto: string;
+  cantidad: number;
+  unidad_simbolo: string | null;
+  estado: string;
+};
+
+async function obtenerAccesoUsuario(supabase: ServerSupabaseClient): Promise<{
   usuario: AccesoUsuario | null;
   errorResponse?: NextResponse;
 }> {
@@ -141,7 +185,7 @@ export async function GET(
 /**
  * Busca un comprobante por código legible (SOL-xxx o DON-xxx)
  */
-async function buscarPorCodigoLegible(supabase: any, codigo: string, usuario: AccesoUsuario) {
+async function buscarPorCodigoLegible(supabase: ServerSupabaseClient, codigo: string, usuario: AccesoUsuario) {
   const esSolicitud = codigo.toUpperCase().startsWith('SOL-');
 
   if (esSolicitud) {
@@ -178,7 +222,7 @@ async function buscarPorCodigoLegible(supabase: any, codigo: string, usuario: Ac
       );
     }
 
-    return generarRespuestaSolicitud(solicitud, codigo);
+    return generarRespuestaSolicitud(solicitud as SolicitudComprobanteRow, codigo);
   } else {
     // Buscar en donaciones
     const { data: donacion, error } = await supabase
@@ -201,14 +245,14 @@ async function buscarPorCodigoLegible(supabase: any, codigo: string, usuario: Ac
       );
     }
 
-    return generarRespuestaDonacion(donacion, codigo);
+    return generarRespuestaDonacion(donacion as DonacionComprobanteRow, codigo);
   }
 }
 
 /**
  * Obtiene solicitud por ID (usado para payload QR)
  */
-async function obtenerSolicitudPorId(supabase: any, id: string, codigoComprobante: string, fecha: string, usuario: AccesoUsuario) {
+async function obtenerSolicitudPorId(supabase: ServerSupabaseClient, id: string, codigoComprobante: string, fecha: string, usuario: AccesoUsuario) {
   const { data: solicitud, error } = await supabase
     .from('solicitudes')
     .select(`
@@ -241,13 +285,13 @@ async function obtenerSolicitudPorId(supabase: any, id: string, codigoComprobant
     );
   }
 
-  return generarRespuestaSolicitud(solicitud, codigoComprobante, fecha);
+  return generarRespuestaSolicitud(solicitud as SolicitudComprobanteRow, codigoComprobante, fecha);
 }
 
 /**
  * Obtiene donación por ID (usado para payload QR)
  */
-async function obtenerDonacionPorId(supabase: any, id: number, codigoComprobante: string, fecha: string, usuario: AccesoUsuario) {
+async function obtenerDonacionPorId(supabase: ServerSupabaseClient, id: number, codigoComprobante: string, fecha: string, usuario: AccesoUsuario) {
   const { data: donacion, error } = await supabase
     .from('donaciones')
     .select('*')
@@ -268,13 +312,13 @@ async function obtenerDonacionPorId(supabase: any, id: number, codigoComprobante
     );
   }
 
-  return generarRespuestaDonacion(donacion, codigoComprobante, fecha);
+  return generarRespuestaDonacion(donacion as DonacionComprobanteRow, codigoComprobante, fecha);
 }
 
 /**
  * Genera la respuesta JSON para una solicitud
  */
-function generarRespuestaSolicitud(solicitud: any, codigoComprobante: string, fecha?: string) {
+function generarRespuestaSolicitud(solicitud: SolicitudComprobanteRow, codigoComprobante: string, fecha?: string) {
   const fechaEmision = fecha ? new Date(parseInt(fecha)).toISOString() : solicitud.fecha_respuesta || solicitud.created_at;
   
   const comprobante: DatosComprobante = {
@@ -285,9 +329,9 @@ function generarRespuestaSolicitud(solicitud: any, codigoComprobante: string, fe
       id: solicitud.usuario_id,
       nombre: solicitud.usuarios?.nombre ?? 'N/A',
       email: solicitud.usuarios?.email ?? 'N/A',
-      telefono: solicitud.usuarios?.telefono,
-      direccion: solicitud.usuarios?.direccion,
-      documento: solicitud.usuarios?.cedula,
+      telefono: solicitud.usuarios?.telefono ?? undefined,
+      direccion: solicitud.usuarios?.direccion ?? undefined,
+      documento: solicitud.usuarios?.cedula ?? undefined,
     },
     pedido: {
       id: solicitud.id,
@@ -325,7 +369,7 @@ function generarRespuestaSolicitud(solicitud: any, codigoComprobante: string, fe
 /**
  * Genera la respuesta JSON para una donación
  */
-function generarRespuestaDonacion(donacion: any, codigoComprobante: string, fecha?: string) {
+function generarRespuestaDonacion(donacion: DonacionComprobanteRow, codigoComprobante: string, fecha?: string) {
   const fechaEmision = fecha ? new Date(parseInt(fecha)).toISOString() : donacion.actualizado_en || donacion.creado_en;
 
   const comprobante: DatosComprobante = {
@@ -333,12 +377,12 @@ function generarRespuestaDonacion(donacion: any, codigoComprobante: string, fech
     fechaEmision,
     fechaVencimiento: new Date(new Date(fechaEmision).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     usuario: {
-      id: donacion.user_id,
+      id: donacion.user_id ?? '',
       nombre: donacion.nombre_donante,
       email: donacion.email,
-      telefono: donacion.telefono,
-      direccion: donacion.direccion_donante_completa,
-      documento: donacion.cedula_donante ?? donacion.ruc_donante,
+      telefono: donacion.telefono ?? undefined,
+      direccion: donacion.direccion_donante_completa ?? undefined,
+      documento: donacion.cedula_donante ?? donacion.ruc_donante ?? undefined,
     },
     pedido: {
       id: String(donacion.id),
@@ -348,7 +392,7 @@ function generarRespuestaDonacion(donacion: any, codigoComprobante: string, fech
       unidad: donacion.unidad_simbolo ?? 'unidades',
       estado: donacion.estado,
       fechaCreacion: donacion.creado_en,
-      fechaAprobacion: donacion.actualizado_en,
+      fechaAprobacion: donacion.actualizado_en ?? undefined,
     },
     descripcionProyecto: DESCRIPCION_PROYECTO,
     instrucciones: [
