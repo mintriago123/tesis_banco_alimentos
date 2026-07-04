@@ -12,7 +12,7 @@ const MapboxLocationPicker = lazy(() => import('@/modules/shared/components/Mapb
 
 export default function ActualizarPerfil() {
   const router = useRouter();
-  const { supabase, user } = useSupabase();
+  const { supabase } = useSupabase();
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
   const {

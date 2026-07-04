@@ -89,9 +89,13 @@ export default function SupabaseProvider({
       try {
         const { data: { session } } = await supabase.auth.getSession();
         setUser(session?.user ?? null);
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Suprimir errores esperados de tokens inválidos
-        if (error?.code !== 'refresh_token_not_found') {
+        const errorCode = typeof error === 'object' && error !== null && 'code' in error
+          ? (error as { code?: string }).code
+          : undefined;
+
+        if (errorCode !== 'refresh_token_not_found') {
           console.error('Error obteniendo sesión:', error);
         }
         setUser(null);

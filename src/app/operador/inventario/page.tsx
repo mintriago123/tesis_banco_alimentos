@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import Toast from '@/app/components/ui/Toast';
@@ -28,7 +28,7 @@ export default function OperadorInventarioPage() {
   const { supabase } = useSupabase();
   const { toasts, showSuccess, showError, hideToast } = useToast();
   const [currentView, setCurrentView] = useState<'inventario' | 'alertas' | 'estadisticas' | 'vencimientos'>('inventario');
-  const [selectedAlerta, setSelectedAlerta] = useState<AlertaInventario | null>(null);
+  const [, setSelectedAlerta] = useState<AlertaInventario | null>(null);
   const [selectedItem, setSelectedItem] = useState<InventarioItem | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isBajaModalOpen, setIsBajaModalOpen] = useState(false);
@@ -45,7 +45,6 @@ export default function OperadorInventarioPage() {
     stats,
     hasActiveFilters,
     refetch,
-    refetchAlertas,
     updateCantidad,
     setSearch,
     setDeposito,
@@ -72,7 +71,7 @@ export default function OperadorInventarioPage() {
       } else {
         showError('Error al actualizar la cantidad');
       }
-    } catch (error) {
+    } catch {
       showError('Error al actualizar la cantidad');
     } finally {
       setProcessingId(undefined);

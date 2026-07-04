@@ -47,6 +47,18 @@ interface DonacionResult {
 
 type SearchResult = SolicitudResult | DonacionResult;
 
+type SolicitudRow = Omit<SolicitudResult, 'tipo' | 'unidades' | 'usuarios'> & {
+  unidades: SolicitudResult['unidades'] | SolicitudResult['unidades'][];
+  usuarios: SolicitudResult['usuarios'] | SolicitudResult['usuarios'][];
+};
+
+const singleRelation = <T,>(relation: T | T[] | null | undefined): T | null => {
+  if (Array.isArray(relation)) {
+    return relation[0] ?? null;
+  }
+  return relation ?? null;
+};
+
 export default function ValidarComprobantePage() {
   const [codigo, setCodigo] = useState('');
   const [loading, setLoading] = useState(false);
@@ -66,7 +78,7 @@ export default function ValidarComprobantePage() {
 
     try {
       // Buscar en solicitudes
-      const { data: solicitud, error: solError } = await supabase
+      const { data: solicitud } = await supabase
         .from('solicitudes')
         .select(`
           id,
@@ -85,8 +97,7 @@ export default function ValidarComprobantePage() {
         .maybeSingle();
 
       if (solicitud) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const sol = solicitud as any;
+        const sol = solicitud as SolicitudRow;
         setResult({
           tipo: 'solicitud',
           id: sol.id,
@@ -98,15 +109,15 @@ export default function ValidarComprobantePage() {
           fecha_respuesta: sol.fecha_respuesta,
           comentario_admin: sol.comentario_admin,
           codigo_comprobante: sol.codigo_comprobante,
-          unidades: sol.unidades,
-          usuarios: sol.usuarios,
-        } as SolicitudResult);
+          unidades: singleRelation(sol.unidades),
+          usuarios: singleRelation(sol.usuarios),
+        });
         setLoading(false);
         return;
       }
 
       // Buscar en donaciones
-      const { data: donacion, error: donError } = await supabase
+      const { data: donacion } = await supabase
         .from('donaciones')
         .select('*')
         .eq('codigo_comprobante', codigo.trim().toUpperCase())
