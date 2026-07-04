@@ -274,10 +274,10 @@ async function main() {
 
   try {
     execFileSync('magick', [outputSvg, outputPng]);
-  } catch (err1) {
+  } catch {
     try {
       execFileSync('convert', [outputSvg, outputPng]);
-    } catch (err2) {
+    } catch {
       console.error('No se pudo convertir SVG a PNG. El SVG quedó generado.');
     }
   }

@@ -6,7 +6,7 @@ import { BellIcon as BellSolidIcon } from '@heroicons/react/24/solid';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import { useNotificaciones } from '@/modules/shared';
 import { useRouter } from 'next/navigation';
-import { formatRelativeTime, formatShortDate } from '@/lib/dateUtils';
+import { formatShortDate } from '@/lib/dateUtils';
 
 interface NotificacionesDropdownProps {
   readonly isCollapsed?: boolean;
