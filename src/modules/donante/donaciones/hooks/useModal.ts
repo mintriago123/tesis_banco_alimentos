@@ -8,7 +8,7 @@ interface UseModalReturn<T> {
   setData: (data: T | null) => void;
 }
 
-export function useModal<T = any>(): UseModalReturn<T> {
+export function useModal<T = unknown>(): UseModalReturn<T> {
   const [isOpen, setIsOpen] = useState(false);
   const [data, setData] = useState<T | null>(null);
 

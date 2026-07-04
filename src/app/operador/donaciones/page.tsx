@@ -172,7 +172,7 @@ export default function OperadorDonationsPage() {
         }}
       />
     );
-  }, [isLoading, filteredDonations, donations.length, hasFiltersApplied, resetFilters, handleChangeEstado, processingId, messages.noData, messages.noFilteredData]);
+  }, [isLoading, filteredDonations, donations.length, hasFiltersApplied, resetFilters, handleChangeEstado, handleViewDetails, processingId, messages.noData, messages.noFilteredData]);
 
   return (
     <DashboardLayout

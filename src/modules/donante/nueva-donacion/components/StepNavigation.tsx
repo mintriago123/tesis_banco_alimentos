@@ -14,7 +14,6 @@ export default function StepNavigation({
   totalPasos,
   onAnterior,
   onSiguiente,
-  onEnviar,
   enviando,
 }: StepNavigationProps) {
   return (

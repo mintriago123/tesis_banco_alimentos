@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { ArrowLeft, Printer, QrCode, Package, Gift, Building2, Calendar, User, Phone, Mail, MapPin, FileText } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import QRCode from 'qrcode';
 
 interface ComprobanteData {
@@ -25,6 +26,24 @@ interface ComprobanteData {
   };
   comentario?: string;
 }
+
+type SolicitudComprobanteRow = {
+  codigo_comprobante: string;
+  estado: string;
+  tipo_alimento: string;
+  cantidad: number;
+  created_at: string;
+  fecha_respuesta: string | null;
+  comentario_admin: string | null;
+  unidades?: { simbolo?: string | null } | null;
+  usuarios?: {
+    nombre?: string | null;
+    cedula?: string | null;
+    telefono?: string | null;
+    email?: string | null;
+    direccion?: string | null;
+  } | null;
+};
 
 export default function ComprobantePage({ params }: { params: Promise<{ codigo: string }> }) {
   const resolvedParams = use(params);
@@ -56,8 +75,7 @@ export default function ComprobantePage({ params }: { params: Promise<{ codigo: 
 
           if (error || !solicitud) throw new Error('Solicitud no encontrada');
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const sol = solicitud as any;
+          const sol = solicitud as SolicitudComprobanteRow;
           setData({
             tipo: 'solicitud',
             codigo: sol.codigo_comprobante,
@@ -289,7 +307,14 @@ export default function ComprobantePage({ params }: { params: Promise<{ codigo: 
                   <div className="flex-shrink-0 text-center border-l border-gray-200 pl-6">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Verificación QR</p>
                     {qrImage && (
-                      <img src={qrImage} alt="QR Code" className="w-28 h-28 mx-auto" />
+                      <Image
+                        src={qrImage}
+                        alt="QR Code"
+                        width={112}
+                        height={112}
+                        unoptimized
+                        className="mx-auto"
+                      />
                     )}
                     <p className="text-xs text-gray-500 mt-1">Escanee para verificar</p>
                   </div>

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { useState, useEffect, useCallback } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface UnidadAlimento {
   unidad_id: number;
@@ -39,7 +39,7 @@ export function useCatalogData(supabase: SupabaseClient | null, authLoading: boo
   const [cargandoAlimentos, setCargandoAlimentos] = useState(true);
   const [cargandoUnidades, setCargandoUnidades] = useState(true);
 
-  const cargarAlimentos = async () => {
+  const cargarAlimentos = useCallback(async () => {
     if (!supabase) return;
     
     try {
@@ -80,9 +80,9 @@ export function useCatalogData(supabase: SupabaseClient | null, authLoading: boo
     } finally {
       setCargandoAlimentos(false);
     }
-  };
+  }, [supabase]);
 
-  const cargarUnidades = async () => {
+  const cargarUnidades = useCallback(async () => {
     if (!supabase) return;
     
     try {
@@ -99,14 +99,14 @@ export function useCatalogData(supabase: SupabaseClient | null, authLoading: boo
     } finally {
       setCargandoUnidades(false);
     }
-  };
+  }, [supabase]);
 
   useEffect(() => {
     if (!authLoading && supabase) {
       cargarAlimentos();
       cargarUnidades();
     }
-  }, [supabase, authLoading]);
+  }, [supabase, authLoading, cargarAlimentos, cargarUnidades]);
 
   // Obtener categorías únicas
   const categoriasUnicas = [...new Set(alimentos.map(a => a.categoria))].sort();

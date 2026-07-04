@@ -90,7 +90,7 @@ export default function ProductSelector({
                 </>
               ) : busqueda ? (
                 <div className="p-3 text-gray-500 text-center">
-                  No se encontraron productos que coincidan con "{busqueda}"
+                  No se encontraron productos que coincidan con &quot;{busqueda}&quot;
                   <div
                     className="mt-2 text-blue-600 cursor-pointer hover:underline"
                     onClick={onSeleccionarPersonalizado}

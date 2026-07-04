@@ -1,5 +1,12 @@
-import { SupabaseClient } from '@supabase/supabase-js';
-import { Donacion } from '../types';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Donacion } from '../types';
+
+type DonacionWithUnidad = Donacion & {
+  unidades?: {
+    nombre?: string | null;
+    simbolo?: string | null;
+  } | null;
+};
 
 export class DonacionesService {
   constructor(private supabase: SupabaseClient) {}
@@ -21,7 +28,7 @@ export class DonacionesService {
       throw new Error(`Error al cargar donaciones: ${error.message}`);
     }
 
-    return (data || []).map((donacion: any) => ({
+    return ((data || []) as DonacionWithUnidad[]).map((donacion) => ({
       ...donacion,
       unidad_nombre: donacion.unidades?.nombre || '',
       unidad_simbolo: donacion.unidades?.simbolo || '',
