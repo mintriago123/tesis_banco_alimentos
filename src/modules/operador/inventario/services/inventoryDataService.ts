@@ -10,9 +10,30 @@ import type {
   ServiceResult,
   SupabaseInventarioRow,
   OperadorInventarioStats,
-  AlertaInventario,
-  MovimientoInventario
+  AlertaInventario
 } from '../types';
+
+type OperadorStatsRow = {
+  cantidad_disponible: number | null;
+  productos?: {
+    fecha_caducidad?: string | null;
+  } | {
+    fecha_caducidad?: string | null;
+  }[] | null;
+};
+
+type AjusteInventarioRow = {
+  id_inventario: string;
+  cantidad_disponible: number | null;
+  id_producto: string;
+  productos?: {
+    nombre_producto?: string | null;
+    unidad_id?: number | null;
+  } | {
+    nombre_producto?: string | null;
+    unidad_id?: number | null;
+  }[] | null;
+};
 
 // Constantes locales
 const STOCK_LEVELS = {
@@ -198,7 +219,7 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
         };
       }
 
-      const stats = calculateOperadorStats(data as any[]);
+      const stats = calculateOperadorStats((data ?? []) as OperadorStatsRow[]);
 
       return {
         success: true,
@@ -390,7 +411,7 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
    * Registrar movimiento de ajuste realizado por operador
    */
   const registrarMovimientoOperador = async (
-    item: any,
+    item: AjusteInventarioRow,
     diferencia: number,
     cantidadNueva: number
   ): Promise<ServiceResult<void>> => {
@@ -406,7 +427,7 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
       }
 
       const operadorId = auth.user.id;
-      const producto = Array.isArray(item.productos) ? item.productos[0] : item.productos;
+      const producto = normalizeRelation(item.productos);
       const nombreProducto = producto?.nombre_producto || 'Producto';
       const tipoTransaccion = diferencia > 0 ? 'ingreso' : 'egreso';
       const cantidadMovimiento = Math.abs(diferencia);
@@ -746,7 +767,7 @@ const getEstadoCaducidad = (diasParaVencer: number | null): 'vigente' | 'proximo
   return 'vigente';
 };
 
-const calculateOperadorStats = (data: any[]): OperadorInventarioStats => {
+const calculateOperadorStats = (data: OperadorStatsRow[]): OperadorInventarioStats => {
   const stats = {
     totalProductos: data.length,
     stockBajo: 0,
@@ -772,7 +793,7 @@ const calculateOperadorStats = (data: any[]): OperadorInventarioStats => {
     }
 
     // Productos próximos a vencer o vencidos
-    const fechaCaducidad = item.productos?.fecha_caducidad;
+    const fechaCaducidad = normalizeRelation(item.productos)?.fecha_caducidad;
     if (fechaCaducidad) {
       const diasParaVencer = getDiasParaVencer(fechaCaducidad);
       if (diasParaVencer < 0) {

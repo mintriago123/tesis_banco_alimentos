@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { SupabaseClient, User } from '@supabase/supabase-js';
+import { useState, useEffect, useCallback } from 'react';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
 
 interface UserProfile {
   id: string;
@@ -27,7 +27,7 @@ export function useUserProfile(
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
-  const cargarPerfilUsuario = async (user: User) => {
+  const cargarPerfilUsuario = useCallback(async (user: User) => {
     if (!supabase) return;
     
     setLoadingUser(true);
@@ -53,7 +53,7 @@ export function useUserProfile(
     } finally {
       setLoadingUser(false);
     }
-  };
+  }, [supabase]);
 
   useEffect(() => {
     if (!authLoading && currentUser !== undefined) {
@@ -64,7 +64,7 @@ export function useUserProfile(
         setLoadingUser(false);
       }
     }
-  }, [currentUser, authLoading, supabase]);
+  }, [currentUser, authLoading, supabase, cargarPerfilUsuario]);
 
   return {
     userProfile,

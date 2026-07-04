@@ -6,7 +6,6 @@ import type { JSX } from 'react';
 import {
   Calendar,
   CheckCircle,
-  Clock,
   FileText,
   MapPin,
   Package,

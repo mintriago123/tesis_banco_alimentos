@@ -16,7 +16,6 @@ import {
   QrCode,
   ExternalLink,
   Package,
-  TrendingUp,
   History
 } from 'lucide-react';
 import type { JSX } from 'react';
@@ -26,7 +25,6 @@ import type {
   Solicitud,
   SolicitudEstado
 } from '../types';
-import { MOTIVOS_RECHAZO } from '../constants';
 import type { HistorialDonacion } from '../services/historialDonacionesService';
 import { obtenerHistorialDonaciones } from '../services/historialDonacionesService';
 import { useSupabase } from '@/app/components/SupabaseProvider';
@@ -67,7 +65,6 @@ interface SolicitudDetailModalProps {
 
 const SolicitudDetailModal = ({
   solicitud,
-  comentarioAdmin,
   inventario,
   inventarioLoading,
   inventarioError,
@@ -75,12 +72,8 @@ const SolicitudDetailModal = ({
   badgeStyles,
   estadoIcons,
   onClose,
-  onComentarioChange,
-  onAprobar,
   onRechazar,
   isProcessing,
-  motivoRechazo = '',
-  onMotivoRechazoChange,
   onDonar,
   abrirEnModoDonacion = false,
   depositoSeleccionado,
@@ -140,11 +133,6 @@ const SolicitudDetailModal = ({
     const cantidad = parseInt(value) || 0;
     const maxDisponible = maxDisponibleDeposito;
     setCantidadDonar(Math.min(Math.max(0, cantidad), maxDisponible));
-  };
-
-  const setearMaximo = () => {
-    const maxDisponible = maxDisponibleDeposito;
-    setCantidadDonar(Math.floor(maxDisponible)); // Redondear hacia abajo para asegurar entero
   };
 
   return (
@@ -315,7 +303,7 @@ const SolicitudDetailModal = ({
                         Comentario del Operador
                       </p>
                       <p className="text-sm text-gray-800 italic">
-                        "{solicitud.comentario_admin}"
+                        &quot;{solicitud.comentario_admin}&quot;
                       </p>
                     </div>
                   )}
@@ -346,7 +334,7 @@ const SolicitudDetailModal = ({
             {solicitud.estado === 'pendiente' && (
             <div className="bg-white p-4 rounded-lg border">
               <h4 className="font-semibold text-gray-900 mb-3">
-                Inventario disponible para "{solicitud.tipo_alimento}"
+                Inventario disponible para &quot;{solicitud.tipo_alimento}&quot;
               </h4>
 
               {inventarioLoading && (
@@ -446,7 +434,7 @@ const SolicitudDetailModal = ({
                 <div className="text-center py-4">
                   <XCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
                   <p className="text-sm text-gray-600">
-                    No hay stock disponible de "{solicitud.tipo_alimento}" en el inventario
+                    No hay stock disponible de &quot;{solicitud.tipo_alimento}&quot; en el inventario
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
                     La solicitud no puede ser satisfecha en este momento
@@ -577,7 +565,7 @@ const SolicitudDetailModal = ({
                     <div className="flex-1">
                       <h4 className="font-bold text-red-900 mb-2">Sin Stock Disponible</h4>
                       <p className="text-sm text-red-800 mb-3">
-                        La bodega seleccionada no tiene inventario disponible de "{solicitud.tipo_alimento}". Selecciona otra bodega o rechaza la solicitud.
+                        La bodega seleccionada no tiene inventario disponible de &quot;{solicitud.tipo_alimento}&quot;. Selecciona otra bodega o rechaza la solicitud.
                       </p>
                       <button
                         type="button"
@@ -588,7 +576,7 @@ const SolicitudDetailModal = ({
                         Rechazar Solicitud por Falta de Stock
                       </button>
                       <p className="text-xs text-red-700 italic mt-2">
-                        Al rechazar, se notificará automáticamente al solicitante con el motivo "Sin stock disponible"
+                        Al rechazar, se notificará automáticamente al solicitante con el motivo &quot;Sin stock disponible&quot;
                       </p>
                     </div>
                   </div>

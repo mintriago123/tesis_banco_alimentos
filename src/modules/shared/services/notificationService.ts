@@ -48,6 +48,10 @@ interface UsuarioRecord {
   recibir_notificaciones?: boolean | null;
 }
 
+type ErrorWithCode = {
+  code?: string;
+};
+
 interface ResolvedRecipient {
   id?: string;
   email: string;
@@ -201,7 +205,7 @@ export class NotificationService {
       .single();
 
     if (error) {
-      if ((error as any)?.code === 'PGRST204') {
+      if ((error as ErrorWithCode)?.code === 'PGRST204') {
         console.warn('columna recibir_notificaciones no disponible en usuarios, usando valor por defecto.');
         const fallback = await this.supabase
           .from('usuarios')
@@ -232,7 +236,7 @@ export class NotificationService {
     const { data, error } = await query;
 
     if (error) {
-      if ((error as any)?.code === 'PGRST204') {
+      if ((error as ErrorWithCode)?.code === 'PGRST204') {
         console.warn('columna recibir_notificaciones no disponible en usuarios, usando valor por defecto.');
         let fallbackQuery = this.supabase
           .from('usuarios')

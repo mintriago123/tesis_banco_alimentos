@@ -1,6 +1,6 @@
-import { SupabaseClient } from '@supabase/supabase-js';
-import { DonacionFormulario } from '../../donaciones/types';
-import { NuevoProducto, ProductoSeleccionado, ImpactoCalculado } from '../types';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { DonacionFormulario } from '../../donaciones/types';
+import type { NuevoProducto, ProductoSeleccionado, ImpactoCalculado, Alimento } from '../types';
 
 interface UserProfile {
   nombre?: string;
@@ -22,7 +22,7 @@ export class NuevaDonacionService {
     impacto: ImpactoCalculado,
     productoInfo: ProductoSeleccionado | null,
     unidadInfo: { id: number; nombre: string; simbolo: string } | null,
-    alimentos: any[],
+    alimentos: Alimento[],
     userId: string,
     userProfile: UserProfile | null
   ): Promise<void> {
@@ -37,7 +37,7 @@ export class NuevaDonacionService {
       tipoProductoFinal = nuevoProducto.nombre;
       categoriaFinal = nuevoProducto.categoria;
     } else {
-      const alimento = alimentos.find((a: any) => a.id.toString() === formulario.tipo_producto);
+      const alimento = alimentos.find((a) => a.id.toString() === formulario.tipo_producto);
       if (alimento) {
         alimentoIdFinal = alimento.id;
         tipoProductoFinal = alimento.nombre;

@@ -79,7 +79,7 @@ const formatDiasParaVencer = (dias: number | undefined): string => {
   return `${dias} días`;
 };
 
-const getEstadoCaducidadText = (estado: string | undefined, dias: number | undefined): string => {
+const getEstadoCaducidadText = (estado: string | undefined): string => {
   switch (estado) {
     case 'vencido': return 'VENCIDO';
     case 'proximo': return 'PRÓXIMO A VENCER';
@@ -233,7 +233,7 @@ const OperadorInventoryTable = ({
                     <td className="px-4 py-4 whitespace-nowrap">
                       <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full border text-xs font-medium ${ESTADO_CADUCIDAD_STYLES[estadoCaducidad]}`}>
                         {ESTADO_CADUCIDAD_ICONS[estadoCaducidad]}
-                        <span>{getEstadoCaducidadText(estadoCaducidad, item.producto.dias_para_vencer)}</span>
+                            <span>{getEstadoCaducidadText(estadoCaducidad)}</span>
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
                         {formatDiasParaVencer(item.producto.dias_para_vencer)}
