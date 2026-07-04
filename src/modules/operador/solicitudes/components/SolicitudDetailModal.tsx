@@ -106,13 +106,13 @@ const SolicitudDetailModal = ({
 
   const depositoActual = inventario.find(item => item.id_deposito === depositoSeleccionado);
   const stockDepositoSeleccionado = depositoActual?.cantidad_disponible ?? 0;
-  const maxDisponibleDeposito = Math.max(0, Math.min(solicitud.cantidad, Math.floor(stockDepositoSeleccionado)));
+  const maxDisponibleDeposito = Math.max(0, Math.min(solicitud.cantidad, stockDepositoSeleccionado));
 
   // Actualizar cantidad a donar cuando cambie el inventario disponible
   useEffect(() => {
     // Calcular la cantidad máxima que se puede donar
     const maxDisponible = maxDisponibleDeposito;
-    const cantidadInicial = Math.floor(maxDisponible);
+    const cantidadInicial = maxDisponible;
     
     // Solo actualizar si es diferente de 0 o si el inventario ha sido cargado
     if (!inventarioLoading && cantidadInicial >= 0) {
@@ -129,8 +129,7 @@ const SolicitudDetailModal = ({
   };
 
   const handleCantidadChange = (value: string) => {
-    // Solo aceptar números enteros
-    const cantidad = parseInt(value) || 0;
+    const cantidad = parseFloat(value) || 0;
     const maxDisponible = maxDisponibleDeposito;
     setCantidadDonar(Math.min(Math.max(0, cantidad), maxDisponible));
   };
@@ -354,6 +353,7 @@ const SolicitudDetailModal = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {inventario.map(item => {
                       const unidad = item.unidad_simbolo || item.unidad_nombre || 'unidades';
+                      const unidadOriginal = item.unidad_simbolo_original || item.unidad_nombre_original || unidad;
                       return (
                         <div key={item.id} className="border rounded-lg p-3">
                           <div className="font-semibold text-gray-900">
@@ -365,6 +365,11 @@ const SolicitudDetailModal = ({
                           <div className="text-sm text-gray-600">
                             Disponible: <span className="font-medium">{formatQuantity(item.cantidad_disponible)} {unidad}</span>
                           </div>
+                          {item.fue_convertido && (
+                            <div className="text-xs text-gray-500">
+                              Equivale a {formatQuantity(item.cantidad_disponible_original)} {unidadOriginal} en inventario
+                            </div>
+                          )}
                           {item.fecha_vencimiento && (
                             <div className="text-xs text-gray-500">
                               Actualizado: {formatDate(item.fecha_vencimiento)}
@@ -607,7 +612,7 @@ const SolicitudDetailModal = ({
                       <div>
                         <span className="text-gray-600">Disponible en stock:</span>
                         <p className={`font-semibold text-lg ${maxDisponibleDeposito >= solicitud.cantidad ? 'text-green-600' : 'text-orange-600'}`}>
-                          {Math.floor(maxDisponibleDeposito)} {solicitud.unidades?.simbolo ?? 'unidades'}
+                          {formatQuantity(maxDisponibleDeposito)} {solicitud.unidades?.simbolo ?? 'unidades'}
                         </p>
                       </div>
                       {(solicitud.cantidad_entregada && solicitud.cantidad_entregada > 0) && (
@@ -630,14 +635,14 @@ const SolicitudDetailModal = ({
                   {/* Cantidad a donar */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Cantidad a donar (unidades enteras)
+                      Cantidad a donar
                     </label>
                     <div className="flex items-center space-x-2">
                       <input
                         type="number"
-                        min="1"
-                        max={Math.max(1, Math.floor(maxDisponibleDeposito))}
-                        step="1"
+                        min="0.01"
+                        max={Math.max(0.01, maxDisponibleDeposito)}
+                        step="0.01"
                         value={cantidadDonar}
                         onChange={(e) => handleCantidadChange(e.target.value)}
                         className="flex-1 px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-lg font-semibold"

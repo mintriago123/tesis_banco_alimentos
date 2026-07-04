@@ -1,4 +1,5 @@
-import { Plus, ShoppingBasket, X } from 'lucide-react';
+import Link from 'next/link';
+import { ExternalLink, ShoppingBasket, X } from 'lucide-react';
 
 interface Alimento {
   id: number;
@@ -16,7 +17,6 @@ interface ProductSelectorProps {
   cargando: boolean;
   alimentosFiltrados: Alimento[];
   onSeleccionarProducto: (alimento: Alimento) => void;
-  onSeleccionarPersonalizado: () => void;
 }
 
 export default function ProductSelector({
@@ -29,7 +29,6 @@ export default function ProductSelector({
   cargando,
   alimentosFiltrados,
   onSeleccionarProducto,
-  onSeleccionarPersonalizado,
 }: ProductSelectorProps) {
   return (
     <div>
@@ -78,35 +77,21 @@ export default function ProductSelector({
                       <div className="text-sm text-gray-500">{alimento.categoria}</div>
                     </div>
                   ))}
-                  <div
-                    className="p-3 hover:bg-blue-50 cursor-pointer border-t border-gray-200 text-blue-600 font-medium"
-                    onClick={onSeleccionarPersonalizado}
-                  >
-                    <div className="flex items-center">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Agregar producto personalizado
-                    </div>
-                  </div>
                 </>
               ) : busqueda ? (
                 <div className="p-3 text-gray-500 text-center">
                   No se encontraron productos que coincidan con &quot;{busqueda}&quot;
-                  <div
-                    className="mt-2 text-blue-600 cursor-pointer hover:underline"
-                    onClick={onSeleccionarPersonalizado}
+                  <Link
+                    href="/donante/solicitar-alimento"
+                    className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg border border-blue-200 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-50"
                   >
-                    + Crear producto personalizado
-                  </div>
+                    <ExternalLink className="h-4 w-4" />
+                    Solicitar alta de alimento
+                  </Link>
                 </div>
               ) : (
-                <div
-                  className="p-3 hover:bg-blue-50 cursor-pointer text-blue-600 font-medium"
-                  onClick={onSeleccionarPersonalizado}
-                >
-                  <div className="flex items-center">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Agregar producto personalizado
-                  </div>
+                <div className="p-3 text-center text-sm text-gray-500">
+                  Busca y selecciona un alimento existente del catálogo.
                 </div>
               )}
             </>

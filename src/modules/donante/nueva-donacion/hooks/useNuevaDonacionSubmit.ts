@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { NuevaDonacionService } from '../services/nuevaDonacionService';
 import { DonacionFormulario } from '../../donaciones/types';
-import { NuevoProducto, ProductoSeleccionado, ImpactoCalculado, Alimento } from '../types';
+import { ProductoSeleccionado, ImpactoCalculado, Alimento } from '../types';
 
 interface UserProfile {
   nombre?: string;
@@ -28,7 +28,6 @@ export function useNuevaDonacionSubmit(
   const enviarDonacion = useCallback(
     async (
       formulario: DonacionFormulario,
-      nuevoProducto: NuevoProducto,
       impacto: ImpactoCalculado,
       productoInfo: ProductoSeleccionado | null,
       unidadInfo: { id: number; nombre: string; simbolo: string } | null,
@@ -45,7 +44,6 @@ export function useNuevaDonacionSubmit(
       try {
         await service.crearDonacion(
           formulario,
-          nuevoProducto,
           impacto,
           productoInfo,
           unidadInfo,

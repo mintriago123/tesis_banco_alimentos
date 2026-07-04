@@ -12,25 +12,21 @@ interface UseProductSelectorReturn {
   mostrarDropdown: boolean;
   alimentoSeleccionado: Alimento | null;
   filtroCategoria: string;
-  mostrarFormularioNuevoProducto: boolean;
-  nuevoProducto: { nombre: string; categoria: string };
   setBusquedaAlimento: (value: string) => void;
   setMostrarDropdown: (value: boolean) => void;
   setFiltroCategoria: (value: string) => void;
   manejarBusquedaAlimento: (e: React.ChangeEvent<HTMLInputElement>) => void;
   manejarFocusInput: () => void;
   manejarSeleccionProducto: (alimento: Alimento) => void;
-  manejarSeleccionPersonalizado: () => void;
   limpiarSeleccion: () => void;
   manejarCambioCategoria: (e: React.ChangeEvent<HTMLSelectElement>) => void;
   manejarBlurContainer: (e: React.FocusEvent) => void;
-  manejarCambioNuevoProducto: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   filtrarAlimentos: (termino: string, categoria?: string) => void;
 }
 
 export function useProductSelector(
   alimentos: Alimento[],
-  onProductoChange: (id: string, nombrePersonalizado?: string) => void,
+  onProductoChange: (id: string) => void,
   onMensajeCambio: (mensaje: string | null) => void
 ): UseProductSelectorReturn {
   const [busquedaAlimento, setBusquedaAlimento] = useState('');
@@ -38,11 +34,6 @@ export function useProductSelector(
   const [mostrarDropdown, setMostrarDropdown] = useState(false);
   const [alimentoSeleccionado, setAlimentoSeleccionado] = useState<Alimento | null>(null);
   const [filtroCategoria, setFiltroCategoria] = useState('');
-  const [mostrarFormularioNuevoProducto, setMostrarFormularioNuevoProducto] = useState(false);
-  const [nuevoProducto, setNuevoProducto] = useState({
-    nombre: '',
-    categoria: ''
-  });
 
   // Función para filtrar alimentos basado en la búsqueda y categoría
   const filtrarAlimentos = useCallback((termino: string, categoria: string = '') => {
@@ -76,7 +67,6 @@ export function useProductSelector(
     if (alimentoSeleccionado && valor !== `${alimentoSeleccionado.nombre} (${alimentoSeleccionado.categoria})`) {
       setAlimentoSeleccionado(null);
       onProductoChange('');
-      setMostrarFormularioNuevoProducto(false);
     }
     
     filtrarAlimentos(valor, filtroCategoria);
@@ -95,16 +85,6 @@ export function useProductSelector(
     setAlimentoSeleccionado(alimento);
     setBusquedaAlimento(`${alimento.nombre} (${alimento.categoria})`);
     setMostrarDropdown(false);
-    setMostrarFormularioNuevoProducto(false);
-    onMensajeCambio(null);
-  };
-
-  const manejarSeleccionPersonalizado = () => {
-    onProductoChange('personalizado');
-    setAlimentoSeleccionado(null);
-    setBusquedaAlimento('Producto personalizado');
-    setMostrarDropdown(false);
-    setMostrarFormularioNuevoProducto(true);
     onMensajeCambio(null);
   };
 
@@ -112,7 +92,6 @@ export function useProductSelector(
     setAlimentoSeleccionado(null);
     setBusquedaAlimento('');
     onProductoChange('');
-    setMostrarFormularioNuevoProducto(false);
     setMostrarDropdown(true);
   };
   
@@ -139,34 +118,21 @@ export function useProductSelector(
     }
   };
 
-  const manejarCambioNuevoProducto = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setNuevoProducto(prev => ({ ...prev, [name]: value }));
-
-    if (name === 'nombre') {
-      onProductoChange('personalizado', value);
-    }
-  };
-
   return {
     busquedaAlimento,
     alimentosFiltrados,
     mostrarDropdown,
     alimentoSeleccionado,
     filtroCategoria,
-    mostrarFormularioNuevoProducto,
-    nuevoProducto,
     setBusquedaAlimento,
     setMostrarDropdown,
     setFiltroCategoria,
     manejarBusquedaAlimento,
     manejarFocusInput,
     manejarSeleccionProducto,
-    manejarSeleccionPersonalizado,
     limpiarSeleccion,
     manejarCambioCategoria,
     manejarBlurContainer,
-    manejarCambioNuevoProducto,
     filtrarAlimentos,
   };
 }

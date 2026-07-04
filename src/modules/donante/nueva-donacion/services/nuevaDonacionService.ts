@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DonacionFormulario } from '../../donaciones/types';
-import type { NuevoProducto, ProductoSeleccionado, ImpactoCalculado, Alimento } from '../types';
+import type { ProductoSeleccionado, ImpactoCalculado, Alimento } from '../types';
 
 interface UserProfile {
   nombre?: string;
@@ -18,7 +18,6 @@ export class NuevaDonacionService {
 
   async crearDonacion(
     formulario: DonacionFormulario,
-    nuevoProducto: NuevoProducto,
     impacto: ImpactoCalculado,
     productoInfo: ProductoSeleccionado | null,
     unidadInfo: { id: number; nombre: string; simbolo: string } | null,
@@ -26,23 +25,10 @@ export class NuevaDonacionService {
     userId: string,
     userProfile: UserProfile | null
   ): Promise<void> {
-    let alimentoIdFinal = null;
-    let tipoProductoFinal = '';
-    let categoriaFinal = '';
-    let esProductoPersonalizado = false;
+    const alimento = alimentos.find((a) => a.id.toString() === formulario.tipo_producto);
 
-    // Determinar si es producto personalizado
-    if (formulario.tipo_producto === 'personalizado') {
-      esProductoPersonalizado = true;
-      tipoProductoFinal = nuevoProducto.nombre;
-      categoriaFinal = nuevoProducto.categoria;
-    } else {
-      const alimento = alimentos.find((a) => a.id.toString() === formulario.tipo_producto);
-      if (alimento) {
-        alimentoIdFinal = alimento.id;
-        tipoProductoFinal = alimento.nombre;
-        categoriaFinal = alimento.categoria;
-      }
+    if (!alimento) {
+      throw new Error('Selecciona un alimento existente del catálogo antes de registrar la donación.');
     }
 
     const datosDonacion = {
@@ -55,10 +41,10 @@ export class NuevaDonacionService {
       direccion_donante_completa: userProfile?.direccion || null,
       tipo_persona_donante: userProfile?.tipo_persona || null,
       representante_donante: userProfile?.representante || null,
-      alimento_id: alimentoIdFinal,
-      tipo_producto: tipoProductoFinal,
-      categoria_comida: categoriaFinal,
-      es_producto_personalizado: esProductoPersonalizado,
+      alimento_id: alimento.id,
+      tipo_producto: productoInfo?.nombre || alimento.nombre,
+      categoria_comida: productoInfo?.categoria || alimento.categoria,
+      es_producto_personalizado: false,
       cantidad: parseFloat(formulario.cantidad),
       unidad_id: parseInt(formulario.unidad_id),
       unidad_nombre: unidadInfo?.nombre || '',
