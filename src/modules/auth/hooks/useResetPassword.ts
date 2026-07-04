@@ -2,7 +2,7 @@
  * Hook para manejo de restablecimiento de contraseña
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import { createAuthService } from '../services/authService';
@@ -13,7 +13,7 @@ import { AUTH_CONSTANTS } from '../constants';
 export const useResetPassword = () => {
   const router = useRouter();
   const { supabase } = useSupabase();
-  const authService = createAuthService(supabase);
+  const authService = useMemo(() => createAuthService(supabase), [supabase]);
 
   const [estaCargando, setEstaCargando] = useState(false);
   const [mensaje, setMensaje] = useState<MensajeAuth | null>(null);
@@ -36,7 +36,7 @@ export const useResetPassword = () => {
     };
 
     verificarSesion();
-  }, []);
+  }, [authService]);
 
   const restablecerContrasena = async (datos: DatosRestablecimiento) => {
     setEstaCargando(true);

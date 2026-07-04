@@ -59,9 +59,9 @@ export default function UserPerfilPage() {
             email: authUser.user?.email || data.email || '',
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error al cargar perfil:', err);
-        setError(err.message || 'Error al cargar el perfil');
+        setError(err instanceof Error ? err.message : 'Error al cargar el perfil');
       } finally {
         setIsLoading(false);
       }

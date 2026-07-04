@@ -1,4 +1,4 @@
-import { Eye, Edit, Trash2, Clock, CheckCircle, XCircle, Calendar, Package } from 'lucide-react';
+import { Eye, Edit, Trash2, Clock, CheckCircle, XCircle, Package } from 'lucide-react';
 import { Donacion } from '../types';
 import { useDateFormatter } from '@/modules/shared/hooks/useDateFormatter';
 

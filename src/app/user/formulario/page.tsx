@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useSupabase } from "@/app/components/SupabaseProvider";
 import DashboardLayout from "@/app/components/DashboardLayout";
 import { useInventoryStock } from "@/modules/user/hooks/useInventoryStock";
@@ -21,12 +20,10 @@ import {
   SolicitudFormData,
   Alimento,
   MESSAGES,
-  FORM_CONFIG,
 } from "@/modules/user";
 
 export default function FormularioSolicitante() {
   const { supabase, user } = useSupabase();
-  const router = useRouter();
 
   // Hooks de datos
   const { userData } = useDatosBasicosUsuario(supabase, user?.id);

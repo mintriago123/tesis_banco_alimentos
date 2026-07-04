@@ -19,8 +19,8 @@ export function useDonacionesData(supabase: SupabaseClient, user: User | null) {
     try {
       const data = await service.obtenerDonaciones(user.id);
       setDonaciones(data);
-    } catch (error: any) {
-      setMensaje(error.message || 'Error al cargar donaciones');
+    } catch (error: unknown) {
+      setMensaje(error instanceof Error ? error.message : 'Error al cargar donaciones');
       console.error('Error al cargar donaciones:', error);
     } finally {
       setCargando(false);
@@ -44,9 +44,9 @@ export function useDonacionesData(supabase: SupabaseClient, user: User | null) {
       setMensaje('Donación eliminada exitosamente');
       setTimeout(() => setMensaje(''), 3000);
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('💥 Error capturado al eliminar:', error);
-      setMensaje(error.message || 'Error al eliminar donación');
+      setMensaje(error instanceof Error ? error.message : 'Error al eliminar donación');
       console.error('Error al eliminar:', error);
       return false;
     }
@@ -61,8 +61,8 @@ export function useDonacionesData(supabase: SupabaseClient, user: User | null) {
       setMensaje('Donación actualizada exitosamente');
       setTimeout(() => setMensaje(''), 3000);
       return true;
-    } catch (error: any) {
-      setMensaje(error.message || 'Error al actualizar donación');
+    } catch (error: unknown) {
+      setMensaje(error instanceof Error ? error.message : 'Error al actualizar donación');
       console.error('Error al actualizar:', error);
       return false;
     }

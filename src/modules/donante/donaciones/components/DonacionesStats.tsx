@@ -1,4 +1,4 @@
-import { Clock, CheckCircle, XCircle, Calendar, Heart } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Heart } from 'lucide-react';
 import { DonacionEstadisticas } from '../types';
 
 interface DonacionesStatsProps {

@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
-import { SupabaseClient, User } from '@supabase/supabase-js';
+import { useState, useCallback, useMemo } from 'react';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { NuevaDonacionService } from '../services/nuevaDonacionService';
 import { DonacionFormulario } from '../../donaciones/types';
-import { NuevoProducto, ProductoSeleccionado, ImpactoCalculado } from '../types';
+import { NuevoProducto, ProductoSeleccionado, ImpactoCalculado, Alimento } from '../types';
 
 interface UserProfile {
   nombre?: string;
@@ -23,7 +23,7 @@ export function useNuevaDonacionSubmit(
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState('');
 
-  const service = new NuevaDonacionService(supabase);
+  const service = useMemo(() => new NuevaDonacionService(supabase), [supabase]);
 
   const enviarDonacion = useCallback(
     async (
@@ -32,7 +32,7 @@ export function useNuevaDonacionSubmit(
       impacto: ImpactoCalculado,
       productoInfo: ProductoSeleccionado | null,
       unidadInfo: { id: number; nombre: string; simbolo: string } | null,
-      alimentos: any[]
+      alimentos: Alimento[]
     ): Promise<boolean> => {
       if (!user) {
         setMensaje('Usuario no autenticado');
@@ -57,15 +57,15 @@ export function useNuevaDonacionSubmit(
         setMensaje('¡Donación registrada exitosamente! Gracias por tu contribución.');
         setTimeout(() => setMensaje(''), 5000);
         return true;
-      } catch (error: any) {
-        setMensaje(error.message || 'Error al registrar la donación');
+      } catch (error: unknown) {
+        setMensaje(error instanceof Error ? error.message : 'Error al registrar la donación');
         console.error('Error al enviar donación:', error);
         return false;
       } finally {
         setEnviando(false);
       }
     },
-    [user, userProfile]
+    [service, user, userProfile]
   );
 
   const limpiarMensaje = useCallback(() => {

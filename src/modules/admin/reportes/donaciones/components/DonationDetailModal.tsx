@@ -7,7 +7,6 @@ import {
   Package,
   User,
   Phone,
-  MapPin,
   Building,
   Gift,
   TrendingUp,

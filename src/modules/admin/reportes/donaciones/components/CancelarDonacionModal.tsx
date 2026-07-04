@@ -51,8 +51,8 @@ export default function CancelarDonacionModal({
     try {
       await onConfirm(motivo, observaciones.trim() || undefined);
       handleClose();
-    } catch (err: any) {
-      setError(err.message || 'Error al procesar la cancelación');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al procesar la cancelación');
     }
   };
 
@@ -164,7 +164,7 @@ export default function CancelarDonacionModal({
             </div>
             {motivo === 'otro' && (
               <p className="mt-1 text-xs text-gray-500">
-                Las observaciones son obligatorias cuando seleccionas "Otro Motivo"
+                Las observaciones son obligatorias cuando seleccionas &quot;Otro Motivo&quot;
               </p>
             )}
           </div>

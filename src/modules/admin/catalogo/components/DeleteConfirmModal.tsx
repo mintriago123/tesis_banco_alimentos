@@ -22,7 +22,6 @@ const DeleteConfirmModal = ({ open, food, usageInfo, onClose, onConfirm }: Delet
   if (!open || !food) return null;
 
   const hasReferences = usageInfo && (usageInfo.totalDonaciones > 0 || usageInfo.totalProductos > 0);
-  const totalReferencias = (usageInfo?.totalDonaciones || 0) + (usageInfo?.totalProductos || 0);
   const hasReferencesBoolean = Boolean(hasReferences);
 
   const handleConfirm = async () => {

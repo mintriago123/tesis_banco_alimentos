@@ -1,7 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FoodRecord, FoodFormValues, ServiceResult, UnidadAlimento } from '../types';
 
-const normalizeFood = (row: any): FoodRecord => ({
+type FoodRow = Omit<FoodRecord, 'unidades'> & {
+  unidades?: UnidadAlimento[] | null;
+};
+
+const normalizeFood = (row: FoodRow): FoodRecord => ({
   id: row.id,
   nombre: row.nombre,
   categoria: row.categoria,

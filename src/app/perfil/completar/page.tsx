@@ -6,7 +6,6 @@ import { useSupabase } from "@/app/components/SupabaseProvider";
 import {
   useIdentityValidation,
   useProfileForm,
-  useDateFormatter,
   useProfileUpdate,
 } from "@/modules/shared";
 import { validarCedulaEcuatoriana, validarRucEcuatoriano } from "@/lib/validaciones";
@@ -14,6 +13,8 @@ import { Loader2 } from "lucide-react";
 
 // Lazy load del componente de mapa para mejor rendimiento
 const MapboxLocationPicker = lazy(() => import("@/modules/shared/components/MapboxLocationPicker"));
+
+type DateFieldName = "fechaEmisionIngresada" | "fechaExpRepreIngresada";
 
 export default function CompletarPerfil() {
   const router = useRouter();
@@ -50,7 +51,7 @@ export default function CompletarPerfil() {
     saveProfile,
   } = useProfileUpdate(supabase);
 
-  const [identificacionValidada, setIdentificacionValidada] = useState(false);
+  const [, setIdentificacionValidada] = useState(false);
 
   // Limpia el formulario al cambiar tipo_persona
   const limpiarFormulario = (tipo: "Natural" | "Juridica") => {
@@ -68,15 +69,15 @@ export default function CompletarPerfil() {
 
     let dia = cleanValue.slice(0, 2);
     let mes = cleanValue.slice(2, 4);
-    let anio = cleanValue.slice(4, 8);
+    const anio = cleanValue.slice(4, 8);
 
     if (dia) {
-      let nDia = parseInt(dia, 10);
+      const nDia = parseInt(dia, 10);
       if (nDia > 31) dia = "31";
       if (nDia < 1 && dia.length === 2) dia = "01";
     }
     if (mes) {
-      let nMes = parseInt(mes, 10);
+      const nMes = parseInt(mes, 10);
       if (nMes > 12) mes = "12";
       if (nMes < 1 && mes.length === 2) mes = "01";
     }
@@ -85,7 +86,7 @@ export default function CompletarPerfil() {
     if (mes) nuevaFecha += "/" + mes;
     if (anio) nuevaFecha += "/" + anio;
 
-    updateField(name as any, nuevaFecha);
+    updateField(name as DateFieldName, nuevaFecha);
     setError(null);
   };
 

@@ -80,14 +80,18 @@ export const useCatalogData = (supabaseClient: SupabaseClient) => {
         console.error('Error al cargar unidades:', error);
       } else {
         // Mapear para incluir tipo_magnitud_nombre
-        const unidadesConTipo = (data || []).map(u => ({
+        const unidadesConTipo = (data || []).map(u => {
+          const tipoMagnitud = u.tipos_magnitud as { nombre?: string | null } | null;
+
+          return {
           id: u.id,
           nombre: u.nombre,
           simbolo: u.simbolo,
           tipo_magnitud_id: u.tipo_magnitud_id,
-          tipo_magnitud_nombre: (u.tipos_magnitud as any)?.nombre,
+          tipo_magnitud_nombre: tipoMagnitud?.nombre ?? undefined,
           es_base: u.es_base
-        }));
+          };
+        });
         setUnidades(unidadesConTipo);
       }
     } catch (err) {

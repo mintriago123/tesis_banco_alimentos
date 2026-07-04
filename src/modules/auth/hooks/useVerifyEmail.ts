@@ -2,7 +2,7 @@
  * Hook para manejo de verificación de email
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import { createAuthService } from '../services/authService';
 import type { MensajeAuth } from '../types';
@@ -10,7 +10,7 @@ import { AUTH_CONSTANTS } from '../constants';
 
 export const useVerifyEmail = () => {
   const { supabase } = useSupabase();
-  const authService = createAuthService(supabase);
+  const authService = useMemo(() => createAuthService(supabase), [supabase]);
 
   const [estaCargando, setEstaCargando] = useState(true);
   const [mensaje, setMensaje] = useState<MensajeAuth | null>(null);
@@ -38,7 +38,7 @@ export const useVerifyEmail = () => {
             texto: AUTH_CONSTANTS.MENSAJES.ENLACE_INVALIDO,
           });
         }
-      } catch (error) {
+      } catch {
         setMensaje({
           tipo: 'error',
           texto: AUTH_CONSTANTS.MENSAJES.ERROR_INESPERADO,
@@ -49,7 +49,7 @@ export const useVerifyEmail = () => {
     };
 
     verificarEmail();
-  }, []);
+  }, [authService]);
 
   const reenviarEmail = async (email: string) => {
     setEstaCargando(true);

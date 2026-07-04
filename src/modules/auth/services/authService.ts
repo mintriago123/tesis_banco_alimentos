@@ -90,7 +90,7 @@ export class AuthService {
       const redirect = this.obtenerRutaPorRol(perfil.rol);
       console.log('✅ Login exitoso, redirigiendo a:', redirect);
       return { success: true, redirect };
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: AUTH_CONSTANTS.MENSAJES.ERROR_INESPERADO,
@@ -104,7 +104,7 @@ export class AuthService {
   async registrar(datos: DatosRegistro): Promise<ResultadoAuth> {
     try {
       // El perfil se creará automáticamente mediante un trigger de base de datos
-      const { data, error } = await this.supabase.auth.signUp({
+      const { error } = await this.supabase.auth.signUp({
         email: datos.email,
         password: datos.password,
         options: {
@@ -133,7 +133,7 @@ export class AuthService {
         success: true,
         mensaje: AUTH_CONSTANTS.MENSAJES.EMAIL_VERIFICACION_ENVIADO,
       };
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: AUTH_CONSTANTS.MENSAJES.ERROR_INESPERADO,
@@ -164,7 +164,7 @@ export class AuthService {
         success: true,
         mensaje: AUTH_CONSTANTS.MENSAJES.EMAIL_ENVIADO,
       };
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: AUTH_CONSTANTS.MENSAJES.ERROR_INESPERADO,
@@ -192,7 +192,7 @@ export class AuthService {
         mensaje: AUTH_CONSTANTS.MENSAJES.PASSWORD_ACTUALIZADO,
         redirect: AUTH_CONSTANTS.RUTAS.INICIAR_SESION,
       };
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: AUTH_CONSTANTS.MENSAJES.ERROR_INESPERADO,
@@ -215,7 +215,7 @@ export class AuthService {
         } : null,
         session: data.session,
       };
-    } catch (error) {
+    } catch {
       return { user: null, session: null };
     }
   }
@@ -239,7 +239,7 @@ export class AuthService {
         mensaje:
           'Se ha reenviado el email de verificación. Por favor, revisa tu bandeja de entrada.',
       };
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: 'Ocurrió un error al reenviar el email.',
