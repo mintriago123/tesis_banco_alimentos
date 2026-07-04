@@ -38,23 +38,32 @@ La documentación técnica completa del proyecto se encuentra organizada en mód
 Asegúrate de tener instalado:
 
 - **Node.js** 18 o superior
-- **npm** o **yarn**
+- **pnpm** 11 o superior
 - Cuenta activa en [Supabase](https://supabase.com)
 - *(Opcional)* Token de [Mapbox](https://mapbox.com) para geolocalización
+
+> **Package manager oficial:** este proyecto usa `pnpm`. No se recomienda instalar dependencias ni ejecutar scripts con `npm`.
 
 ### **Instalación**
 
 1. **Clonar el repositorio:**
 
 ```bash
-git clone https://github.com/mintriago123/bancoalimentostest.git
-cd banco-alimentos
+git clone https://github.com/mintriago123/tesis_banco_alimentos.git
+cd tesis_banco_alimentos
 ```
 
 2. **Instalar dependencias:**
 
 ```bash
-npm install
+pnpm install
+```
+
+Si no tienes `pnpm`, puedes habilitarlo con Corepack:
+
+```bash
+corepack enable
+corepack prepare pnpm@11.6.0 --activate
 ```
 
 3. **Configurar variables de entorno:**
@@ -93,7 +102,7 @@ NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=tu_token_mapbox
 5. **Ejecutar en desarrollo:**
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
@@ -185,10 +194,10 @@ banco-alimentos/
 
 | Comando | Descripción |
 |---------|-------------|
-| `npm run dev` | Modo desarrollo con hot-reload (Turbopack) |
-| `npm run build` | Construir para producción |
-| `npm start` | Ejecutar versión de producción |
-| `npm run lint` | Verificar código con ESLint |
+| `pnpm dev` | Modo desarrollo con hot-reload (Turbopack) |
+| `pnpm build` | Construir para producción |
+| `pnpm start` | Ejecutar versión de producción |
+| `pnpm lint` | Verificar código con ESLint |
 
 ---
 

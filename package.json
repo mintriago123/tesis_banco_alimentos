@@ -2,11 +2,12 @@
   "name": "banco-alimentos",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.6.0",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
