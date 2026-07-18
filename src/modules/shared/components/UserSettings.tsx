@@ -10,19 +10,21 @@ import {
   EyeSlashIcon,
   KeyIcon
 } from '@heroicons/react/24/outline';
-import { usePasswordChange, useUserPreferences, useMessage } from '@/modules/shared';
+import { usePasswordChange, useUserPreferences, useMessage } from '@/modules/shared/hooks';
 
 type Props = {
   title?: string;
   description?: string;
+  variant?: 'default' | 'donante' | 'solicitante';
   showHeader?: boolean;
   showPreferences?: boolean;
   showPasswordChange?: boolean;
 };
 
-export default function UserSettings({
+export function UserSettingsContent({
   title = 'Configuración de Usuario',
   description = 'Gestiona tus preferencias personales y de cuenta',
+  variant = 'default',
   showHeader = true,
   showPreferences = true,
   showPasswordChange = true,
@@ -80,7 +82,7 @@ export default function UserSettings({
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto" data-settings-variant={variant}>
       {showHeader && (
         <>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center mb-2">
@@ -192,3 +194,5 @@ export default function UserSettings({
     </div>
   );
 }
+
+export default UserSettingsContent;
