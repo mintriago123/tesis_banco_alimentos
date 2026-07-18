@@ -8,6 +8,17 @@ El proyecto ya tiene una base modular funcional: Next.js 16, React 19, TypeScrip
 
 La propuesta prioriza primero los riesgos de mayor impacto y deja las mejoras estructurales para fases controladas.
 
+## Estado de Ejecución
+
+Estado actualizado: refactor incremental ejecutado en la rama `refactoring_clean_code`.
+
+- Fase 1 completada: `/api/admin/usuarios` valida sesión, perfil activo y rol `ADMINISTRADOR` antes de usar service role.
+- Fase 2 completada: se agregó Vitest + React Testing Library con scripts `pnpm test` y `pnpm test:watch`.
+- Fase 3 completada para solicitudes: la fachada `createSolicitudesActionService()` delega en casos de uso y servicios internos de inventario, movimientos y notificaciones.
+- Fase 4 completada como mitigación de aplicación: aprobaciones y entregas parciales restauran inventario y revierten estado si falla una operación posterior. La frontera BD/aplicación está documentada en `DATABASE.md`.
+- Fase 5 completada para perfil/configuración común: perfiles por rol usan `UserProfilePageContent`; configuración de donante y solicitante usa `UserSettingsContent`.
+- Fase 6 iniciada: se redujeron páginas App Router con `'use client'` de 41 a 35 mediante wrappers server + client islands.
+
 ## 2. Objetivo
 
 Mejorar la calidad del código y reducir riesgos en flujos críticos mediante cambios incrementales, verificables y compatibles con la arquitectura actual.
@@ -45,15 +56,15 @@ Estado validado:
 
 - `pnpm lint` pasa.
 - `pnpm build` pasa con Next.js 16.2.3.
+- `pnpm test` pasa.
 - TypeScript usa `strict: true`.
-- No existe script `pnpm test`.
 - `src` contiene aproximadamente 339 archivos y 50k líneas.
-- 41 de 43 páginas usan `'use client'`.
+- 35 de 43 páginas usan `'use client'`.
 
-Hallazgos principales:
+Hallazgos principales de la línea base, ya intervenidos por este refactor:
 
-- `src/app/api/admin/usuarios/route.ts` usa service role sin validar rol dentro del handler.
-- `solicitudesActionService.ts` concentra aprobación, rechazo, entrega, reversión, inventario, movimientos, comprobantes, QR, emails y notificaciones.
+- `/api/admin/usuarios` usaba service role sin validación server-side completa.
+- La acción de solicitudes mezclaba aprobación, rechazo, entrega, reversión, inventario, movimientos, comprobantes, QR, emails y notificaciones en una sola fachada.
 - Algunos flujos actualizan estado e inventario en pasos separados.
 - Hay duplicación entre páginas de perfil y configuración por rol.
 - `donationActionService.ts` conserva bloques grandes de código comentado legacy.
@@ -74,9 +85,9 @@ Cambios:
 
 Entregables:
 
-- Helper de autorización reutilizable.
-- `/api/admin/usuarios` protegido.
-- Documentación de patrón de autorización para API routes.
+- Helper de autorización reutilizable: implementado en `src/lib/server-auth.ts`.
+- `/api/admin/usuarios` protegido: implementado.
+- Documentación de patrón de autorización para API routes: documentado en `ARCHITECTURE.md`.
 
 Criterios de aceptación:
 
@@ -98,8 +109,8 @@ Cambios:
 
 Entregables:
 
-- Configuración de pruebas.
-- Tests mínimos para autorización, conversión de unidades, validaciones y servicios críticos.
+- Configuración de pruebas: implementada con `vitest.config.ts`.
+- Tests mínimos para autorización, validaciones y servicios críticos: implementados.
 
 Criterios de aceptación:
 
@@ -129,9 +140,9 @@ Cambios:
 
 Entregables:
 
-- Servicios más pequeños por responsabilidad.
-- Tipos compartidos ordenados.
-- Código comentado legacy eliminado o documentado fuera del código activo.
+- Servicios más pequeños por responsabilidad: implementado para solicitudes.
+- Tipos compartidos ordenados: ampliados para resultados de inventario.
+- Código comentado legacy eliminado o documentado fuera del código activo: aplicado en donaciones.
 
 Criterios de aceptación:
 
@@ -152,8 +163,8 @@ Cambios:
 
 Entregables:
 
-- Operaciones críticas de inventario con unidad transaccional clara.
-- Documentación actualizada en `docs/DATABASE.md` o documento técnico equivalente.
+- Operaciones críticas de inventario con unidad transaccional clara: implementado mediante compensación explícita para solicitudes.
+- Documentación actualizada en `docs/DATABASE.md`: implementado.
 
 Criterios de aceptación:
 
@@ -174,8 +185,8 @@ Cambios:
 
 Entregables:
 
-- Componentes compartidos de perfil/configuración.
-- Páginas por rol más pequeñas y declarativas.
+- Componentes compartidos de perfil/configuración: implementado.
+- Páginas por rol más pequeñas y declarativas: implementado para perfiles y configuración común.
 
 Criterios de aceptación:
 
@@ -196,9 +207,9 @@ Cambios:
 
 Entregables:
 
-- Lista de páginas candidatas.
-- Migración incremental de vistas de lectura.
-- Documentación de patrón Server Component + Client Island.
+- Lista de páginas candidatas: documentada en `COMPONENTS.md`.
+- Migración incremental de vistas de lectura: iniciada con páginas de perfil/configuración común.
+- Documentación de patrón Server Component + Client Island: documentado en `COMPONENTS.md`.
 
 Criterios de aceptación:
 
@@ -232,7 +243,7 @@ Cada fase debe cerrar con:
 
 - `pnpm lint`
 - `pnpm build`
-- `pnpm test` cuando exista
+- `pnpm test`
 - Revisión manual del flujo afectado
 - Actualización de documentación si cambia arquitectura o comportamiento
 
@@ -261,8 +272,8 @@ Al finalizar la propuesta, el sistema debe conservar su comportamiento funcional
 
 La refactorización se considera completa cuando:
 
-- Los riesgos de autorización con service role están corregidos.
-- Existe suite mínima de pruebas y se ejecuta en CI o en validación local.
-- Los servicios críticos ya no concentran múltiples casos de uso no relacionados.
-- Los flujos de inventario críticos tienen una unidad transaccional clara.
-- `README.md`, `ARCHITECTURE.md`, `COMPONENTS.md`, `WORKFLOW.md` y documentos de calidad reflejan el estado final.
+- Los riesgos de autorización con service role están corregidos en los endpoints intervenidos.
+- Existe suite mínima de pruebas y se ejecuta en validación local.
+- Los servicios críticos de solicitudes ya no concentran múltiples casos de uso no relacionados.
+- Los flujos de inventario intervenidos tienen una unidad transaccional clara o compensación explícita.
+- `ARCHITECTURE.md`, `COMPONENTS.md`, `WORKFLOW.md`, `DATABASE.md` y documentos de calidad reflejan el estado final.

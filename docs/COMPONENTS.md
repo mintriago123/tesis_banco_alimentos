@@ -31,7 +31,7 @@ El frontend del Banco de Alimentos ULEAM está construido con **React 19** y **N
 ### Principios de Diseño:
 
 - ✅ **Componentización**: Todo es un componente reutilizable
-- ⚠️ **Client Components predominantes**: El código actual usa `'use client'` en la mayoría de páginas
+- ⚠️ **Client Components predominantes con islas cliente**: 35 de 43 páginas usan `'use client'`; perfil/configuración común ya usa wrappers Server Component con componentes interactivos cliente
 - ✅ **Composición**: Componentes pequeños que se combinan
 - ✅ **Accesibilidad**: Semántica HTML y ARIA labels
 - ✅ **Type Safety**: TypeScript en todos los componentes
@@ -82,6 +82,8 @@ src/
     │
     └── shared/
         └── components/          # Componentes compartidos entre módulos
+            ├── UserProfilePageContent.tsx
+            ├── UserSettings.tsx
             ├── estadisticas/
             ├── tablas/
             └── formularios/
@@ -324,6 +326,61 @@ export function CardContent({ children, className }: CardProps) {
 ---
 
 ## Componentes Globales
+
+### 👤 UserProfilePageContent
+
+**Ubicación**: `src/modules/shared/components/UserProfilePageContent.tsx`
+
+**Propósito**: Centralizar carga, estado y presentación de perfil para las páginas por rol.
+
+Páginas que lo usan:
+
+- `src/app/admin/perfil/page.tsx`
+- `src/app/operador/perfil/page.tsx`
+- `src/app/donante/perfil/page.tsx`
+- `src/app/user/perfil/page.tsx`
+
+Patrón:
+
+```tsx
+import UserProfilePageContent from '@/modules/shared/components/UserProfilePageContent';
+
+export default function AdminPerfilPage() {
+  return (
+    <UserProfilePageContent
+      requiredRole="ADMINISTRADOR"
+      title="Mi Perfil"
+      tone="red"
+    />
+  );
+}
+```
+
+La página queda como Server Component sin `'use client'`. La interacción vive en `UserProfilePageContent`.
+
+### ⚙️ UserSettingsContent
+
+**Ubicación**: `src/modules/shared/components/UserSettings.tsx`
+
+**Propósito**: Unificar preferencias comunes y cambio de contraseña.
+
+Exportaciones:
+
+- `UserSettings`: export default compatible.
+- `UserSettingsContent`: export nombrado para wrappers por rol.
+
+Páginas que lo usan como contenido compartido:
+
+- `src/app/donante/configuracion/page.tsx`
+- `src/app/user/configuracion/page.tsx`
+
+Ejemplo:
+
+```tsx
+<DashboardLayout requiredRole="SOLICITANTE">
+  <UserSettingsContent variant="solicitante" />
+</DashboardLayout>
+```
 
 ### 🏠 DashboardLayout
 
@@ -884,9 +941,38 @@ export function useInventoryStock(productoId?: string) {
 
 ### Server State vs Client State
 
-El proyecto tiene soporte para **Server Components**, pero el estado actual del código es predominantemente client-side: la mayoría de páginas en `src/app` están marcadas con `'use client'`. Esto simplifica formularios, filtros, modales, mapas y flujos interactivos, pero reduce los beneficios de SSR y data fetching en servidor.
+El proyecto tiene soporte para **Server Components**. El estado actual sigue siendo mayormente client-side: 35 de 43 páginas en `src/app` están marcadas con `'use client'`. Esto simplifica formularios, filtros, modales, mapas y flujos interactivos, pero reduce los beneficios de SSR y data fetching en servidor.
 
-La dirección recomendada es migrar gradualmente páginas de lectura a Server Components y mantener Client Components solo en las partes interactivas.
+La dirección aplicada es migrar gradualmente páginas de lectura o wrappers simples a Server Components y mantener Client Components solo en las partes interactivas.
+
+#### Patrón Server Wrapper + Client Island:
+
+```tsx
+// src/app/user/perfil/page.tsx
+import UserProfilePageContent from '@/modules/shared/components/UserProfilePageContent';
+
+export default function UserPerfilPage() {
+  return (
+    <UserProfilePageContent
+      requiredRole="SOLICITANTE"
+      title="Mi Perfil"
+      tone="red"
+    />
+  );
+}
+```
+
+Reglas:
+
+- La página no debe importar barrels que arrastren hooks cliente si pretende mantenerse como Server Component.
+- Importar componentes cliente directamente, por ejemplo `@/modules/shared/components/UserProfilePageContent`.
+- Mantener formularios, mapas, toggles, modales y estados locales dentro de Client Components.
+
+Candidatas para próximas migraciones:
+
+- Dashboards con datos de solo lectura inicial.
+- Reportes que renderizan tablas antes de abrir filtros/modales.
+- Páginas de comprobante que solo muestran datos.
 
 #### Server State (Objetivo Recomendado):
 

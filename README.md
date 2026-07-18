@@ -26,8 +26,8 @@ La documentación técnica completa del proyecto se encuentra organizada en mód
 | **🔄 Flujos de Trabajo** | Flujos de usuario por rol (beneficiario, donante, operador, admin), ciclo de vida de requests, secuencias de autenticación y flujos de negocio end-to-end | [docs/WORKFLOW.md](./docs/WORKFLOW.md) |
 | **🗄️ Base de Datos** | Diagrama ER completo, diccionario de datos de 20+ tablas, funciones SQL, triggers automáticos, políticas RLS y estrategias de optimización | [docs/DATABASE.md](./docs/DATABASE.md) |
 | **🎨 Componentes Frontend** | Sistema de diseño, componentes UI reutilizables, hooks personalizados, patrones de composición y configuración de Tailwind CSS | [docs/COMPONENTS.md](./docs/COMPONENTS.md) |
-| **🧹 Calidad y Refactor** | Estado actual del código, arquitectura real, riesgos detectados y prioridades para refactorización incremental | [docs/CODE_QUALITY_REFACTORING.md](./docs/CODE_QUALITY_REFACTORING.md) |
-| **📋 Propuesta de Refactor** | Propuesta formal de cambios, fases, entregables, criterios de aceptación y plan de validación | [docs/PROPUESTA_REFACTOR_CLEAN_CODE.md](./docs/PROPUESTA_REFACTOR_CLEAN_CODE.md) |
+| **🧹 Calidad y Refactor** | Estado posterior al refactor incremental, cambios implementados, riesgos residuales y próximos pasos técnicos | [docs/CODE_QUALITY_REFACTORING.md](./docs/CODE_QUALITY_REFACTORING.md) |
+| **📋 Propuesta de Refactor** | Propuesta formal con estado de ejecución, fases, entregables, criterios de aceptación y plan de validación | [docs/PROPUESTA_REFACTOR_CLEAN_CODE.md](./docs/PROPUESTA_REFACTOR_CLEAN_CODE.md) |
 
 > 💡 **Nota para desarrolladores:** Cada documento incluye diagramas técnicos, código comentado y explicaciones detalladas del funcionamiento interno del sistema.
 
@@ -129,9 +129,10 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 
 ### **Herramientas de Desarrollo**
 - **ESLint** - Linting con configuración Next.js
+- **Vitest + React Testing Library** - Pruebas unitarias y de componentes
 - **PostCSS** - Procesamiento CSS avanzado
 
-> Estado validado: `pnpm lint` y `pnpm build` ejecutan correctamente. Actualmente no existe script `pnpm test` ni suite automatizada configurada.
+> Estado validado: `pnpm lint`, `pnpm build` y `pnpm test` ejecutan correctamente.
 
 ---
 
@@ -202,8 +203,10 @@ banco-alimentos/
 | `pnpm build` | Construir para producción |
 | `pnpm start` | Ejecutar versión de producción |
 | `pnpm lint` | Verificar código con ESLint |
+| `pnpm test` | Ejecutar pruebas con Vitest |
+| `pnpm test:watch` | Ejecutar pruebas en modo watch |
 
-> Pendiente: agregar un script de pruebas automatizadas antes de refactorizar flujos críticos de inventario, solicitudes y usuarios.
+La suite actual cubre autorización server-side, la API administrativa de usuarios, casos de uso de solicitudes y componentes compartidos de configuración.
 
 ---
 

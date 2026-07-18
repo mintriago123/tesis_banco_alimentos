@@ -311,9 +311,10 @@ export default async function DonanteDashboard() {
 
 **Características**:
 - **Capacidad de Server Components**: Next.js permite renderizado en servidor para páginas de lectura
-- **Estado actual**: La mayoría de páginas del proyecto usan `'use client'`
+- **Estado actual**: 35 de 43 páginas del proyecto usan `'use client'`
 - **Acceso a servicios**: Las páginas cliente consumen hooks, servicios y API routes; las páginas servidor pueden usar clientes server-side
-- **Oportunidad de mejora**: Migrar dashboards y vistas de solo lectura a Server Components para aprovechar caching, streaming y menor JavaScript en cliente
+- **Patrón aplicado**: Perfil y configuración común usan wrappers Server Component con islas cliente para carga/interacción
+- **Oportunidad de mejora**: Migrar dashboards y vistas de solo lectura restantes a Server Components para aprovechar caching, streaming y menor JavaScript en cliente
 
 ---
 
@@ -370,7 +371,7 @@ export class DonacionService {
 **Características**:
 - **Encapsulamiento**: Toda la lógica de negocio en un lugar
 - **Reutilizable**: Se usa desde páginas, API routes, y otros servicios
-- **Testabilidad como objetivo**: Los servicios pueden probarse mejor si se separan dependencias externas y se agrega suite automatizada
+- **Testabilidad incremental**: Solicitudes ya separa casos de uso y servicios internos con tests sobre mocks de Supabase/inventario/movimientos
 - **Type-safe**: TypeScript garantiza tipos correctos
 
 ---
@@ -591,6 +592,87 @@ export const config = {
 ---
 
 ## Flujos de Negocio Principales
+
+### 🔐 Flujo: Crear o Actualizar Usuarios desde Admin
+
+`/api/admin/usuarios` usa `SUPABASE_SERVICE_ROLE_KEY`, por lo que valida autorización dentro del handler aunque la ruta de página ya esté protegida por `proxy.ts`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Admin Browser
+    participant API as /api/admin/usuarios
+    participant Auth as Supabase Auth Client
+    participant Admin as Supabase Admin Client
+    participant DB as usuarios
+
+    A->>API: POST/PATCH
+    API->>Auth: getUser()
+    Auth-->>API: user o null
+
+    alt Sin sesión
+        API-->>A: 401 Usuario no autenticado
+    else Sesión válida
+        API->>DB: SELECT perfil por user.id
+        DB-->>API: rol, estado
+
+        alt Perfil inactivo o rol no admin
+            API-->>A: 403 Rol no permitido
+        else ADMINISTRADOR activo
+            API->>API: Validar payload y whitelist
+            API->>Admin: Crear/actualizar usuario con service role
+            Admin-->>API: Resultado
+            API-->>A: 200 o error controlado
+        end
+    end
+```
+
+Reglas:
+
+- `POST`: solo `ADMINISTRADOR` activo puede crear usuarios.
+- `PATCH`: solo `ADMINISTRADOR` activo puede modificar usuarios.
+- `PATCH` rechaza campos fuera de whitelist.
+- `rol` solo acepta `ADMINISTRADOR`, `OPERADOR`, `DONANTE`, `SOLICITANTE`.
+- `estado` solo acepta `activo`, `bloqueado`, `desactivado`.
+
+### 📦 Flujo: Aprobar Solicitud con Inventario
+
+La fachada `createSolicitudesActionService()` conserva la API pública usada por hooks y páginas, pero delega en casos de uso internos.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant O as Operador/Admin
+    participant F as useSolicitudActions
+    participant UC as approveSolicitud
+    participant INV as solicitudesInventoryService
+    participant MOV as solicitudesMovementService
+    participant DB as Supabase
+    participant NOT as solicitudesNotificationService
+
+    O->>F: Aprobar solicitud
+    F->>UC: solicitud, operador, depósito
+    UC->>INV: validarStockDisponible()
+
+    alt Stock insuficiente
+        UC-->>F: error sin modificar estado
+    else Stock suficiente
+        UC->>INV: descontarDelInventario()
+        UC->>DB: UPDATE solicitudes estado=aprobada
+        UC->>MOV: registrarMovimientoSolicitud()
+
+        alt Falla update o movimiento
+            UC->>INV: restaurarInventario()
+            UC->>DB: rollback estado anterior
+            UC-->>F: error controlado
+        else Todo OK
+            UC->>NOT: notificarCambioEstado()
+            UC-->>F: success
+        end
+    end
+```
+
+Este flujo evita que una solicitud quede aprobada sin descuento efectivo o sin movimiento esperado.
 
 ### 📦 Flujo Completo: Crear una Donación
 
@@ -842,7 +924,7 @@ sequenceDiagram
    - Coordinan operaciones entre entidades
 
 3. **Database Triggers** automatizan operaciones
-   - Actualizan inventario automáticamente
+   - Actualizan inventario automáticamente para donaciones
    - Crean notificaciones en tiempo real
    - Garantizan integridad de datos
 
@@ -853,7 +935,7 @@ sequenceDiagram
 
 Esta arquitectura garantiza:
 - ✅ **Seguridad** en múltiples capas
-- ✅ **Consistencia** de datos con transacciones
+- ✅ **Consistencia** de datos con triggers/RPC y compensación explícita en solicitudes
 - ✅ **Trazabilidad** de todas las operaciones
 - ✅ **Escalabilidad** con lógica modular
 - ✅ **Mantenibilidad** con código organizado

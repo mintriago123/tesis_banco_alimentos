@@ -2,13 +2,13 @@
 
 ## Estado Actual
 
-Este documento resume el estado real del código al momento del análisis en la rama `refactoring_clean_code`.
+Este documento resume el estado real del código en la rama `refactoring_clean_code` después del refactor incremental de seguridad, pruebas, servicios críticos y frontend por rol.
 
 - Stack validado localmente: Next.js 16.x, React 19, TypeScript 5, Tailwind CSS 4, Supabase.
-- Comandos verificados: `pnpm lint` y `pnpm build` pasan correctamente.
+- Comandos verificados: `pnpm lint`, `pnpm build` y `pnpm test` pasan correctamente.
 - Tamaño aproximado de `src`: 339 archivos y 50k líneas.
-- Páginas App Router: 43 páginas; 41 usan `'use client'`.
-- No existe script `pnpm test` ni suite automatizada detectada.
+- Páginas App Router: 43 páginas; 35 usan `'use client'`.
+- Pruebas automatizadas: Vitest + React Testing Library, con tests de autorización, API route administrativa, casos de uso de solicitudes y componente compartido de configuración.
 
 ## Arquitectura Real
 
@@ -19,92 +19,97 @@ La arquitectura actual es un **monolito modular con capas**:
 - `src/lib`: clientes Supabase, email, comprobantes, validaciones y utilidades globales.
 - `database`: scripts SQL, funciones, triggers y políticas RLS.
 
-El proyecto no implementa Clean Architecture estricta. Los servicios de aplicación dependen directamente de Supabase, email, QR, notificaciones y lógica de inventario. Esto es aceptable para el estado actual, pero limita testabilidad y aumenta el riesgo al cambiar flujos críticos.
+El proyecto no implementa Clean Architecture estricta. Los servicios de aplicación siguen dependiendo de Supabase, email, QR y notificaciones, pero el flujo crítico de solicitudes ya separa fachada, casos de uso, inventario, movimientos y notificaciones. Esto mejora la testabilidad sin introducir una reescritura completa.
 
-## Hallazgos Principales
+## Cambios Implementados
 
 ### 1. Seguridad en API Routes
 
-`src/app/api/admin/usuarios/route.ts` usa `SUPABASE_SERVICE_ROLE_KEY` mediante `createAdminSupabaseClient`, pero el handler actual no valida sesión ni rol antes de crear o modificar usuarios. El proxy protege rutas de página como `/admin`, pero no cubre automáticamente `/api/admin/*`.
+`src/app/api/admin/usuarios/route.ts` usa `SUPABASE_SERVICE_ROLE_KEY` mediante `createAdminSupabaseClient`, pero ahora valida sesión, perfil activo y rol `ADMINISTRADOR` dentro del handler antes de ejecutar operaciones privilegiadas.
 
-Prioridad: alta.
+Estado: resuelto para `/api/admin/usuarios`.
 
-Acción recomendada:
+Cambios aplicados:
 
-- Validar usuario autenticado dentro del endpoint.
-- Exigir rol `ADMINISTRADOR` y estado `activo`.
-- Definir una lista explícita de campos modificables para `PATCH`.
-- Evitar aceptar `updates` arbitrario desde el cliente.
+- `src/lib/server-auth.ts` centraliza `getAuthenticatedUser`, `getActiveUserProfile`, `requireRole` y validaciones de roles/estados.
+- `PATCH` usa whitelist explícita de campos editables.
+- Campos fuera de whitelist devuelven `400`.
+- Usuarios sin sesión reciben `401`.
+- Usuarios activos sin rol admin reciben `403`.
 
 ### 2. Servicios con Demasiadas Responsabilidades
 
-`src/modules/admin/reportes/solicitudes/services/solicitudesActionService.ts` concentra aprobación, rechazo, entrega, reversión, validación de stock, descuento de inventario, movimientos, comprobantes, QR, emails y notificaciones.
+`src/modules/admin/reportes/solicitudes/services/solicitudesActionService.ts` quedó como fachada compatible. La lógica se separó en módulos internos:
 
-Prioridad: alta.
+- `use-cases/approveSolicitud.ts`
+- `use-cases/rejectSolicitud.ts`
+- `use-cases/deliverSolicitud.ts`
+- `use-cases/revertSolicitud.ts`
+- `use-cases/processPartialDelivery.ts`
+- `solicitudesInventoryService.ts`
+- `solicitudesMovementService.ts`
+- `solicitudesNotificationService.ts`
 
-Acción recomendada:
+Estado: resuelto para solicitudes.
 
-- Separar casos de uso por archivo: aprobar solicitud, rechazar solicitud, entregar solicitud, revertir solicitud y procesar entrega parcial.
-- Extraer servicios específicos para inventario, comprobantes y notificaciones.
-- Mantener una fachada compatible para no romper hooks y páginas de golpe.
+### 3. Consistencia Transaccional en Inventario
 
-### 3. Riesgo Transaccional en Inventario
+Las solicitudes aprobadas y entregas parciales validan stock, descuentan inventario, actualizan estado y registran movimientos en una unidad coordinada desde la capa de aplicación. Si falla la actualización de estado o el movimiento, el servicio restaura inventario y revierte el estado de la solicitud.
 
-Algunos flujos actualizan la solicitud y después descuentan inventario o registran movimientos en pasos separados. Si falla una operación intermedia, la base puede quedar en estado parcial.
+Estado: mitigado para solicitudes.
 
-Prioridad: alta.
+Decisiones documentadas:
 
-Acción recomendada:
+- Donaciones: la base de datos gobierna inventario mediante trigger.
+- Bajas: la RPC `dar_baja_producto()` gobierna la unidad transaccional.
+- Solicitudes: la capa de aplicación gobierna el flujo con compensación explícita.
 
-- Mover operaciones críticas a funciones SQL/RPC transaccionales o a handlers server-side que coordinen una única unidad de trabajo.
-- Agregar pruebas de caracterización antes de cambiar estos flujos.
+Ver [DATABASE.md](./DATABASE.md).
 
-### 4. Frontend Client-Heavy
+### 4. Base de Pruebas Automatizadas
 
-La documentación anterior decía que el proyecto usaba Server Components por defecto. El código actual usa `'use client'` en casi todas las páginas.
+Se agregó Vitest + React Testing Library.
 
-Prioridad: media.
+Scripts:
 
-Acción recomendada:
+- `pnpm test`
+- `pnpm test:watch`
 
-- Mantener Client Components para formularios, modales, filtros, mapas y estados locales.
-- Migrar páginas de lectura o dashboards simples a Server Components cuando no requieran eventos del navegador.
-- Bajar la frontera client-side a componentes interactivos específicos.
+Cobertura inicial:
 
-### 5. Duplicación por Rol
+- Helpers de autorización y whitelist.
+- `PATCH`/`POST /api/admin/usuarios` con mocks.
+- Casos de uso de solicitudes: aprobación, rechazo, entrega y entrega parcial.
+- Componente compartido `UserSettingsContent`.
 
-Hay páginas de perfil y configuración con lógica similar entre `admin`, `donante`, `operador` y `user`.
+### 5. Frontend Client-Heavy
 
-Prioridad: media.
+El proyecto sigue teniendo mayoría de páginas cliente, pero se redujo el número de páginas con `'use client'` de 41 a 35. Las páginas de perfil y configuración compartida ahora son Server Components que renderizan islas cliente.
 
-Acción recomendada:
+Estado: mejora parcial.
 
-- Crear componentes compartidos para perfil, cambio de contraseña y preferencias.
-- Mantener wrappers por rol solo para títulos, permisos y navegación.
+### 6. Duplicación por Rol
 
-### 6. Código Comentado y Compatibilidad Legacy
+Se extrajo `UserProfilePageContent` para perfiles de `admin`, `operador`, `donante` y `user`. También se formalizó `UserSettingsContent({ variant })` para configuración común de donante y solicitante.
 
-`donationActionService.ts` conserva bloques grandes de lógica desactivada porque el inventario pasó a manejarse por triggers de base de datos.
+Estado: resuelto para perfil y configuración común.
 
-Prioridad: media.
+### 7. Código Comentado y Compatibilidad Legacy
 
-Acción recomendada:
+`donationActionService.ts` ya no conserva los bloques comentados de integración manual de inventario. La decisión se documentó en `docs/DATABASE.md`.
 
-- Eliminar código comentado y documentar la decisión en este archivo o en `docs/DATABASE.md`.
-- Mantener solo la lógica activa y los comentarios que expliquen decisiones vigentes.
+Estado: resuelto.
 
-## Plan de Refactor Recomendado
+## Pendientes Recomendados
 
-1. Corregir seguridad de API routes con service role.
-2. Agregar pruebas mínimas para usuarios, solicitudes, donaciones e inventario.
-3. Extraer lógica de inventario y conversión de unidades desde servicios grandes.
-4. Separar casos de uso de solicitudes y donaciones.
-5. Reducir duplicación de páginas por rol.
-6. Migrar gradualmente páginas de lectura a Server Components.
-7. Actualizar documentación después de cada refactor funcional.
+1. Extender el helper de autorización a otras API routes con permisos elevados.
+2. Agregar tests para donaciones, bajas e inventario operativo.
+3. Evaluar una RPC SQL transaccional para aprobación de solicitudes si el flujo requiere garantías más estrictas que la compensación de aplicación.
+4. Migrar dashboards y reportes de solo lectura a Server Components con islas cliente para filtros/modales.
+5. Mantener documentación actualizada después de cada refactor funcional.
 
 La propuesta formal de ejecución está en [PROPUESTA_REFACTOR_CLEAN_CODE.md](./PROPUESTA_REFACTOR_CLEAN_CODE.md).
 
 ## Criterio de Clean Code
 
-El código actual tiene una estructura modular razonable, pero todavía no cumple completamente con Clean Code en los flujos críticos porque hay archivos grandes, mezcla de responsabilidades, código comentado y ausencia de pruebas. La recomendación es aplicar refactor incremental, no una reescritura completa.
+El código actual tiene una estructura modular más segura y testeable que la línea base. Los flujos de solicitudes ya no concentran responsabilidades críticas en un único archivo, las API routes administrativas tienen autorización server-side y existe una red mínima de pruebas. Todavía conviene continuar con migraciones pequeñas en donaciones, reportes y páginas client-heavy.

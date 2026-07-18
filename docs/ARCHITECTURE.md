@@ -20,7 +20,7 @@ El Banco de Alimentos ULEAM está construido con una **arquitectura modular mono
 
 - **Modular Monolith**: Organización en módulos independientes por dominio de negocio
 - **App Router**: Rutas de página y API routes integradas en Next.js
-- **Client Components predominantes**: La mayoría de páginas actuales usan `'use client'`; Server Components quedan disponibles para futuras optimizaciones
+- **Server wrappers + Client Islands**: La mayoría de páginas siguen siendo cliente, pero perfil/configuración común ya usa wrappers Server Component que renderizan componentes interactivos cliente
 - **API Routes**: Endpoints REST integrados en Next.js
 - **Row Level Security (RLS)**: Seguridad a nivel de base de datos
 - **Middleware de Autenticación**: Control de acceso centralizado
@@ -273,7 +273,7 @@ src/modules/
 - **Separación de responsabilidades**: Services, Hooks, Types, Utils separados
 - **Reutilización**: Código compartido en `shared/`
 - **Type Safety**: TypeScript types exportados desde cada módulo
-- **Testabilidad como objetivo**: La separación por módulos ayuda, pero falta suite automatizada y algunos servicios aún mezclan responsabilidades
+- **Testabilidad incremental**: La separación por módulos se complementa con Vitest + React Testing Library para autorización, API routes y casos de uso críticos
 
 ---
 
@@ -284,6 +284,7 @@ src/lib/
 ├── supabase.ts                # Cliente Supabase (client-side)
 ├── supabase-server.ts         # Cliente Supabase (server-side)
 ├── supabase-admin.ts          # Cliente Supabase (admin)
+├── server-auth.ts             # Autorización server-side para API routes
 ├── constantes.ts              # Constantes globales
 ├── validaciones.ts            # Esquemas de validación
 ├── dateUtils.ts               # Utilidades de fechas
@@ -349,6 +350,7 @@ export default async function DonanteDashboard() {
 - Orquestar llamadas a servicios de negocio
 - Manejar autenticación y autorización
 - Transformar datos entre formatos (DTO ↔ Domain)
+- Validar sesión y rol dentro de handlers sensibles, no solo desde `proxy.ts`
 
 **Tecnologías**:
 - Next.js API Routes
@@ -387,6 +389,24 @@ export async function POST(request: Request) {
 **Tecnologías**:
 - TypeScript classes y funciones
 - Custom React Hooks
+
+**Patrón actual en solicitudes**:
+
+`createSolicitudesActionService()` actúa como fachada pública para no romper hooks ni páginas. Internamente delega en casos de uso y servicios especializados:
+
+```
+solicitudesActionService.ts
+├── use-cases/approveSolicitud.ts
+├── use-cases/rejectSolicitud.ts
+├── use-cases/deliverSolicitud.ts
+├── use-cases/revertSolicitud.ts
+├── use-cases/processPartialDelivery.ts
+├── solicitudesInventoryService.ts
+├── solicitudesMovementService.ts
+└── solicitudesNotificationService.ts
+```
+
+Los casos de uso coordinan reglas de negocio. Los servicios internos encapsulan inventario, movimientos y notificaciones.
 
 **Ejemplo**:
 ```typescript
@@ -619,6 +639,55 @@ const ROLES = {
 } as const;
 ```
 
+### 4. Autorización en API Routes Sensibles
+
+El middleware protege rutas de página, pero las API routes sensibles deben validar autorización dentro del handler. Este patrón es obligatorio cuando una ruta usa `SUPABASE_SERVICE_ROLE_KEY`.
+
+Helper central: `src/lib/server-auth.ts`.
+
+Funciones principales:
+
+- `getAuthenticatedUser(supabase)`: devuelve usuario autenticado o `401`.
+- `getActiveUserProfile(adminSupabase, userId)`: consulta `usuarios` y exige `estado === 'activo'`.
+- `requireRole(profile, roles)`: devuelve `403` si el rol no está permitido.
+- `sanitizeAdminUserPatchUpdates(updates)`: aplica whitelist y valida `rol`/`estado`.
+
+Ejemplo aplicado:
+
+```typescript
+const context = await requireActiveAdmin();
+if ('response' in context) {
+  return context.response;
+}
+```
+
+`/api/admin/usuarios` usa este patrón para `POST` y `PATCH`.
+
+---
+
+## Pruebas Automatizadas
+
+El proyecto usa Vitest + React Testing Library.
+
+Scripts:
+
+```bash
+pnpm test
+pnpm test:watch
+```
+
+Configuración:
+
+- `vitest.config.ts`
+- `src/test/setup.ts`
+
+Cobertura inicial:
+
+- Helpers de autorización y whitelist de usuarios.
+- `POST` y `PATCH` de `/api/admin/usuarios` con mocks de Supabase.
+- Casos de uso de solicitudes con mocks de inventario, movimientos y notificaciones.
+- Componente compartido `UserSettingsContent`.
+
 ### 4. Estados de Usuario
 
 ```typescript
@@ -638,10 +707,11 @@ Estado verificado en la rama `refactoring_clean_code`:
 
 - `pnpm lint` pasa correctamente.
 - `pnpm build` pasa correctamente con Next.js 16.x.
-- No existe script `pnpm test` ni suite automatizada detectada.
+- `pnpm test` pasa correctamente con Vitest.
 - La arquitectura real es modular monolítica con capas, no Clean Architecture estricta.
-- Hay servicios grandes que concentran responsabilidades críticas, especialmente solicitudes, donaciones e inventario.
-- La protección de rutas de página está centralizada en `src/proxy.ts`, pero las API routes sensibles deben validar sesión y rol dentro del handler.
+- El flujo de solicitudes se separó en fachada, casos de uso y servicios internos.
+- La protección de rutas de página está centralizada en `src/proxy.ts`; las API routes con service role validan sesión y rol dentro del handler.
+- 35 de 43 páginas App Router usan `'use client'`; perfil/configuración común ya aplica Server Component + Client Island.
 
 Para el detalle de riesgos y prioridades, ver [CODE_QUALITY_REFACTORING.md](./CODE_QUALITY_REFACTORING.md).
 
@@ -653,9 +723,9 @@ La arquitectura del Banco de Alimentos ULEAM permite mantener el proyecto como u
 
 - ✅ **Mantenible**: Código organizado y modular
 - ✅ **Escalable**: Fácil agregar nuevos módulos o extraer a microservicios
-- ⚠️ **Segura con pendientes**: RLS y proxy aportan seguridad, pero las API routes con permisos elevados deben reforzar autorización
-- ⚠️ **Testeable con limitaciones**: TypeScript y servicios modulares ayudan, pero falta suite automatizada y hay servicios con responsabilidades mezcladas
+- ✅ **Segura por capas**: RLS, proxy y autorización server-side en endpoints administrativos intervenidos
+- ✅ **Testeable incrementalmente**: TypeScript, servicios modulares y suite Vitest inicial
 - ✅ **Type-Safe**: TypeScript en toda la aplicación
-- ⚠️ **Performance mejorable**: Next.js permite SSR y Server Components, pero el frontend actual usa Client Components de forma predominante
+- ⚠️ **Performance mejorable**: Next.js permite SSR y Server Components; quedan dashboards/reportes client-heavy por migrar
 
-La recomendación actual es refactorizar de forma incremental, empezando por seguridad, pruebas y separación de servicios críticos.
+La recomendación actual es continuar el refactor incremental en API routes restantes, donaciones/reportes y páginas de lectura.
