@@ -109,6 +109,7 @@ export interface ResultadoInventario {
   productosActualizados: number;
   noStock?: boolean;
   error?: boolean;
+  errorDetails?: unknown;
   detalleEntregado: InventarioDescontado[];
 }
 
@@ -202,4 +203,6 @@ export interface DescuentoProductoResult {
   cantidadRestante: number;
   productosActualizados: number;
   cantidadEntregada: number;
+  error?: boolean;
+  errorDetails?: unknown;
 }

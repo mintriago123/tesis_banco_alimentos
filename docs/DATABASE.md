@@ -602,6 +602,17 @@ unidades (N) ──── (N) unidades (a través de conversiones)
 
 ## Funciones y Triggers
 
+### Frontera transaccional de inventario
+
+La responsabilidad se divide entre base de datos y capa de aplicación:
+
+- **Donaciones**: la base de datos gobierna la creación/actualización de `productos_donados` e `inventario` mediante `trigger_crear_producto` / `crear_producto_desde_donacion()` cuando una donación pasa a estado aprobado/entregado. La capa de aplicación no duplica esa integración.
+- **Bajas de productos**: la base de datos gobierna el flujo mediante la RPC `dar_baja_producto()`, que actualiza inventario y registra la baja en una unidad transaccional.
+- **Solicitudes aprobadas y entregas parciales**: la capa de aplicación gobierna el flujo en `createSolicitudesActionService()`. La secuencia valida stock, descuenta inventario, actualiza `solicitudes` y registra `movimiento_inventario_*`. Si falla la actualización de estado o el registro del movimiento, el servicio restaura inventario y revierte el estado de la solicitud.
+- **Historial de entregas parciales**: `historial_donaciones` se mantiene como auditoría de aplicación; un fallo al registrar historial se reporta en logs y no duplica descuentos de inventario.
+
+Para nuevas operaciones que modifiquen más de una tabla crítica, la preferencia es una RPC SQL transaccional. Si se implementa en la capa de aplicación, debe incluir compensación explícita y tests de fallo de stock/movimiento.
+
 ### 🔧 Funciones Principales
 
 #### 1. `crear_notificacion()`
