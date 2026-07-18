@@ -310,10 +310,10 @@ export default async function DonanteDashboard() {
 ```
 
 **Características**:
-- **Server Components por defecto**: Renderizado en servidor
-- **Acceso directo a servicios**: Sin necesidad de API routes
-- **Caching automático**: Next.js cachea resultados
-- **Streaming**: Puede hacer streaming de UI mientras carga datos
+- **Capacidad de Server Components**: Next.js permite renderizado en servidor para páginas de lectura
+- **Estado actual**: La mayoría de páginas del proyecto usan `'use client'`
+- **Acceso a servicios**: Las páginas cliente consumen hooks, servicios y API routes; las páginas servidor pueden usar clientes server-side
+- **Oportunidad de mejora**: Migrar dashboards y vistas de solo lectura a Server Components para aprovechar caching, streaming y menor JavaScript en cliente
 
 ---
 
@@ -370,7 +370,7 @@ export class DonacionService {
 **Características**:
 - **Encapsulamiento**: Toda la lógica de negocio en un lugar
 - **Reutilizable**: Se usa desde páginas, API routes, y otros servicios
-- **Testeable**: Fácil de testear unitariamente
+- **Testabilidad como objetivo**: Los servicios pueden probarse mejor si se separan dependencias externas y se agrega suite automatizada
 - **Type-safe**: TypeScript garantiza tipos correctos
 
 ---

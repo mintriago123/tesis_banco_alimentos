@@ -8,17 +8,19 @@
 - [Capas de la Aplicación](#capas-de-la-aplicación)
 - [Middleware y Proxy](#middleware-y-proxy)
 - [Seguridad y Autenticación](#seguridad-y-autenticación)
+- [Estado Técnico Actual](#estado-técnico-actual)
 
 ---
 
 ## Visión General
 
-El Banco de Alimentos ULEAM está construido con una **arquitectura modular monolítica** que sigue los principios de **separación de responsabilidades** y **encapsulamiento**. La aplicación utiliza Next.js con App Router como framework principal, Supabase como backend, y TypeScript para garantizar type-safety en toda la aplicación.
+El Banco de Alimentos ULEAM está construido con una **arquitectura modular monolítica** que sigue una separación parcial de responsabilidades. La aplicación utiliza Next.js 16 con App Router como framework principal, Supabase como backend, React 19 para la interfaz y TypeScript para type-safety en la aplicación.
 
 ### Características Arquitectónicas Principales
 
 - **Modular Monolith**: Organización en módulos independientes por dominio de negocio
-- **Server-Side Rendering (SSR)**: Páginas renderizadas en el servidor para mejor SEO y performance
+- **App Router**: Rutas de página y API routes integradas en Next.js
+- **Client Components predominantes**: La mayoría de páginas actuales usan `'use client'`; Server Components quedan disponibles para futuras optimizaciones
 - **API Routes**: Endpoints REST integrados en Next.js
 - **Row Level Security (RLS)**: Seguridad a nivel de base de datos
 - **Middleware de Autenticación**: Control de acceso centralizado
@@ -109,6 +111,8 @@ graph TB
 
 La aplicación implementa un **Modular Monolith**, que combina las ventajas de un monolito (simplicidad de despliegue, transacciones directas) con la organización modular de microservicios.
 
+No implementa Clean Architecture estricta. Los servicios de `src/modules` dependen directamente de Supabase, notificaciones, email, comprobantes y utilidades globales. Esta decisión reduce complejidad inicial, pero dificulta pruebas unitarias y refactors seguros en flujos críticos.
+
 #### Características del Patrón:
 
 1. **Módulos Independientes por Dominio**
@@ -141,7 +145,7 @@ La aplicación implementa un **Modular Monolith**, que combina las ventajas de u
 
 ### 📁 `/src/app` - App Router (Presentación y Rutas)
 
-La carpeta `app` sigue la convención del **App Router de Next.js 15**, donde la estructura de carpetas define las rutas de la aplicación.
+La carpeta `app` sigue la convención del **App Router de Next.js 16**, donde la estructura de carpetas define las rutas de la aplicación.
 
 ```
 src/app/
@@ -198,8 +202,8 @@ src/app/
 **Principios de `app/`:**
 - **Presentación pura**: Solo componentes de UI y páginas
 - **Rutas protegidas**: Verificación de autenticación y roles
-- **Server Components**: Por defecto, para mejor performance
-- **Client Components**: Marcados con `'use client'` cuando necesario
+- **Estado actual**: La mayoría de páginas son Client Components
+- **Objetivo recomendado**: Usar Server Components para páginas de lectura y dejar Client Components para formularios, filtros, mapas, modales y eventos del navegador
 
 ---
 
@@ -269,7 +273,7 @@ src/modules/
 - **Separación de responsabilidades**: Services, Hooks, Types, Utils separados
 - **Reutilización**: Código compartido en `shared/`
 - **Type Safety**: TypeScript types exportados desde cada módulo
-- **Testeable**: Lógica desacoplada de la UI
+- **Testabilidad como objetivo**: La separación por módulos ayuda, pero falta suite automatizada y algunos servicios aún mezclan responsabilidades
 
 ---
 
@@ -628,15 +632,30 @@ type EstadoUsuario = 'activo' | 'bloqueado' | 'desactivado';
 
 ---
 
+## Estado Técnico Actual
+
+Estado verificado en la rama `refactoring_clean_code`:
+
+- `pnpm lint` pasa correctamente.
+- `pnpm build` pasa correctamente con Next.js 16.x.
+- No existe script `pnpm test` ni suite automatizada detectada.
+- La arquitectura real es modular monolítica con capas, no Clean Architecture estricta.
+- Hay servicios grandes que concentran responsabilidades críticas, especialmente solicitudes, donaciones e inventario.
+- La protección de rutas de página está centralizada en `src/proxy.ts`, pero las API routes sensibles deben validar sesión y rol dentro del handler.
+
+Para el detalle de riesgos y prioridades, ver [CODE_QUALITY_REFACTORING.md](./CODE_QUALITY_REFACTORING.md).
+
+---
+
 ## Conclusión
 
-La arquitectura del Banco de Alimentos ULEAM está diseñada para ser:
+La arquitectura del Banco de Alimentos ULEAM permite mantener el proyecto como un monolito modular:
 
 - ✅ **Mantenible**: Código organizado y modular
 - ✅ **Escalable**: Fácil agregar nuevos módulos o extraer a microservicios
-- ✅ **Segura**: Múltiples capas de seguridad
-- ✅ **Testeable**: Lógica de negocio desacoplada
+- ⚠️ **Segura con pendientes**: RLS y proxy aportan seguridad, pero las API routes con permisos elevados deben reforzar autorización
+- ⚠️ **Testeable con limitaciones**: TypeScript y servicios modulares ayudan, pero falta suite automatizada y hay servicios con responsabilidades mezcladas
 - ✅ **Type-Safe**: TypeScript en toda la aplicación
-- ✅ **Performante**: SSR, caching, y optimizaciones de Next.js
+- ⚠️ **Performance mejorable**: Next.js permite SSR y Server Components, pero el frontend actual usa Client Components de forma predominante
 
-Esta arquitectura permite al equipo de desarrollo trabajar de forma independiente en diferentes módulos mientras mantiene la coherencia del sistema.
+La recomendación actual es refactorizar de forma incremental, empezando por seguridad, pruebas y separación de servicios críticos.

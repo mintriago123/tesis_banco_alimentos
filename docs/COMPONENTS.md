@@ -15,12 +15,12 @@
 
 ## Visión General
 
-El frontend del Banco de Alimentos ULEAM está construido con **React** y **Next.js**, siguiendo una arquitectura basada en componentes reutilizables y modulares.
+El frontend del Banco de Alimentos ULEAM está construido con **React 19** y **Next.js 16**, siguiendo una arquitectura basada en componentes reutilizables y modulares.
 
 ### Tecnologías Frontend:
 
-- **React**: Biblioteca de UI con Server Components
-- **Next.js**: Framework con App Router
+- **React 19**: Biblioteca de UI
+- **Next.js 16**: Framework con App Router, API Routes y Proxy/Middleware
 - **TypeScript**: Type safety en todo el código
 - **Tailwind CSS**: Framework de estilos utility-first
 - **Lucide React**: Biblioteca de iconos
@@ -31,7 +31,7 @@ El frontend del Banco de Alimentos ULEAM está construido con **React** y **Next
 ### Principios de Diseño:
 
 - ✅ **Componentización**: Todo es un componente reutilizable
-- ✅ **Server Components**: Por defecto, para mejor performance
+- ⚠️ **Client Components predominantes**: El código actual usa `'use client'` en la mayoría de páginas
 - ✅ **Composición**: Componentes pequeños que se combinan
 - ✅ **Accesibilidad**: Semántica HTML y ARIA labels
 - ✅ **Type Safety**: TypeScript en todos los componentes
@@ -884,9 +884,11 @@ export function useInventoryStock(productoId?: string) {
 
 ### Server State vs Client State
 
-El proyecto utiliza **Server Components** por defecto, minimizando la necesidad de gestión de estado global.
+El proyecto tiene soporte para **Server Components**, pero el estado actual del código es predominantemente client-side: la mayoría de páginas en `src/app` están marcadas con `'use client'`. Esto simplifica formularios, filtros, modales, mapas y flujos interactivos, pero reduce los beneficios de SSR y data fetching en servidor.
 
-#### Server State (Por Defecto):
+La dirección recomendada es migrar gradualmente páginas de lectura a Server Components y mantener Client Components solo en las partes interactivas.
+
+#### Server State (Objetivo Recomendado):
 
 ```tsx
 // src/app/admin/dashboard/page.tsx
@@ -908,7 +910,7 @@ export default async function AdminDashboard() {
 }
 ```
 
-#### Client State (Cuando es Necesario):
+#### Client State (Uso Actual Frecuente):
 
 ```tsx
 'use client';
@@ -1151,7 +1153,7 @@ El frontend del Banco de Alimentos ULEAM está construido con:
 
 - ✅ **Componentes modulares y reutilizables**
 - ✅ **Sistema de diseño consistente con Tailwind CSS**
-- ✅ **Server Components por defecto para mejor performance**
+- ⚠️ **Client Components predominantes actualmente**
 - ✅ **Hooks personalizados para lógica compartida**
 - ✅ **Tipado estricto con TypeScript**
 - ✅ **Accesibilidad con semántica HTML**
@@ -1161,4 +1163,4 @@ Esta arquitectura permite:
 - Mantenimiento sencillo con código organizado
 - Escalabilidad agregando nuevos componentes
 - Consistencia visual en toda la aplicación
-- Performance óptimo con SSR y Client Components selectivos
+- Mejora progresiva de performance si se reducen las fronteras client-side en páginas de lectura

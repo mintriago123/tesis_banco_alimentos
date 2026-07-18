@@ -2,7 +2,7 @@
 
 # 🍲 Banco de Alimentos ULEAM
 
-[![Next.js](https://img.shields.io/badge/Next.js-15.3.4-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16.x-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
@@ -26,6 +26,7 @@ La documentación técnica completa del proyecto se encuentra organizada en mód
 | **🔄 Flujos de Trabajo** | Flujos de usuario por rol (beneficiario, donante, operador, admin), ciclo de vida de requests, secuencias de autenticación y flujos de negocio end-to-end | [docs/WORKFLOW.md](./docs/WORKFLOW.md) |
 | **🗄️ Base de Datos** | Diagrama ER completo, diccionario de datos de 20+ tablas, funciones SQL, triggers automáticos, políticas RLS y estrategias de optimización | [docs/DATABASE.md](./docs/DATABASE.md) |
 | **🎨 Componentes Frontend** | Sistema de diseño, componentes UI reutilizables, hooks personalizados, patrones de composición y configuración de Tailwind CSS | [docs/COMPONENTS.md](./docs/COMPONENTS.md) |
+| **🧹 Calidad y Refactor** | Estado actual del código, arquitectura real, riesgos detectados y prioridades para refactorización incremental | [docs/CODE_QUALITY_REFACTORING.md](./docs/CODE_QUALITY_REFACTORING.md) |
 
 > 💡 **Nota para desarrolladores:** Cada documento incluye diagramas técnicos, código comentado y explicaciones detalladas del funcionamiento interno del sistema.
 
@@ -37,7 +38,7 @@ La documentación técnica completa del proyecto se encuentra organizada en mód
 
 Asegúrate de tener instalado:
 
-- **Node.js** 18 o superior
+- **Node.js** compatible con Next.js 16. El entorno validado usa Node.js v24.16.0
 - **pnpm** 11 o superior
 - Cuenta activa en [Supabase](https://supabase.com)
 - *(Opcional)* Token de [Mapbox](https://mapbox.com) para geolocalización
@@ -112,8 +113,8 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 ## 🛠️ Stack Tecnológico
 
 ### **Core Framework**
-- **Next.js** - App Router, SSR, API Routes, Turbopack
-- **React** - Server Components y Client Components
+- **Next.js 16.x** - App Router, API Routes, Proxy/Middleware y Turbopack
+- **React 19** - Client Components predominantes y Server Components disponibles
 - **TypeScript** - Tipado estricto end-to-end
 
 ### **Backend & Database**
@@ -128,6 +129,8 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 ### **Herramientas de Desarrollo**
 - **ESLint** - Linting con configuración Next.js
 - **PostCSS** - Procesamiento CSS avanzado
+
+> Estado validado: `pnpm lint` y `pnpm build` ejecutan correctamente. Actualmente no existe script `pnpm test` ni suite automatizada configurada.
 
 ---
 
@@ -172,7 +175,7 @@ banco-alimentos/
 └── 📁 public/                     # Archivos estáticos
 ```
 
-> 🔍 **Arquitectura:** El proyecto sigue un patrón **Modular Monolith** con separación clara entre capas de presentación (`app/`) y lógica de negocio (`modules/`). Ver detalles en [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md).
+> 🔍 **Arquitectura:** El proyecto sigue un patrón **Modular Monolith** con separación parcial entre presentación (`app/`), módulos de negocio (`modules/`) e infraestructura/utilidades (`lib/`). No implementa Clean Architecture estricta. Ver detalles en [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) y prioridades en [docs/CODE_QUALITY_REFACTORING.md](./docs/CODE_QUALITY_REFACTORING.md).
 
 ---
 
@@ -198,6 +201,8 @@ banco-alimentos/
 | `pnpm build` | Construir para producción |
 | `pnpm start` | Ejecutar versión de producción |
 | `pnpm lint` | Verificar código con ESLint |
+
+> Pendiente: agregar un script de pruebas automatizadas antes de refactorizar flujos críticos de inventario, solicitudes y usuarios.
 
 ---
 
