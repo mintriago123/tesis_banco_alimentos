@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase-admin';
-import type { PostgrestSingleResponse } from '@supabase/supabase-js';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
+import {
+  getActiveUserProfile,
+  getAuthenticatedUser,
+  isPlainObject,
+  isValidUserRole,
+  requireRole,
+  sanitizeAdminUserPatchUpdates,
+} from '@/lib/server-auth';
+import type { PostgrestSingleResponse, SupabaseClient } from '@supabase/supabase-js';
 
 type CreateUserRequest = {
   email: string;
@@ -10,20 +19,92 @@ type CreateUserRequest = {
   tipo_persona?: string;
 };
 
+type AdminContext = {
+  admin: SupabaseClient;
+};
+
+const invalidPayload = (message: string) =>
+  NextResponse.json({ error: message }, { status: 400 });
+
+async function requireActiveAdmin(): Promise<AdminContext | { response: NextResponse }> {
+  const supabase = await createServerSupabaseClient();
+  const authResult = await getAuthenticatedUser(supabase);
+
+  if (authResult.response) {
+    return { response: authResult.response };
+  }
+
+  const admin = createAdminSupabaseClient();
+  const profileResult = await getActiveUserProfile(admin, authResult.user.id);
+
+  if (profileResult.response) {
+    return { response: profileResult.response };
+  }
+
+  const roleResult = requireRole(profileResult.profile, ['ADMINISTRADOR']);
+
+  if (roleResult.response) {
+    return { response: roleResult.response };
+  }
+
+  return { admin };
+}
+
+async function readJsonBody(request: Request): Promise<{ body: unknown } | { response: NextResponse }> {
+  try {
+    return { body: await request.json() };
+  } catch {
+    return { response: invalidPayload('Payload JSON inválido.') };
+  }
+}
+
+const parseCreateUserRequest = (body: unknown): CreateUserRequest | { response: NextResponse } => {
+  if (!isPlainObject(body)) {
+    return { response: invalidPayload('El payload debe ser un objeto.') };
+  }
+
+  const { email, password, rol, nombre, tipo_persona: tipoPersona } = body;
+
+  if (typeof email !== 'string' || !email.trim()) {
+    return { response: invalidPayload('email es obligatorio.') };
+  }
+
+  if (typeof password !== 'string' || !password.trim()) {
+    return { response: invalidPayload('password es obligatorio.') };
+  }
+
+  if (!isValidUserRole(rol)) {
+    return { response: invalidPayload('rol inválido.') };
+  }
+
+  return {
+    email: email.trim(),
+    password,
+    rol,
+    nombre: typeof nombre === 'string' ? nombre : undefined,
+    tipo_persona: typeof tipoPersona === 'string' ? tipoPersona : undefined,
+  };
+};
+
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as CreateUserRequest;
-    if (!body.email || !body.password || !body.rol) {
-      return NextResponse.json(
-        { error: 'email, password y rol son obligatorios.' },
-        { status: 400 }
-      );
+    const context = await requireActiveAdmin();
+    if ('response' in context) {
+      return context.response;
     }
 
-    const admin = createAdminSupabaseClient();
+    const jsonBody = await readJsonBody(request);
+    if ('response' in jsonBody) {
+      return jsonBody.response;
+    }
+
+    const body = parseCreateUserRequest(jsonBody.body);
+    if ('response' in body) {
+      return body.response;
+    }
 
     // Crear usuario en auth con la clave de servicio
-    const { data: authData, error: authError } = await admin.auth.admin.createUser({
+    const { data: authData, error: authError } = await context.admin.auth.admin.createUser({
       email: body.email,
       password: body.password,
       email_confirm: true,
@@ -50,7 +131,7 @@ export async function POST(request: Request) {
       updated_at: new Date().toISOString(),
     };
 
-    const insertRes: PostgrestSingleResponse<unknown> = await admin
+    const insertRes: PostgrestSingleResponse<unknown> = await context.admin
       .from('usuarios')
       .insert(payload)
       .select()
@@ -80,33 +161,37 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const body = await request.json();
-    const { userId, updates } = body;
-
-    if (!userId || !updates) {
-      return NextResponse.json(
-        { error: 'userId y updates son obligatorios.' },
-        { status: 400 }
-      );
+    const context = await requireActiveAdmin();
+    if ('response' in context) {
+      return context.response;
     }
 
-    // Verificar que la service role key esté configurada
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.error('SUPABASE_SERVICE_ROLE_KEY no está configurada en las variables de entorno');
-      return NextResponse.json(
-        { error: 'Configuración del servidor incompleta. SUPABASE_SERVICE_ROLE_KEY no encontrada.' },
-        { status: 500 }
-      );
+    const jsonBody = await readJsonBody(request);
+    if ('response' in jsonBody) {
+      return jsonBody.response;
     }
 
-    // Usar cliente admin para bypass RLS
-    const admin = createAdminSupabaseClient();
+    if (!isPlainObject(jsonBody.body)) {
+      return invalidPayload('El payload debe ser un objeto.');
+    }
+
+    const { userId, updates } = jsonBody.body;
+
+    if (typeof userId !== 'string' || !userId.trim()) {
+      return invalidPayload('userId es obligatorio.');
+    }
+
+    const sanitized = sanitizeAdminUserPatchUpdates(updates);
+
+    if (!sanitized.success) {
+      return invalidPayload(sanitized.error);
+    }
 
     // Actualizar usuario con bypass de RLS
-    const { error } = await admin
+    const { error } = await context.admin
       .from('usuarios')
-      .update(updates)
-      .eq('id', userId);
+      .update(sanitized.updates)
+      .eq('id', userId.trim());
 
     if (error) {
       console.error('Error actualizando usuario:', error);

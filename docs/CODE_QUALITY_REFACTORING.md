@@ -103,6 +103,8 @@ Acción recomendada:
 6. Migrar gradualmente páginas de lectura a Server Components.
 7. Actualizar documentación después de cada refactor funcional.
 
+La propuesta formal de ejecución está en [PROPUESTA_REFACTOR_CLEAN_CODE.md](./PROPUESTA_REFACTOR_CLEAN_CODE.md).
+
 ## Criterio de Clean Code
 
 El código actual tiene una estructura modular razonable, pero todavía no cumple completamente con Clean Code en los flujos críticos porque hay archivos grandes, mezcla de responsabilidades, código comentado y ausencia de pruebas. La recomendación es aplicar refactor incremental, no una reescritura completa.

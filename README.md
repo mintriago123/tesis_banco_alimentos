@@ -27,6 +27,7 @@ La documentación técnica completa del proyecto se encuentra organizada en mód
 | **🗄️ Base de Datos** | Diagrama ER completo, diccionario de datos de 20+ tablas, funciones SQL, triggers automáticos, políticas RLS y estrategias de optimización | [docs/DATABASE.md](./docs/DATABASE.md) |
 | **🎨 Componentes Frontend** | Sistema de diseño, componentes UI reutilizables, hooks personalizados, patrones de composición y configuración de Tailwind CSS | [docs/COMPONENTS.md](./docs/COMPONENTS.md) |
 | **🧹 Calidad y Refactor** | Estado actual del código, arquitectura real, riesgos detectados y prioridades para refactorización incremental | [docs/CODE_QUALITY_REFACTORING.md](./docs/CODE_QUALITY_REFACTORING.md) |
+| **📋 Propuesta de Refactor** | Propuesta formal de cambios, fases, entregables, criterios de aceptación y plan de validación | [docs/PROPUESTA_REFACTOR_CLEAN_CODE.md](./docs/PROPUESTA_REFACTOR_CLEAN_CODE.md) |
 
 > 💡 **Nota para desarrolladores:** Cada documento incluye diagramas técnicos, código comentado y explicaciones detalladas del funcionamiento interno del sistema.
 
