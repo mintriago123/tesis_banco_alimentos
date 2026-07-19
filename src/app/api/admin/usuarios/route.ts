@@ -127,18 +127,17 @@ export async function POST(request: Request) {
       nombre: body.nombre ?? '',
       email: body.email,
       estado: 'activo' as const,
-      created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
 
-    const insertRes: PostgrestSingleResponse<unknown> = await context.admin
+    const upsertRes: PostgrestSingleResponse<unknown> = await context.admin
       .from('usuarios')
-      .insert(payload)
+      .upsert(payload, { onConflict: 'id' })
       .select()
       .single();
 
-    if (insertRes.error) {
-      console.error('Error insertando en usuarios:', insertRes.error);
+    if (upsertRes.error) {
+      console.error('Error registrando en usuarios:', upsertRes.error);
       return NextResponse.json(
         { error: 'Usuario creado en auth, pero falló al registrar en la tabla usuarios.' },
         { status: 500 }

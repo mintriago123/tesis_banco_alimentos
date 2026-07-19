@@ -3,11 +3,13 @@ import { cookies } from 'next/headers';
 
 // Configuración de Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabasePublishableKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 
 // Cliente para el servidor (con manejo de cookies)
 export async function createServerSupabaseClient() {
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
+  return createServerClient(supabaseUrl, supabasePublishableKey, {
     cookies: {
       async getAll() {
         // Devuelve un array de cookies en el formato esperado por Supabase

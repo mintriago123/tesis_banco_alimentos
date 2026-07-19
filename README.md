@@ -96,9 +96,9 @@ NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=tu_token_mapbox
 4. **Configurar base de datos:**
 
 - Crea un proyecto en Supabase
-- Ejecuta los scripts SQL en orden:
-  1. `database/01.Create_BD_Structure.sql` (estructura de tablas y funciones)
-  2. `database/02.Insert Aliments to BD.sql` (catálogo inicial de alimentos)
+- Ejecuta las migraciones SQL oficiales en orden ascendente desde `supabase/migrations/`
+- El seed incluido crea el catálogo base de alimentos, unidades, conversiones y depósitos iniciales
+- No crees usuarios manualmente desde SQL; los perfiles nacen desde Supabase Auth y el trigger `public.handle_new_user()`
 - Habilita autenticación por email en Supabase Auth
 
 5. **Ejecutar en desarrollo:**
@@ -171,8 +171,9 @@ banco-alimentos/
 │   ├── DATABASE.md                # Esquema de base de datos
 │   └── COMPONENTS.md              # Componentes frontend
 │
-├── 📁 database/                   # Scripts SQL
-│   └── 01.Create_BD_Structure.sql # Estructura completa
+├── 📁 supabase/
+│   └── 📁 migrations/             # Migraciones SQL oficiales para una BD nueva
+├── 📁 database/                   # SQL legacy / referencia histórica
 │
 └── 📁 public/                     # Archivos estáticos
 ```

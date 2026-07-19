@@ -43,12 +43,12 @@ const createUpdateQuery = () => {
   return { update, eq };
 };
 
-const createInsertQuery = () => {
+const createUpsertQuery = () => {
   const single = vi.fn(async () => ({ data: { id: 'created-user' }, error: null }));
   const select = vi.fn(() => ({ single }));
-  const insert = vi.fn(() => ({ select }));
+  const upsert = vi.fn(() => ({ select }));
 
-  return { insert, select, single };
+  return { upsert, select, single };
 };
 
 const enqueueProfile = (overrides: Record<string, unknown> = {}) => {
@@ -161,9 +161,9 @@ describe('/api/admin/usuarios', () => {
   });
 
   it('allows an active admin to create users', async () => {
-    const insertQuery = createInsertQuery();
+    const upsertQuery = createUpsertQuery();
     enqueueProfile();
-    mocks.adminFromQueue.push(insertQuery);
+    mocks.adminFromQueue.push(upsertQuery);
     mocks.adminCreateUser.mockResolvedValue({
       data: { user: { id: 'new-user-1' } },
       error: null,
@@ -182,12 +182,15 @@ describe('/api/admin/usuarios', () => {
       password: 'secret-password',
       email_confirm: true,
     });
-    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'new-user-1',
-      email: 'new@example.com',
-      rol: 'DONANTE',
-      estado: 'activo',
-    }));
+    expect(upsertQuery.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'new-user-1',
+        email: 'new@example.com',
+        rol: 'DONANTE',
+        estado: 'activo',
+      }),
+      { onConflict: 'id' }
+    );
     await expect(response.json()).resolves.toEqual({
       id: 'new-user-1',
       email: 'new@example.com',

@@ -1,5 +1,9 @@
 # 🗄️ Base de Datos - Banco de Alimentos ULEAM
 
+codex resume 019f76bf-6cd7-73a3-b760-3cacd8bd66db
+
+
+
 ## Índice
 - [Visión General](#visión-general)
 - [Diagrama Entidad-Relación](#diagrama-entidad-relación)
@@ -33,7 +37,19 @@ El sistema utiliza **PostgreSQL** como motor de base de datos, gestionado a trav
 - **Supabase**: Backend-as-a-Service
 - **UUID**: Para claves primarias
 - **JSONB**: Para metadatos flexibles
-- **Extensions**: pg_graphql, pgcrypto, uuid-ossp
+- **Extensions**: pgcrypto, uuid-ossp, pg_stat_statements, supabase_vault
+
+## Migraciones y Arranque Desde Cero
+
+La fuente oficial para crear una base nueva es `supabase/migrations/`.
+Los archivos se ejecutan en orden ascendente por nombre e incluyen:
+
+- Esquema completo, funciones, triggers, vistas, constraints e índices.
+- RLS y grants endurecidos para `anon`, `authenticated` y `service_role`.
+- Seed de catálogo base: tipos de magnitud, unidades, conversiones, alimentos, relaciones alimento-unidad y depósitos iniciales.
+- Flujo de solicitudes de alta de alimentos y hardening final detectado con Supabase MCP Advisor.
+
+La carpeta `database/` queda como referencia histórica. Para instalaciones nuevas no debe reemplazar a `supabase/migrations/`.
 
 ---
 
