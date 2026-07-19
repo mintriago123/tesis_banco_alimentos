@@ -36,35 +36,11 @@ const estadoStyles: Record<SolicitudAltaAlimento['estado'], string> = {
 };
 
 async function notificarRevisionSolicitud(
-  solicitud: SolicitudAltaAlimento,
-  estado: 'aprobada' | 'rechazada',
-  comentarioAdmin?: string
+  solicitud: SolicitudAltaAlimento
 ) {
-  const nombreAlimento = solicitud.nombre.trim();
-  const categoria = solicitud.categoria.trim();
-
-  const titulo =
-    estado === 'aprobada'
-      ? `Solicitud aprobada: ${nombreAlimento}`
-      : `Solicitud rechazada: ${nombreAlimento}`;
-
-  const mensaje =
-    estado === 'aprobada'
-      ? `Tu solicitud para registrar "${nombreAlimento}" en la categoría "${categoria}" fue aprobada y ya está disponible en el catálogo.`
-      : `Tu solicitud para registrar "${nombreAlimento}" en la categoría "${categoria}" fue rechazada.${comentarioAdmin?.trim() ? ` Motivo: ${comentarioAdmin.trim()}` : ''}`;
-
   await sendNotification({
-    titulo,
-    mensaje,
-    tipo: estado === 'aprobada' ? 'success' : 'error',
-    categoria: 'catalogo',
-    destinatarioId: solicitud.solicitante_id,
-    urlAccion: '/donante/solicitar-alimento',
-    metadatos: {
-      solicitudId: solicitud.id,
-      estado,
-      tipo: 'solicitud_alta_alimento'
-    }
+    event: 'catalog_food_request_reviewed',
+    entityId: solicitud.id
   });
 }
 
@@ -316,7 +292,7 @@ const SolicitudesAltaSection = ({
     });
 
     if (result.success) {
-      await notificarRevisionSolicitud(solicitud, 'aprobada');
+      await notificarRevisionSolicitud(solicitud);
       onSuccess('Solicitud aprobada y alimento creado');
       closeModal();
       await Promise.all([onRefresh(), onCatalogRefresh()]);
@@ -342,7 +318,7 @@ const SolicitudesAltaSection = ({
     });
 
     if (result.success) {
-      await notificarRevisionSolicitud(solicitud, 'rechazada', comentarioAdmin);
+      await notificarRevisionSolicitud(solicitud);
       onSuccess('Solicitud rechazada');
       closeModal();
       await onRefresh();

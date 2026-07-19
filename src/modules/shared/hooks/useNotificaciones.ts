@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { SupabaseClient, User } from '@supabase/supabase-js';
+import { type SupabaseClient, type User } from '@supabase/supabase-js';
+import type { NotificationEventPayload } from '@/modules/shared/services/notificationEvents';
 
 interface Notificacion {
   id: string;
@@ -201,55 +202,9 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
     }
   };
 
-  // Crear notificación (solo para admin)
-  const crearNotificacion = async (notificacion: {
-    titulo: string;
-    mensaje: string;
-    tipo?: 'info' | 'success' | 'warning' | 'error';
-    destinatario_id?: string;
-    destinatarioId?: string;
-    rol_destinatario?: string;
-    rolDestinatario?: string;
-    categoria?: string;
-    url_accion?: string;
-    urlAccion?: string;
-    metadatos?: Record<string, unknown>;
-    expira_en?: string;
-    expiraEn?: string;
-    enviarEmail?: boolean;
-    email?: {
-      to?: string | string[];
-      subject?: string;
-      html?: string;
-      text?: string;
-      from?: string;
-      cc?: string | string[];
-      bcc?: string | string[];
-      replyTo?: string;
-      attachments?: Array<{
-        filename: string;
-        path?: string;
-        content?: string;
-        contentType?: string;
-      }>;
-      headers?: Record<string, string>;
-    };
-  }) => {
+  // Crear notificacion mediante eventos server-side permitidos
+  const crearNotificacion = async (payload: NotificationEventPayload) => {
     try {
-      const payload = {
-        titulo: notificacion.titulo,
-        mensaje: notificacion.mensaje,
-        tipo: notificacion.tipo,
-        categoria: notificacion.categoria,
-        urlAccion: notificacion.urlAccion ?? notificacion.url_accion,
-        destinatarioId: notificacion.destinatarioId ?? notificacion.destinatario_id,
-        rolDestinatario: notificacion.rolDestinatario ?? notificacion.rol_destinatario,
-        metadatos: notificacion.metadatos,
-        expiraEn: notificacion.expiraEn ?? notificacion.expira_en,
-        enviarEmail: notificacion.enviarEmail,
-        email: notificacion.email,
-      };
-
       const response = await fetch('/api/notificaciones', {
         method: 'POST',
         headers: {

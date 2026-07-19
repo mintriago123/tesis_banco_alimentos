@@ -1,10 +1,16 @@
 import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { sendEmail, EmailOptions } from '@/lib/email';
+import { sendEmail, type EmailOptions } from '@/lib/email';
 import { buildNotificationEmailTemplate } from '@/lib/email/templates/notificationEmail';
 
 type NotificationType = 'info' | 'success' | 'warning' | 'error';
+type NotificationEmailOptions = Partial<
+  Pick<
+    EmailOptions,
+    'to' | 'subject' | 'html' | 'text' | 'from' | 'cc' | 'bcc' | 'replyTo' | 'attachments' | 'headers'
+  >
+>;
 
 export interface CreateNotificationInput {
   titulo: string;
@@ -17,10 +23,7 @@ export interface CreateNotificationInput {
   metadatos?: Record<string, unknown>;
   expiraEn?: string;
   enviarEmail?: boolean;
-  email?: Pick<
-    EmailOptions,
-    'to' | 'subject' | 'html' | 'text' | 'from' | 'cc' | 'bcc' | 'replyTo' | 'attachments' | 'headers'
-  >;
+  email?: NotificationEmailOptions;
 }
 
 export interface NotificacionRecord {

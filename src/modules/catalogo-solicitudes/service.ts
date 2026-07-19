@@ -79,7 +79,7 @@ export const createCatalogoSolicitudesService = (supabase: SupabaseClient) => {
     }
   };
 
-  const crearSolicitud = async (input: CrearSolicitudAltaInput): Promise<CatalogoSolicitudResult> => {
+  const crearSolicitud = async (input: CrearSolicitudAltaInput): Promise<CatalogoSolicitudResult<{ id: string }>> => {
     try {
       const nombre = input.nombre.trim();
       const categoria = input.categoria.trim();
@@ -134,7 +134,7 @@ export const createCatalogoSolicitudesService = (supabase: SupabaseClient) => {
         };
       }
 
-      return { success: true };
+      return { success: true, data: { id: data.id as string } };
     } catch (err) {
       return {
         success: false,

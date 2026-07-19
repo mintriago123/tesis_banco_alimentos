@@ -132,20 +132,10 @@ export default function SolicitarAlimentoPage() {
     });
     setSubmitting(false);
 
-    if (result.success) {
+    if (result.success && result.data?.id) {
       await sendNotification({
-        titulo: `Nueva solicitud de alta: ${nombre.trim()}`,
-        mensaje: `${user.email ?? 'Un donante'} solicitó registrar "${nombre.trim()}" en la categoría "${categoriaFinal.trim()}".`,
-        tipo: 'info',
-        categoria: 'catalogo',
-        rolDestinatario: 'ADMINISTRADOR',
-        urlAccion: '/admin/catalogo',
-        metadatos: {
-          tipo: 'solicitud_alta_alimento',
-          nombre: nombre.trim(),
-          categoria: categoriaFinal.trim(),
-          solicitanteId: user.id
-        }
+        event: 'catalog_food_request_created',
+        entityId: result.data.id
       });
 
       setNombre('');
@@ -156,6 +146,8 @@ export default function SolicitarAlimentoPage() {
       setUnidadPrincipalId(undefined);
       setMessage({ type: 'success', text: 'Solicitud enviada para revisión' });
       await loadData();
+    } else if (result.success) {
+      setMessage({ type: 'error', text: 'La solicitud fue creada, pero no se pudo identificar para notificarla' });
     } else {
       setMessage({ type: 'error', text: result.error ?? 'No fue posible enviar la solicitud' });
     }

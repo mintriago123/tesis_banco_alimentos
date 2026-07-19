@@ -11,17 +11,7 @@ import type {
 } from '../types';
 import { SYSTEM_MESSAGES } from '../constants';
 import { sendNotification } from '@/modules/shared/services/notificationClient';
-import {
-  generarCodigoComprobante,
-  generarURLComprobante,
-  generarQRBase64,
-  generarDatosComprobante,
-} from '@/lib/comprobante';
-import {
-  buildDonacionAprobadaEmailTemplate,
-  buildDonacionCanceladaEmailTemplate,
-} from '@/lib/email/templates/donacionEmail';
-import { getBaseUrl } from '@/lib/getBaseUrl';
+import { generarCodigoComprobante } from '@/lib/comprobante';
 
 const logger = {
   info: (message: string, details?: unknown) => console.info(`[DonationActionService] ${message}`, details),
@@ -449,7 +439,7 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
         });
       }
 
-      await notificarCambioEstadoDonacion(donation, nuevoEstado, codigoComprobante, cancelacionData);
+      await notificarCambioEstadoDonacion(donation, nuevoEstado);
 
       return {
         success: true,
@@ -479,151 +469,18 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
 
   const notificarCambioEstadoDonacion = async (
     donation: Donation, 
-    nuevoEstado: DonationEstado,
-    codigoComprobanteGuardado?: string | null,
-    cancelacionData?: { motivo: MotivoCancelacion; observaciones?: string }
+    nuevoEstado: DonationEstado
   ) => {
     try {
-      const baseUrl = getBaseUrl();
+      logger.info('Solicitando notificacion segura de donacion', {
+        donacionId: donation.id,
+        nuevoEstado,
+      });
 
-      // Usar el código guardado en BD o generar uno nuevo
-      const codigoComprobante = codigoComprobanteGuardado ?? generarCodigoComprobante('donacion', String(donation.id));
-
-      // Datos del usuario/donante
-      const datosUsuario = {
-        id: donation.user_id,
-        nombre: donation.nombre_donante,
-        email: donation.email,
-        telefono: donation.telefono,
-        direccion: donation.direccion_donante_completa,
-        documento: donation.cedula_donante ?? donation.ruc_donante,
-      };
-
-      // Datos del pedido/donación
-      const datosPedido = {
-        id: String(donation.id),
-        tipo: 'donacion' as const,
-        tipoAlimento: donation.tipo_producto,
-        cantidad: donation.cantidad,
-        unidad: donation.unidad_simbolo ?? 'unidades',
-        estado: nuevoEstado,
-        fechaCreacion: donation.creado_en,
-        fechaAprobacion: new Date().toISOString(),
-      };
-
-      // Generar comprobante con el código correcto
-      const comprobante = {
-        ...generarDatosComprobante('donacion', datosUsuario, datosPedido),
-        codigoComprobante, // Usar el código guardado en BD
-      };
-
-      // Generar QR
-      const urlComprobante = generarURLComprobante(
-        baseUrl,
-        codigoComprobante,
-        'donacion',
-        donation.user_id,
-        String(donation.id)
-      );
-      const qrImageBase64 = await generarQRBase64(urlComprobante);
-
-      // Configurar notificación y email según el estado
-      switch (nuevoEstado) {
-        case 'Aprobada': {
-          const emailTemplate = buildDonacionAprobadaEmailTemplate({
-            comprobante,
-            qrImageBase64,
-            baseUrl,
-          });
-
-          await sendNotification({
-            titulo: `✅ Donación Aprobada - ¡Gracias! - Código: ${comprobante.codigoComprobante}`,
-            mensaje: `Estimado/a ${datosUsuario.nombre}, su donación de ${donation.cantidad} ${datosPedido.unidad} de ${donation.tipo_producto} ha sido aprobada e incorporada a nuestro inventario. ¡Gracias por su generosidad! Su aporte ayudará a familias que lo necesitan.`,
-            categoria: 'donacion',
-            tipo: 'success',
-            destinatarioId: donation.user_id ?? undefined,
-            urlAccion: '/donante/donaciones',
-            metadatos: {
-              donacionId: donation.id,
-              nuevoEstado,
-              codigoComprobante: comprobante.codigoComprobante,
-            },
-            email: {
-              subject: emailTemplate.subject,
-              html: emailTemplate.html,
-              text: emailTemplate.text,
-            },
-          });
-          break;
-        }
-
-        case 'Cancelada': {
-          // Construir mensaje con motivo si está disponible
-          const motivoTexto = cancelacionData?.motivo ? ` Motivo: ${cancelacionData.motivo.replace(/_/g, ' ')}` : '';
-          const observacionesTexto = cancelacionData?.observaciones ? ` Detalles: ${cancelacionData.observaciones}` : '';
-          
-          const emailTemplate = buildDonacionCanceladaEmailTemplate({
-            comprobante: {
-              ...comprobante,
-              pedido: {
-                ...comprobante.pedido,
-                comentarioAdmin: cancelacionData?.observaciones || undefined
-              }
-            },
-            baseUrl,
-          });
-
-          await sendNotification({
-            titulo: '❌ Donación Cancelada',
-            mensaje: `Estimado/a ${datosUsuario.nombre}, le informamos que su donación de ${donation.tipo_producto} ha sido cancelada.${motivoTexto}${observacionesTexto} Si tiene alguna duda, no dude en contactarnos.`,
-            categoria: 'donacion',
-            tipo: 'warning',
-            destinatarioId: donation.user_id ?? undefined,
-            urlAccion: '/donante/nueva-donacion',
-            metadatos: {
-              donacionId: donation.id,
-              nuevoEstado,
-              motivoCancelacion: cancelacionData?.motivo,
-              observacionesCancelacion: cancelacionData?.observaciones
-            },
-            email: {
-              subject: emailTemplate.subject,
-              html: emailTemplate.html,
-              text: emailTemplate.text,
-            },
-          });
-          break;
-        }
-
-        default: {
-          // Estado Pendiente u otro
-          const emailTemplate = buildDonacionAprobadaEmailTemplate({
-            comprobante,
-            qrImageBase64,
-            baseUrl,
-          });
-
-          await sendNotification({
-            titulo: `🎁 Donación Registrada - Código: ${comprobante.codigoComprobante}`,
-            mensaje: `Estimado/a ${datosUsuario.nombre}, su donación de ${donation.cantidad} ${datosPedido.unidad} de ${donation.tipo_producto} ha sido registrada. Nuestro equipo la procesará pronto.`,
-            categoria: 'donacion',
-            tipo: 'info',
-            destinatarioId: donation.user_id ?? undefined,
-            urlAccion: '/donante/donaciones',
-            metadatos: {
-              donacionId: donation.id,
-              nuevoEstado,
-              codigoComprobante: comprobante.codigoComprobante,
-            },
-            email: {
-              subject: emailTemplate.subject,
-              html: emailTemplate.html,
-              text: emailTemplate.text,
-            },
-          });
-          break;
-        }
-      }
+      await sendNotification({
+        event: 'donation_status_changed',
+        entityId: String(donation.id),
+      });
     } catch (error) {
       logger.error('Error enviando notificación de donación', error);
     }
