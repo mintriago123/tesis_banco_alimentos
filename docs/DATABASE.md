@@ -552,6 +552,15 @@ VALUES (5, 6, 1000);
 - El servidor valida sesión, perfil activo, rol permitido y ownership/contexto de la entidad.
 - `NotificationService` usa `SUPABASE_SERVICE_ROLE_KEY` solo en servidor para insertar la notificación, resolver destinatarios y consultar preferencias de email.
 
+**Realtime**:
+- El frontend escucha cambios por `destinatario_id`, por `rol_destinatario` del usuario y por `rol_destinatario = TODOS`.
+- El handler del hook deduplica por `id` porque Supabase Realtime no soporta filtros `OR` en una sola suscripción de Postgres Changes.
+- En una base nueva, `public.notificaciones` debe estar incluida en la publicación `supabase_realtime` para emitir cambios:
+
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.notificaciones;
+```
+
 ---
 
 ### ⚠️ bajas_productos

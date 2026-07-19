@@ -924,7 +924,7 @@ sequenceDiagram
     NS->>DB: INSERT INTO notificaciones
     NS->>DB: SELECT usuarios/preferencias para email
     
-    Note over U: Frontend carga por RLS y escucha realtime por destinatario_id
+    Note over U: Frontend carga por RLS y escucha realtime por usuario, rol y TODOS
     U->>DB: SELECT notificaciones visibles
     DB-->>U: Notificaciones visibles
     
@@ -934,7 +934,7 @@ sequenceDiagram
     DB-->>U: Success
 ```
 
-`/api/notificaciones` no acepta `titulo`, `mensaje`, `destinatarioId`, `rolDestinatario`, `email`, `metadatos` ni `urlAccion` desde el cliente. El contrato público es `{ event, entityId }`. Las notificaciones por `rol_destinatario` se listan por RLS; el realtime actual escucha `destinatario_id` y puede requerir una mejora adicional para eventos por rol.
+`/api/notificaciones` no acepta `titulo`, `mensaje`, `destinatarioId`, `rolDestinatario`, `email`, `metadatos` ni `urlAccion` desde el cliente. El contrato público es `{ event, entityId }`. El hook de notificaciones carga las filas visibles por RLS y mantiene tres suscripciones realtime: `destinatario_id`, `rol_destinatario` del usuario y `rol_destinatario = TODOS`. El handler deduplica por `id` para evitar duplicados cuando una fila coincide con más de un filtro.
 
 ---
 

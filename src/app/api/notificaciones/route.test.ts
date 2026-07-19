@@ -45,6 +45,13 @@ const jsonRequest = (body: unknown) =>
     body: JSON.stringify(body),
   });
 
+const rawJsonRequest = (body: string) =>
+  new Request('http://localhost/api/notificaciones', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  });
+
 const createProfileQuery = (profile: unknown) => ({
   select: vi.fn(() => ({
     eq: vi.fn(() => ({
@@ -143,8 +150,6 @@ describe('/api/notificaciones', () => {
   });
 
   it('rejects sensitive notification fields from the client', async () => {
-    enqueueProfile();
-
     const response = await POST(jsonRequest({
       event: 'catalog_food_request_created',
       entityId: REQUEST_ID,
@@ -157,6 +162,19 @@ describe('/api/notificaciones', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'Campos no permitidos: titulo, destinatarioId, email.',
     });
+    expect(mocks.createAdminSupabaseClient).not.toHaveBeenCalled();
+    expect(mocks.buildNotificationForEvent).not.toHaveBeenCalled();
+    expect(mocks.NotificationService).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed JSON before creating the admin client', async () => {
+    const response = await POST(rawJsonRequest('{'));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Payload JSON invalido.',
+    });
+    expect(mocks.createAdminSupabaseClient).not.toHaveBeenCalled();
     expect(mocks.buildNotificationForEvent).not.toHaveBeenCalled();
     expect(mocks.NotificationService).not.toHaveBeenCalled();
   });

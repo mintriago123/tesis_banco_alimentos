@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { type SupabaseClient, type User } from '@supabase/supabase-js';
 import type { NotificationEventPayload } from '@/modules/shared/services/notificationEvents';
 
@@ -29,6 +29,8 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [conteoNoLeidas, setConteoNoLeidas] = useState(0);
+  const [userRole, setUserRole] = useState<{ userId: string; role: string } | null>(null);
+  const notificationIdsRef = useRef<Set<string>>(new Set());
 
   // Cargar notificaciones del usuario
   const cargarNotificaciones = useCallback(async () => {
@@ -47,6 +49,12 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
 
       if (userError) throw userError;
 
+      const rol = userData?.rol;
+
+      if (typeof rol !== 'string') {
+        throw new Error('Rol de usuario no disponible');
+      }
+
       // Obtener notificaciones
       const { data: notificacionesData, error: notificacionesError } = await supabase
         .from('notificaciones')
@@ -61,18 +69,22 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
           fecha_creacion,
           leida
         `)
-        .or(`destinatario_id.eq.${user.id},rol_destinatario.eq.${userData.rol},rol_destinatario.eq.TODOS`)
+        .or(`destinatario_id.eq.${user.id},rol_destinatario.eq.${rol},rol_destinatario.eq.TODOS`)
         .eq('activa', true)
         .order('fecha_creacion', { ascending: false })
         .limit(50);
 
       if (notificacionesError) throw notificacionesError;
 
-      setNotificaciones(notificacionesData || []);
+      const loadedNotificaciones = notificacionesData || [];
+
+      notificationIdsRef.current = new Set(loadedNotificaciones.map(n => n.id));
+      setNotificaciones(loadedNotificaciones);
       
       // Contar no leídas
-      const noLeidas = (notificacionesData || []).filter(n => !n.leida).length;
+      const noLeidas = loadedNotificaciones.filter(n => !n.leida).length;
       setConteoNoLeidas(noLeidas);
+      setUserRole({ userId: user.id, role: rol });
 
     } catch (err) {
       console.error('Error al cargar notificaciones:', err);
@@ -255,41 +267,60 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
 
   // Suscribirse a cambios en tiempo real
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userRole || userRole.userId !== user.id) return;
 
-    const channel = supabase
-      .channel('notificaciones_realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'notificaciones',
-          filter: `destinatario_id=eq.${user.id}`
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const nuevaNotificacion = payload.new as Notificacion;
-            setNotificaciones(prev => [nuevaNotificacion, ...prev]);
-            if (!nuevaNotificacion.leida) {
-              setConteoNoLeidas(prev => prev + 1);
-            }
-          } else if (payload.eventType === 'UPDATE') {
-            const notificacionActualizada = payload.new as Notificacion;
-            setNotificaciones(prev => 
-              prev.map(n => 
-                n.id === notificacionActualizada.id ? notificacionActualizada : n
-              )
-            );
-          }
+    const handleRealtimePayload = (payload: { eventType: string; new: unknown }) => {
+      if (payload.eventType === 'INSERT') {
+        const nuevaNotificacion = payload.new as Notificacion;
+
+        if (notificationIdsRef.current.has(nuevaNotificacion.id)) {
+          return;
         }
-      )
-      .subscribe();
+
+        notificationIdsRef.current.add(nuevaNotificacion.id);
+        setNotificaciones(prev => [nuevaNotificacion, ...prev]);
+
+        if (!nuevaNotificacion.leida) {
+          setConteoNoLeidas(prev => prev + 1);
+        }
+      } else if (payload.eventType === 'UPDATE') {
+        const notificacionActualizada = payload.new as Notificacion;
+        setNotificaciones(prev => 
+          prev.map(n => 
+            n.id === notificacionActualizada.id ? notificacionActualizada : n
+          )
+        );
+      }
+    };
+
+    const subscriptions = [
+      { key: 'usuario', filter: `destinatario_id=eq.${user.id}` },
+      { key: 'rol', filter: `rol_destinatario=eq.${userRole.role}` },
+      { key: 'todos', filter: 'rol_destinatario=eq.TODOS' },
+    ];
+
+    const channels = subscriptions.map(({ key, filter }) =>
+      supabase
+        .channel(`notificaciones_realtime:${user.id}:${key}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'notificaciones',
+            filter
+          },
+          handleRealtimePayload
+        )
+        .subscribe()
+    );
 
     return () => {
-      supabase.removeChannel(channel);
+      channels.forEach(channel => {
+        supabase.removeChannel(channel);
+      });
     };
-  }, [supabase, user]);
+  }, [supabase, user, userRole]);
 
   // Cargar datos iniciales
   useEffect(() => {

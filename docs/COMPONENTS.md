@@ -845,39 +845,56 @@ import type { NotificationEventPayload } from '@/modules/shared/services/notific
 export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<{ userId: string; role: string } | null>(null);
+  const notificationIdsRef = useRef<Set<string>>(new Set());
   
   // Cargar notificaciones
   useEffect(() => {
     if (!user) return;
     
     async function cargarNotificaciones() {
-      const userRole = await obtenerRolDelUsuario(user.id);
+      const rol = await obtenerRolDelUsuario(user.id);
       const { data, error } = await supabase
         .from('notificaciones')
         .select('*')
-        .or(`destinatario_id.eq.${user.id},rol_destinatario.eq.${userRole},rol_destinatario.eq.TODOS`)
+        .or(`destinatario_id.eq.${user.id},rol_destinatario.eq.${rol},rol_destinatario.eq.TODOS`)
         .eq('activa', true)
         .order('fecha_creacion', { ascending: false });
       
       if (!error && data) {
+        notificationIdsRef.current = new Set(data.map(n => n.id));
         setNotificaciones(data);
+        setUserRole({ userId: user.id, role: rol });
       }
       setLoading(false);
     }
     
     cargarNotificaciones();
-    
-    const channel = supabase
-      .channel('notificaciones_realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'notificaciones', filter: `destinatario_id=eq.${user.id}` },
-        (payload) => actualizarEstadoLocal(payload)
-      )
-      .subscribe();
-    
-    return () => supabase.removeChannel(channel);
   }, [user]);
+
+  // Escuchar cambios en vivo por destinatario directo, rol y TODOS
+  useEffect(() => {
+    if (!user || !userRole || userRole.userId !== user.id) return;
+
+    const filters = [
+      `destinatario_id=eq.${user.id}`,
+      `rol_destinatario=eq.${userRole.role}`,
+      'rol_destinatario=eq.TODOS',
+    ];
+
+    const channels = filters.map((filter, index) =>
+      supabase
+        .channel(`notificaciones_realtime:${user.id}:${index}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'notificaciones', filter },
+          (payload) => actualizarEstadoLocal(payload, notificationIdsRef)
+        )
+        .subscribe()
+    );
+
+    return () => channels.forEach(channel => supabase.removeChannel(channel));
+  }, [user, userRole]);
 
   const crearNotificacion = async (payload: NotificationEventPayload) => {
     const response = await fetch('/api/notificaciones', {
@@ -915,7 +932,7 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
 }
 ```
 
-`crearNotificacion` no acepta `titulo`, `mensaje`, `destinatarioId`, `rolDestinatario`, `email` ni metadata libre. Debe recibir un `NotificationEventPayload` como `{ event: 'catalog_food_request_created', entityId }`. La carga inicial incluye notificaciones por `destinatario_id`, `rol_destinatario` y `TODOS`; el realtime actual escucha `destinatario_id` y puede no emitir en vivo las notificaciones por rol hasta una recarga o una mejora posterior.
+`crearNotificacion` no acepta `titulo`, `mensaje`, `destinatarioId`, `rolDestinatario`, `email` ni metadata libre. Debe recibir un `NotificationEventPayload` como `{ event: 'catalog_food_request_created', entityId }`. La carga inicial incluye notificaciones por `destinatario_id`, `rol_destinatario` y `TODOS`; realtime usa los mismos criterios mediante filtros separados y deduplica por `id`.
 
 ---
 

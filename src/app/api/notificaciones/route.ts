@@ -31,13 +31,6 @@ export async function POST(request: Request) {
       return authResult.response;
     }
 
-    const adminSupabase = createAdminSupabaseClient();
-    const profileResult = await getActiveUserProfile(adminSupabase, authResult.user.id);
-
-    if (profileResult.response) {
-      return profileResult.response;
-    }
-
     const jsonBody = await readJsonBody(request);
 
     if ('response' in jsonBody) {
@@ -48,6 +41,13 @@ export async function POST(request: Request) {
 
     if (!payloadResult.success) {
       return NextResponse.json({ error: payloadResult.error }, { status: 400 });
+    }
+
+    const adminSupabase = createAdminSupabaseClient();
+    const profileResult = await getActiveUserProfile(adminSupabase, authResult.user.id);
+
+    if (profileResult.response) {
+      return profileResult.response;
     }
 
     const input = await buildNotificationForEvent(
