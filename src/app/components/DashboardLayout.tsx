@@ -15,9 +15,9 @@ interface DashboardLayoutProps {
 
 interface UserProfile {
   rol: string;
-  nombre: string;
-  cedula?: string;
-  ruc?: string;
+  nombre: string | null;
+  cedula?: string | null;
+  ruc?: string | null;
 }
 
 // Context para manejar el estado del sidebar
@@ -31,19 +31,13 @@ const SidebarContext = createContext<{
 
 export const useSidebar = () => useContext(SidebarContext);
 
-interface DashboardLayoutProps {
-  readonly children: React.ReactNode;
-  readonly requiredRole?: 'ADMINISTRADOR' | 'OPERADOR' | 'DONANTE' | 'SOLICITANTE' | 'ANY';
-  readonly title?: string;
-  readonly description?: string;
-}
+const hasText = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
 
-interface UserProfile {
-  rol: string;
-  nombre: string;
-  cedula?: string;
-  ruc?: string;
-}
+const isProfileComplete = (profile: UserProfile) =>
+  hasText(profile.rol) &&
+  hasText(profile.nombre) &&
+  (hasText(profile.cedula) || hasText(profile.ruc));
 
 export default function DashboardLayout({ 
   children, 
@@ -103,13 +97,25 @@ export default function DashboardLayout({
           return;
         }
 
-        // Verificar acceso según rol
-        if (!checkRoleAccess(data.rol, requiredRole)) {
-          router.push(getRedirectUrl(data.rol));
+        const profile: UserProfile = {
+          rol: data.rol,
+          nombre: data.nombre ?? null,
+          cedula: data.cedula ?? null,
+          ruc: data.ruc ?? null,
+        };
+
+        if (!isProfileComplete(profile)) {
+          router.replace('/perfil/completar');
           return;
         }
 
-        setPerfil(data);
+        // Verificar acceso según rol
+        if (!checkRoleAccess(profile.rol, requiredRole)) {
+          router.push(getRedirectUrl(profile.rol));
+          return;
+        }
+
+        setPerfil(profile);
       } catch (error) {
         console.error('Error:', error);
         await supabase.auth.signOut();

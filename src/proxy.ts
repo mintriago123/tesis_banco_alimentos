@@ -9,6 +9,27 @@ const getErrorCode = (error: unknown): string | undefined => {
   return undefined;
 };
 
+type ProxyUserProfile = {
+  estado?: string | null;
+  rol?: string | null;
+  nombre?: string | null;
+  cedula?: string | null;
+  ruc?: string | null;
+};
+
+const hasText = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+const isProfileComplete = (perfil: ProxyUserProfile) =>
+  hasText(perfil.rol) && hasText(perfil.nombre) && (hasText(perfil.cedula) || hasText(perfil.ruc));
+
+const dashboardUrlForRole = (rol: string, requestUrl: string) => {
+  if (rol === 'ADMINISTRADOR') return new URL('/admin/dashboard', requestUrl);
+  if (rol === 'OPERADOR') return new URL('/operador/dashboard', requestUrl);
+  if (rol === 'DONANTE') return new URL('/donante/dashboard', requestUrl);
+  return new URL('/user/dashboard', requestUrl);
+};
+
 export async function proxy(request: NextRequest) {
   const supabaseResponse = NextResponse.next({
     request,
@@ -49,7 +70,7 @@ export async function proxy(request: NextRequest) {
       try {
         const { data: perfil } = await supabase
           .from('usuarios')
-          .select('estado, rol')
+          .select('estado, rol, nombre, cedula, ruc')
           .eq('id', user.id)
           .single();
 
@@ -62,16 +83,11 @@ export async function proxy(request: NextRequest) {
             return supabaseResponse;
           }
 
-          // Redirigir al dashboard según el rol
-          if (perfil.rol === 'ADMINISTRADOR') {
-            return NextResponse.redirect(new URL('/admin/dashboard', request.url));
-          } else if (perfil.rol === 'OPERADOR') {
-            return NextResponse.redirect(new URL('/operador/dashboard', request.url));
-          } else if (perfil.rol === 'DONANTE') {
-            return NextResponse.redirect(new URL('/donante/dashboard', request.url));
-          } else {
-            return NextResponse.redirect(new URL('/user/dashboard', request.url));
+          if (!isProfileComplete(perfil)) {
+            return NextResponse.redirect(new URL('/perfil/completar', request.url));
           }
+
+          return NextResponse.redirect(dashboardUrlForRole(perfil.rol, request.url));
         }
       } catch (error) {
         // Si hay error obteniendo el perfil, permitir acceso a auth
@@ -101,7 +117,7 @@ export async function proxy(request: NextRequest) {
       try {
         const { data: perfil } = await supabase
           .from('usuarios')
-          .select('estado, rol')
+          .select('estado, rol, nombre, cedula, ruc')
           .eq('id', user.id)
           .single();
 
@@ -115,6 +131,10 @@ export async function proxy(request: NextRequest) {
             const url = new URL('/auth/iniciar-sesion', request.url);
             url.searchParams.set('error', estadoUsuario === 'bloqueado' ? 'blocked' : 'deactivated');
             return NextResponse.redirect(url);
+          }
+
+          if (!isProfileComplete(perfil)) {
+            return NextResponse.redirect(new URL('/perfil/completar', request.url));
           }
 
           // Verificar autorización por rol
@@ -172,15 +192,7 @@ export async function proxy(request: NextRequest) {
 
           // Verificar acceso a /dashboard genérico - redirigir al dashboard específico del rol
           if (pathname === '/dashboard') {
-            if (rolUsuario === 'ADMINISTRADOR') {
-              return NextResponse.redirect(new URL('/admin/dashboard', request.url));
-            } else if (rolUsuario === 'OPERADOR') {
-              return NextResponse.redirect(new URL('/operador/dashboard', request.url));
-            } else if (rolUsuario === 'DONANTE') {
-              return NextResponse.redirect(new URL('/donante/dashboard', request.url));
-            } else {
-              return NextResponse.redirect(new URL('/user/dashboard', request.url));
-            }
+            return NextResponse.redirect(dashboardUrlForRole(rolUsuario, request.url));
           }
         } else {
           // Si no hay perfil, redirigir a login

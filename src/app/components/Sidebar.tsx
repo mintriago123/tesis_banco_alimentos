@@ -22,7 +22,7 @@ import {
 
 interface SidebarProps {
   readonly userRole?: string;
-  readonly userName?: string;
+  readonly userName?: string | null;
   readonly isCollapsed?: boolean;
   readonly setIsCollapsed?: (collapsed: boolean) => void;
 }
@@ -221,7 +221,7 @@ const menuItems: MenuItem[] = [
 
 export default function Sidebar({ 
   userRole = 'SOLICITANTE', 
-  userName = 'Usuario',
+  userName,
   isCollapsed: externalIsCollapsed,
   setIsCollapsed: externalSetIsCollapsed
 }: SidebarProps) {
@@ -358,9 +358,20 @@ export default function Sidebar({
     return 'bg-blue-500 text-white'; // Solicitante
   };
 
-  const getUserInitials = (name: string) => {
-    return name
+  const displayUserName = typeof userName === 'string' && userName.trim()
+    ? userName.trim()
+    : 'Usuario';
+
+  const getUserInitials = (name: string | null | undefined) => {
+    const normalizedName = typeof name === 'string' ? name.trim() : '';
+
+    if (!normalizedName) {
+      return 'US';
+    }
+
+    return normalizedName
       .split(' ')
+      .filter(Boolean)
       .map(word => word.charAt(0).toUpperCase())
       .slice(0, 2)
       .join('');
@@ -388,11 +399,11 @@ export default function Sidebar({
               <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
                 {/* Avatar con iniciales */}
                 <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold shadow-md flex-shrink-0 ${getAvatarColor()}`}>
-                  {getUserInitials(userName)}
+                  {getUserInitials(displayUserName)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <h2 className="text-xs sm:text-sm font-semibold text-gray-900 truncate">
-                    {userName}
+                    {displayUserName}
                   </h2>
                   <p className={`text-xs font-medium ${
                     isAdmin ? 'text-red-600' : isDonante ? 'text-green-600' : isOperador ? 'text-orange-600' : 'text-blue-600'
@@ -416,9 +427,9 @@ export default function Sidebar({
             <button
               onClick={() => setIsCollapsed(false)}
               className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-md ${getAvatarColor()}`}
-              title={`Expandir sidebar - ${userName}`}
+              title={`Expandir sidebar - ${displayUserName}`}
             >
-              {getUserInitials(userName)}
+              {getUserInitials(displayUserName)}
             </button>
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}

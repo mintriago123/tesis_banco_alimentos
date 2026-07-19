@@ -12,6 +12,8 @@ import {
   AUTH_CONSTANTS,
 } from '@/modules/auth';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 // Componente para manejar los parámetros de búsqueda
 function FormularioIniciarSesion() {
   const searchParams = useSearchParams();
@@ -22,13 +24,15 @@ function FormularioIniciarSesion() {
 
   // Debug: Log de parámetros
   useEffect(() => {
-    console.log('🔍 Parámetros de URL:', {
-      timeout: searchParams.get('timeout'),
-      timeoutParam,
-      error: errorParam,
-      registro: registroExitoso,
-      verificacion: verificacionExitosa
-    });
+    if (isDevelopment) {
+      console.log('🔍 Parámetros de URL:', {
+        timeout: searchParams.get('timeout'),
+        timeoutParam,
+        error: errorParam,
+        registro: registroExitoso,
+        verificacion: verificacionExitosa
+      });
+    }
   }, [searchParams, timeoutParam, errorParam, registroExitoso, verificacionExitosa]);
 
   const { login, estaCargando, mensaje, limpiarMensaje } = useLogin();
@@ -38,7 +42,9 @@ function FormularioIniciarSesion() {
   const [mensajeInicial, setMensajeInicial] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('📢 mensajeInicial cambió a:', mensajeInicial);
+    if (isDevelopment) {
+      console.log('📢 mensajeInicial cambió a:', mensajeInicial);
+    }
     
     // Solo auto-ocultar mensajes de éxito (registro, verificación)
     // NO auto-ocultar mensajes de error o timeout
@@ -53,28 +59,44 @@ function FormularioIniciarSesion() {
 
   // Detectar cambios en el parámetro de timeout
   useEffect(() => {
-    console.log('🔔 Evaluando mensajes. timeoutParam:', timeoutParam);
+    if (isDevelopment) {
+      console.log('🔔 Evaluando mensajes. timeoutParam:', timeoutParam);
+    }
     
     if (timeoutParam) {
-      console.log('✅ Configurando mensaje de timeout');
+      if (isDevelopment) {
+        console.log('✅ Configurando mensaje de timeout');
+      }
       setMensajeInicial('Tu sesión expiró por inactividad. Inicia sesión nuevamente para continuar.');
     } else if (errorParam === 'blocked') {
-      console.log('✅ Configurando mensaje de cuenta bloqueada');
+      if (isDevelopment) {
+        console.log('✅ Configurando mensaje de cuenta bloqueada');
+      }
       setMensajeInicial('Tu cuenta ha sido bloqueada. Contacta al administrador.');
     } else if (errorParam === 'deactivated') {
-      console.log('✅ Configurando mensaje de cuenta desactivada');
+      if (isDevelopment) {
+        console.log('✅ Configurando mensaje de cuenta desactivada');
+      }
       setMensajeInicial('Tu cuenta ha sido desactivada. Contacta al administrador.');
     } else if (errorParam === 'unauthorized') {
-      console.log('✅ Configurando mensaje de acceso no autenticado');
+      if (isDevelopment) {
+        console.log('✅ Configurando mensaje de acceso no autenticado');
+      }
       setMensajeInicial('Necesitas iniciar sesión para acceder a esta sección.');
     } else if (errorParam === 'forbidden') {
-      console.log('✅ Configurando mensaje de acceso no autorizado');
+      if (isDevelopment) {
+        console.log('✅ Configurando mensaje de acceso no autorizado');
+      }
       setMensajeInicial('No tienes permisos para acceder a esta sección.');
     } else if (registroExitoso) {
-      console.log('✅ Configurando mensaje de registro exitoso');
+      if (isDevelopment) {
+        console.log('✅ Configurando mensaje de registro exitoso');
+      }
       setMensajeInicial(AUTH_CONSTANTS.MENSAJES.REGISTRO_EXITOSO);
     } else if (verificacionExitosa) {
-      console.log('✅ Configurando mensaje de verificación exitosa');
+      if (isDevelopment) {
+        console.log('✅ Configurando mensaje de verificación exitosa');
+      }
       setMensajeInicial(AUTH_CONSTANTS.MENSAJES.VERIFICACION_EXITOSA);
     }
   }, [timeoutParam, errorParam, registroExitoso, verificacionExitosa]);

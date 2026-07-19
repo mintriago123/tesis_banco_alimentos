@@ -7,6 +7,8 @@ import { ConfirmProvider } from '@/modules/admin/shared/hooks/useConfirm';
 import { CONFIGURACION_SEGURIDAD } from '@/lib/configuracion-seguridad';
 import { useRouter } from 'next/navigation';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 type SupabaseContext = {
   supabase: SupabaseClient;
   user: User | null;
@@ -33,13 +35,13 @@ export default function SupabaseProvider({
     if (user && CONFIGURACION_SEGURIDAD.CIERRE_SESION_AUTOMATICO_HABILITADO) {
       const minutosInactividad = CONFIGURACION_SEGURIDAD.TIEMPO_INACTIVIDAD_MS / 60000;
       
-      if (CONFIGURACION_SEGURIDAD.LOGS_INACTIVIDAD) {
+      if (isDevelopment && CONFIGURACION_SEGURIDAD.LOGS_INACTIVIDAD) {
         console.log(`⏱️ Cerrando sesión por inactividad (${minutosInactividad} minuto${minutosInactividad !== 1 ? 's' : ''} sin actividad)`);
       }
       
       await supabase.auth.signOut();
       
-      if (CONFIGURACION_SEGURIDAD.LOGS_INACTIVIDAD) {
+      if (isDevelopment && CONFIGURACION_SEGURIDAD.LOGS_INACTIVIDAD) {
         console.log('✅ Sesión cerrada. Redirigiendo a /auth/iniciar-sesion?timeout=true');
       }
       
@@ -77,7 +79,7 @@ export default function SupabaseProvider({
     // Crear nuevo temporizador
     timeoutRef.current = setTimeout(handleInactivityLogout, CONFIGURACION_SEGURIDAD.TIEMPO_INACTIVIDAD_MS);
     
-    if (CONFIGURACION_SEGURIDAD.LOGS_INACTIVIDAD) {
+    if (isDevelopment && CONFIGURACION_SEGURIDAD.LOGS_INACTIVIDAD) {
       const tiempoTranscurrido = Math.floor((ahora - lastActivityRef.current) / 1000);
       console.log(`🔄 Actividad detectada - Temporizador reiniciado (última actividad: hace ${tiempoTranscurrido}s)`);
     }
@@ -111,7 +113,7 @@ export default function SupabaseProvider({
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       // Solo loggear en desarrollo si es necesario
-      if (process.env.NODE_ENV === 'development' && event !== 'TOKEN_REFRESHED') {
+      if (isDevelopment && event !== 'TOKEN_REFRESHED') {
         console.log('🔐 Auth:', event);
       }
       

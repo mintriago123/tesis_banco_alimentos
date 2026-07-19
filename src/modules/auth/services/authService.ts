@@ -16,6 +16,8 @@ import type {
 } from '../types';
 import { AUTH_CONSTANTS } from '../constants';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 export class AuthService {
   constructor(private supabase: SupabaseClient) {}
 
@@ -49,11 +51,15 @@ export class AuthService {
       // Obtener perfil del usuario
       const perfil = await this.obtenerPerfil(data.user.id);
 
-      console.log('🔍 Perfil obtenido:', perfil);
+      if (isDevelopment) {
+        console.log('🔍 Perfil obtenido:', perfil);
+      }
 
       // Si no hay perfil o no tiene rol, crear/completar perfil
       if (!perfil || !perfil.rol) {
-        console.log('❌ Perfil incompleto (sin rol)');
+        if (isDevelopment) {
+          console.log('❌ Perfil incompleto (sin rol)');
+        }
         return {
           success: true,
           redirect: AUTH_CONSTANTS.RUTAS.COMPLETAR_PERFIL,
@@ -63,7 +69,9 @@ export class AuthService {
       // Verificar estado del usuario
       const validacionEstado = this.validarEstadoUsuario(perfil);
       if (!validacionEstado.success) {
-        console.log('❌ Estado de usuario inválido:', perfil.estado);
+        if (isDevelopment) {
+          console.log('❌ Estado de usuario inválido:', perfil.estado);
+        }
         await this.supabase.auth.signOut();
         return validacionEstado;
       }
@@ -71,15 +79,19 @@ export class AuthService {
       // Validar que el perfil esté completo (necesita nombre Y (cedula O ruc))
       const perfilCompleto = perfil.nombre && (perfil.cedula || perfil.ruc);
       
-      console.log('📋 Validación de perfil:', {
-        nombre: perfil.nombre,
-        cedula: perfil.cedula,
-        ruc: perfil.ruc,
-        perfilCompleto,
-      });
+      if (isDevelopment) {
+        console.log('📋 Validación de perfil:', {
+          nombre: perfil.nombre,
+          cedula: perfil.cedula,
+          ruc: perfil.ruc,
+          perfilCompleto,
+        });
+      }
 
       if (!perfilCompleto) {
-        console.log('❌ Perfil incompleto (faltan datos)');
+        if (isDevelopment) {
+          console.log('❌ Perfil incompleto (faltan datos)');
+        }
         return {
           success: true,
           redirect: AUTH_CONSTANTS.RUTAS.COMPLETAR_PERFIL,
@@ -88,7 +100,9 @@ export class AuthService {
 
       // Redirigir según el rol
       const redirect = this.obtenerRutaPorRol(perfil.rol);
-      console.log('✅ Login exitoso, redirigiendo a:', redirect);
+      if (isDevelopment) {
+        console.log('✅ Login exitoso, redirigiendo a:', redirect);
+      }
       return { success: true, redirect };
     } catch {
       return {
