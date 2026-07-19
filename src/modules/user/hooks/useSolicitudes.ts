@@ -16,6 +16,8 @@ import type {
 import { SolicitudesService } from '../services/solicitudesService';
 import { MESSAGES } from '../constants';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 type SolicitudWithUnidad = Solicitud & {
   unidades?: {
     simbolo?: string | null;
@@ -78,7 +80,9 @@ export function useSolicitudes(
       return false;
     }
 
-    console.log('[useSolicitudes] Creando solicitud con datos:', data);
+    if (isDevelopment) {
+      console.log('[useSolicitudes] Creando solicitud con datos:', data);
+    }
     const { error: createError } = await service.createSolicitud(usuarioId, data);
 
     if (createError) {
@@ -87,7 +91,9 @@ export function useSolicitudes(
       return false;
     }
 
-    console.log('[useSolicitudes] Solicitud creada correctamente');
+    if (isDevelopment) {
+      console.log('[useSolicitudes] Solicitud creada correctamente');
+    }
     await fetchSolicitudes();
     return true;
   };

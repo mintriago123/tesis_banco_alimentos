@@ -50,6 +50,8 @@ const SYSTEM_MESSAGES = {
   alertasError: 'Error al cargar las alertas del inventario'
 } as const;
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 const applyFilters = (items: InventarioItem[], filters: OperadorInventarioFilters) => {
   const term = filters.search.trim().toLowerCase();
 
@@ -126,18 +128,24 @@ export const useOperadorInventoryData = (supabaseClient: SupabaseClient): UseOpe
   );
 
   const loadInventario = useCallback(async () => {
-    console.log('[OperadorInventoryHook] Iniciando carga de inventario...');
+    if (isDevelopment) {
+      console.log('[OperadorInventoryHook] Iniciando carga de inventario...');
+    }
     setLoadingState('loading');
     setErrorMessage(undefined);
 
     try {
       const result = await dataService.fetchInventario();
-      console.log('[OperadorInventoryHook] Resultado de inventario:', result);
+      if (isDevelopment) {
+        console.log('[OperadorInventoryHook] Resultado de inventario:', result);
+      }
       
       if (result.success) {
         setInventario(result.data || []);
         setLoadingState('success');
-        console.log('[OperadorInventoryHook] Inventario cargado exitosamente:', result.data?.length);
+        if (isDevelopment) {
+          console.log('[OperadorInventoryHook] Inventario cargado exitosamente:', result.data?.length);
+        }
       } else {
         setInventario([]);
         setLoadingState('error');

@@ -17,8 +17,14 @@ import {
   parsePositiveIntegerValue,
 } from '@/lib/validation-core';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 const logger = {
-  info: (message: string, details?: unknown) => console.info(`[SolicitudesDataService] ${message}`, details),
+  info: (message: string, details?: unknown) => {
+    if (isDevelopment) {
+      console.info(`[SolicitudesDataService] ${message}`, details);
+    }
+  },
   error: (message: string, error?: unknown) => console.error(`[SolicitudesDataService] ${message}`, error)
 };
 

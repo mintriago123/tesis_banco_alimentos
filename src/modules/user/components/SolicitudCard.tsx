@@ -26,6 +26,8 @@ import { useDateFormatter } from '@/modules/shared/hooks/useDateFormatter';
 import { createClient } from '@/lib/supabase';
 import { SolicitudDetalleModal } from './SolicitudDetalleModal';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 interface SolicitudCardProps {
   solicitud: Solicitud;
   onDelete: (solicitud: Solicitud) => void;
@@ -111,7 +113,7 @@ export function SolicitudCard({
 
   // Log de depuración para solicitudes rechazadas
   useEffect(() => {
-    if (esRechazada) {
+    if (isDevelopment && esRechazada) {
       console.log('🔍 Datos de solicitud rechazada:', {
         id: solicitud.id,
         motivo_rechazo: solicitud.motivo_rechazo,

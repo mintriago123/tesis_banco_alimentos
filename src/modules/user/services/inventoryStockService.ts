@@ -67,8 +67,14 @@ const singleRelation = <T>(relation: T | T[] | null | undefined): T | null => {
   return relation ?? null;
 };
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 const logger = {
-  info: (message: string, details?: unknown) => console.info(`[InventoryStockService] ${message}`, details),
+  info: (message: string, details?: unknown) => {
+    if (isDevelopment) {
+      console.info(`[InventoryStockService] ${message}`, details);
+    }
+  },
   error: (message: string, error?: unknown) => console.error(`[InventoryStockService] ${message}`, error)
 };
 

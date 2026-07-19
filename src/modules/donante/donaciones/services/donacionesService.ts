@@ -15,6 +15,8 @@ type DonacionWithUnidad = Donacion & {
   } | null;
 };
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 export class DonacionesService {
   constructor(private supabase: SupabaseClient) {}
 
@@ -57,7 +59,9 @@ export class DonacionesService {
       throw new Error(donacionId.error);
     }
 
-    console.log('🗑️ Intentando eliminar donación con ID:', id);
+    if (isDevelopment) {
+      console.log('🗑️ Intentando eliminar donación con ID:', id);
+    }
     
     const { data, error } = await this.supabase
       .from('donaciones')
@@ -76,7 +80,9 @@ export class DonacionesService {
       throw new Error('No se pudo eliminar la donación. Verifica los permisos o que la donación exista.');
     }
     
-    console.log('✅ Donación eliminada exitosamente:', data);
+    if (isDevelopment) {
+      console.log('✅ Donación eliminada exitosamente:', data);
+    }
   }
 
   async actualizarDonacion(donacion: Donacion): Promise<void> {

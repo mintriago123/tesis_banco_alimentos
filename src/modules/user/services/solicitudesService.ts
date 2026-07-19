@@ -23,6 +23,7 @@ type SolicitudWithUnidad = Solicitud & {
   } | null;
 };
 
+const isDevelopment = process.env.NODE_ENV === 'development';
 const ESTADOS_SOLICITUD_FILTRO = ['pendiente', 'aprobada', 'rechazada', 'entregada'] as const;
 
 export class SolicitudesService {
@@ -65,7 +66,7 @@ export class SolicitudesService {
       const { data, error } = await query;
       
       // Log de depuración para ver datos de solicitudes rechazadas
-      if (data) {
+      if (isDevelopment && data) {
         const rechazadas = (data as SolicitudWithUnidad[]).filter((s) => s.estado === 'rechazada');
         if (rechazadas.length > 0) {
           console.log('📋 Solicitudes rechazadas obtenidas desde BD:', rechazadas.map((s) => ({
@@ -124,10 +125,12 @@ export class SolicitudesService {
         return { data: null, error: comentarios.error };
       }
 
-      console.log('[SolicitudesService] Intentando crear solicitud:', {
-        usuarioId,
-        solicitudData
-      });
+      if (isDevelopment) {
+        console.log('[SolicitudesService] Intentando crear solicitud:', {
+          usuarioId,
+          solicitudData
+        });
+      }
 
       const insertData = {
         usuario_id: parsedUsuarioId.value,
@@ -139,7 +142,9 @@ export class SolicitudesService {
         longitud: solicitudData.longitud || null,
       };
 
-      console.log('[SolicitudesService] Datos a insertar:', insertData);
+      if (isDevelopment) {
+        console.log('[SolicitudesService] Datos a insertar:', insertData);
+      }
 
       const { data, error } = await this.supabase
         .from('solicitudes')
@@ -149,7 +154,7 @@ export class SolicitudesService {
 
       if (error) {
         console.error('[SolicitudesService] Error al crear solicitud:', error);
-      } else {
+      } else if (isDevelopment) {
         console.log('[SolicitudesService] Solicitud creada exitosamente:', data);
       }
 

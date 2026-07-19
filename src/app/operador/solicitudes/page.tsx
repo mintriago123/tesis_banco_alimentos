@@ -18,6 +18,8 @@ import {
 } from '@/modules/operador/solicitudes';
 import type { Solicitud } from '@/modules/operador/solicitudes';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 const ErrorState = ({
   message,
   onRetry
@@ -164,13 +166,15 @@ export default function OperadorSolicitudesPage() {
     const { data: { user } } = await supabase.auth.getUser();
     const operadorId = user?.id;
 
-    console.log('🔍 COMPONENTE - Llamando updateEstado con:', {
-      estado,
-      comentario,
-      motivo,
-      operadorId,
-      solicitudId: solicitud.id
-    });
+    if (isDevelopment) {
+      console.log('🔍 COMPONENTE - Llamando updateEstado con:', {
+        estado,
+        comentario,
+        motivo,
+        operadorId,
+        solicitudId: solicitud.id
+      });
+    }
 
     const result = await updateEstado(solicitud, estado, comentario, motivo, operadorId);
 

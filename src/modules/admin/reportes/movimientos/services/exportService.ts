@@ -25,12 +25,16 @@ import {
 } from '../constants';
 import { formatDate, formatNumber, padRowToColumnCount, generateExportFilename } from '../utils/formatters';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 /**
  * Logger especializado para el servicio de exportación
  */
 const exportLogger = {
   info: (message: string, details?: unknown) => {
-    console.info(`[ExportService] ${message}`, details);
+    if (isDevelopment) {
+      console.info(`[ExportService] ${message}`, details);
+    }
   },
   error: (message: string, error?: unknown) => {
     console.error(`[ExportService] ${message}`, error);

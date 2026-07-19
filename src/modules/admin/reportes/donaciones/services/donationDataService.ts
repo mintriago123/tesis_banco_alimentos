@@ -10,8 +10,14 @@ import type {
   SupabaseAlimentoRow
 } from '../types';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 const logger = {
-  info: (message: string, details?: unknown) => console.info(`[DonationDataService] ${message}`, details),
+  info: (message: string, details?: unknown) => {
+    if (isDevelopment) {
+      console.info(`[DonationDataService] ${message}`, details);
+    }
+  },
   error: (message: string, error?: unknown) => console.error(`[DonationDataService] ${message}`, error)
 };
 

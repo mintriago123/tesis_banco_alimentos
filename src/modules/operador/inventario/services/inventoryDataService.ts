@@ -52,8 +52,14 @@ const DAYS_TO_EXPIRE = {
   CRITICO: 7
 } as const;
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 const logger = {
-  info: (message: string, details?: unknown) => console.info(`[OperadorInventoryService] ${message}`, details),
+  info: (message: string, details?: unknown) => {
+    if (isDevelopment) {
+      console.info(`[OperadorInventoryService] ${message}`, details);
+    }
+  },
   error: (message: string, error?: unknown) => console.error(`[OperadorInventoryService] ${message}`, error)
 };
 

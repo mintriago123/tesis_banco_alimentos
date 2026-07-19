@@ -3,6 +3,8 @@ import { SupabaseClient, User } from '@supabase/supabase-js';
 import { DonacionesService } from '../services/donacionesService';
 import { Donacion } from '../types';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 export function useDonacionesData(supabase: SupabaseClient, user: User | null) {
   const [donaciones, setDonaciones] = useState<Donacion[]>([]);
   const [cargando, setCargando] = useState(false);
@@ -28,18 +30,26 @@ export function useDonacionesData(supabase: SupabaseClient, user: User | null) {
   }, [user, service]);
 
   const eliminarDonacion = useCallback(async (id: number): Promise<boolean> => {
-    console.log('🔍 Solicitando confirmación para eliminar donación ID:', id);
+    if (isDevelopment) {
+      console.log('🔍 Solicitando confirmación para eliminar donación ID:', id);
+    }
     
     if (!window.confirm('¿Estás seguro de que deseas eliminar esta donación?')) {
-      console.log('❌ Eliminación cancelada por el usuario');
+      if (isDevelopment) {
+        console.log('❌ Eliminación cancelada por el usuario');
+      }
       return false;
     }
 
-    console.log('✅ Usuario confirmó eliminación, procediendo...');
+    if (isDevelopment) {
+      console.log('✅ Usuario confirmó eliminación, procediendo...');
+    }
     
     try {
       await service.eliminarDonacion(id);
-      console.log('📝 Actualizando estado local después de eliminar');
+      if (isDevelopment) {
+        console.log('📝 Actualizando estado local después de eliminar');
+      }
       setDonaciones(prev => prev.filter(d => d.id !== id));
       setMensaje('Donación eliminada exitosamente');
       setTimeout(() => setMensaje(''), 3000);

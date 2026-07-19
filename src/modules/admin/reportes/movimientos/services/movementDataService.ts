@@ -14,6 +14,8 @@ import type {
 } from '../types';
 import { DEFAULT_VALUES } from '../constants';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 /**
  * Logger personalizado para el servicio de datos
  */
@@ -25,7 +27,9 @@ const logger = {
     console.warn(`[MovementDataService] ${message}`, details);
   },
   info: (message: string, details?: unknown) => {
-    console.info(`[MovementDataService] ${message}`, details);
+    if (isDevelopment) {
+      console.info(`[MovementDataService] ${message}`, details);
+    }
   }
 };
 

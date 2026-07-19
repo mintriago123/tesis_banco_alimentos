@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 interface UserProfile {
   id: string;
   rol: string;
@@ -39,7 +41,9 @@ export function useUserProfile(
         .single();
 
       if (error && error.details?.includes('0 rows')) {
-        console.log('Usuario no encontrado en la tabla usuarios');
+        if (isDevelopment) {
+          console.log('Usuario no encontrado en la tabla usuarios');
+        }
         setUserProfile(null);
       } else if (error) {
         console.error('Error al cargar perfil:', error);

@@ -7,6 +7,7 @@ import { GmailEmailProvider } from './providers/GmailEmailProvider';
 let providerInstance: EmailProvider | null = null;
 let suppressMessageShown = false;
 let logOnlyMessageShown = false;
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 function ensureProvider(): EmailProvider {
   const config = loadEmailConfig();
@@ -33,10 +34,12 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
       suppressMessageShown = true;
     }
 
-    console.log('[email] Envío de correo suprimido:', {
-      to: options.to,
-      subject: options.subject,
-    });
+    if (isDevelopment) {
+      console.log('[email] Envío de correo suprimido:', {
+        to: options.to,
+        subject: options.subject,
+      });
+    }
     return;
   }
 
@@ -45,10 +48,12 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
       console.warn('[email] EMAIL_LOG_ONLY=true: los correos se registrarán pero se intentará el envío.');
       logOnlyMessageShown = true;
     }
-    console.log('[email] Envío de correo (modo log):', {
-      to: options.to,
-      subject: options.subject,
-    });
+    if (isDevelopment) {
+      console.log('[email] Envío de correo (modo log):', {
+        to: options.to,
+        subject: options.subject,
+      });
+    }
   }
 
   const provider = ensureProvider();

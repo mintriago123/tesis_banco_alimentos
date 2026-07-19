@@ -11,8 +11,14 @@ import {
   parseUuidValue,
 } from '@/lib/validation-core';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 const logger = {
-  info: (message: string, details?: unknown) => console.info(`[InventoryActionService] ${message}`, details),
+  info: (message: string, details?: unknown) => {
+    if (isDevelopment) {
+      console.info(`[InventoryActionService] ${message}`, details);
+    }
+  },
   warn: (message: string, details?: unknown) => console.warn(`[InventoryActionService] ${message}`, details),
   error: (message: string, error?: unknown) => console.error(`[InventoryActionService] ${message}`, error)
 };
