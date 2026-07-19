@@ -482,7 +482,7 @@ export async function createServerSupabaseClient() {
 
 ### 📡 `proxy.ts` - Middleware de Autenticación y Autorización
 
-El archivo `proxy.ts` actúa como un **Middleware de Next.js** que intercepta todas las peticiones antes de que lleguen a las páginas o API routes.
+El archivo `proxy.ts` actúa como un **Middleware de Next.js** que intercepta las peticiones no estáticas antes de que lleguen a las páginas o API routes. Las páginas privadas se protegen aquí; las API routes sensibles también validan autorización dentro de cada handler.
 
 #### Funcionalidades Principales:
 
@@ -493,7 +493,7 @@ El archivo `proxy.ts` actúa como un **Middleware de Next.js** que intercepta to
 
 2. **Autorización por Rol**
    - Verifica que el usuario tenga el rol correcto para acceder a una ruta
-   - Redirige al dashboard correspondiente si intenta acceder a una ruta no autorizada
+   - Redirige a login con `error=forbidden` si intenta acceder a una ruta de otro rol
    - Roles: `ADMINISTRADOR`, `OPERADOR`, `DONANTE`, `SOLICITANTE`
 
 3. **Validación de Estado de Usuario**
@@ -502,8 +502,12 @@ El archivo `proxy.ts` actúa como un **Middleware de Next.js** que intercepta to
    - Comprueba perfiles completos
 
 4. **Gestión de Rutas Públicas**
-   - Define rutas que no requieren autenticación
-   - Permite acceso a `/auth/*`, `/api/public/*`, etc.
+   - Define rutas que no requieren autenticación: `/`, `/contribuyentes` y páginas públicas de `/auth`
+   - Usa match exacto o por segmento para evitar que una ruta similar quede pública por accidente
+
+5. **Páginas Privadas Compartidas**
+   - Protege `/perfil/actualizar`, `/notificaciones`, `/configuracion-notificaciones` y `/comprobante/*`
+   - Requiere sesión, usuario activo y perfil completo
 
 #### Flujo del Middleware:
 
@@ -527,7 +531,7 @@ sequenceDiagram
         P-->>U: Página renderizada
     else Rol incorrecto
         M->>M: Usuario no autorizado
-        M-->>U: Redirect a dashboard correcto
+        M-->>U: Redirect a login con error=forbidden
     else Usuario bloqueado
         M->>S: Cerrar sesión
         M-->>U: Redirect a login con error
@@ -541,39 +545,29 @@ sequenceDiagram
 export async function proxy(request: NextRequest) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  
+
   const isAuthenticated = !!user;
   const { pathname } = request.nextUrl;
-  
-  // Verificar si es ruta pública
-  const esRutaPublica = RUTAS_PUBLICAS.some(ruta => pathname.startsWith(ruta));
-  if (esRutaPublica) return NextResponse.next();
-  
-  // Para rutas protegidas, verificar autenticación
-  if (!isAuthenticated) {
-    return NextResponse.redirect(new URL('/auth/iniciar-sesion', request.url));
+
+  if (isCompletarPerfilPath(pathname)) {
+    // Permite completar perfil, pero redirige si ya está completo.
+    return handleProfileCompletionRoute(request, supabase, user);
   }
-  
-  // Obtener perfil y validar autorización
-  const { data: perfil } = await supabase
-    .from('usuarios')
-    .select('estado, rol')
-    .eq('id', user.id)
-    .single();
-  
-  // Validar estado
-  if (perfil.estado === 'bloqueado' || perfil.estado === 'desactivado') {
-    await supabase.auth.signOut();
-    return NextResponse.redirect(new URL('/auth/iniciar-sesion?error=blocked', request.url));
+
+  if (isAnyRouteMatch(pathname, RUTAS_PUBLICAS)) {
+    return NextResponse.next();
   }
-  
-  // Validar autorización por rol
-  if (pathname.startsWith('/admin') && perfil.rol !== 'ADMINISTRADOR') {
-    return NextResponse.redirect(new URL(`/${perfil.rol.toLowerCase()}/dashboard`, request.url));
+
+  const roleAccess = getRoleAccessForPath(pathname);
+  const isPrivatePage =
+    pathname === '/dashboard' ||
+    isAnyRouteMatch(pathname, SHARED_PRIVATE_ROUTES) ||
+    roleAccess;
+
+  if (isPrivatePage) {
+    return protectPrivateRoute(request, supabase, user, roleAccess?.role);
   }
-  
-  // ... validaciones similares para otros roles
-  
+
   return NextResponse.next();
 }
 ```
@@ -651,6 +645,7 @@ Funciones principales:
 - `getAuthenticatedUser(supabase)`: devuelve usuario autenticado o `401`.
 - `getActiveUserProfile(adminSupabase, userId)`: consulta `usuarios` y exige `estado === 'activo'`.
 - `requireRole(profile, roles)`: devuelve `403` si el rol no está permitido.
+- `requireActiveUserRole(supabase, roles)`: combina sesión, perfil activo y rol permitido para handlers server-side.
 - `sanitizeAdminUserPatchUpdates(updates)`: aplica whitelist y valida `rol`/`estado`.
 
 Ejemplo aplicado:
@@ -666,6 +661,10 @@ Rutas que usan este patrón:
 
 - `/api/admin/usuarios`: valida sesión, perfil activo y rol `ADMINISTRADOR` antes de crear o actualizar usuarios con service role.
 - `/api/notificaciones`: valida sesión y perfil activo, acepta solo `{ event, entityId }`, y delega en `notificationEventDispatcher` para autorizar el evento y construir la notificación server-side antes de usar service role.
+- `/api/admin/cancelaciones-donaciones`: exige `ADMINISTRADOR` activo.
+- `/api/operador/bajas`, `/api/operador/bajas/estadisticas` y `/api/operador/alertas-vencimiento`: exigen `ADMINISTRADOR` u `OPERADOR` activo.
+- `/api/comprobante/[codigo]`: exige usuario activo y luego valida rol administrativo u ownership del comprobante.
+- `/api/proxy/consultar-cedula` y `/api/proxy/consultar-ruc`: exigen sesión autenticada, pero no perfil completo porque se usan durante el alta/completado de perfil.
 
 El cliente no puede escoger `titulo`, `mensaje`, `destinatarioId`, `rolDestinatario`, `email`, `metadatos` ni `urlAccion` para `/api/notificaciones`. El servidor deriva esos campos desde la entidad de negocio y el evento permitido.
 
@@ -692,6 +691,7 @@ Cobertura inicial:
 - Helpers de autorización y whitelist de usuarios.
 - `POST` y `PATCH` de `/api/admin/usuarios` con mocks de Supabase.
 - `POST` de `/api/notificaciones` con payload por evento, rechazo de campos sensibles y mapeo de errores del dispatcher.
+- Autorización de APIs operativas y proxies de consulta de identidad.
 - `notificationEventDispatcher` para autorización por rol, validación de entidad y construcción segura de notificaciones.
 - Casos de uso de solicitudes con mocks de inventario, movimientos y notificaciones.
 - Componente compartido `UserSettingsContent`.
@@ -718,7 +718,7 @@ Estado verificado en la rama `refactoring_clean_code`:
 - `pnpm test` pasa correctamente con Vitest.
 - La arquitectura real es modular monolítica con capas, no Clean Architecture estricta.
 - El flujo de solicitudes se separó en fachada, casos de uso y servicios internos.
-- La protección de rutas de página está centralizada en `src/proxy.ts`; las API routes con service role validan sesión y rol dentro del handler.
+- La protección de rutas de página está centralizada en `src/proxy.ts`; las API routes sensibles validan sesión, perfil activo y rol dentro del handler.
 - 35 de 43 páginas App Router usan `'use client'`; perfil/configuración común ya aplica Server Component + Client Island.
 
 Para el detalle de riesgos y prioridades, ver [CODE_QUALITY_REFACTORING.md](./CODE_QUALITY_REFACTORING.md).

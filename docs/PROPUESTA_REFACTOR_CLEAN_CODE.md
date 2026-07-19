@@ -12,7 +12,7 @@ La propuesta prioriza primero los riesgos de mayor impacto y deja las mejoras es
 
 Estado actualizado: refactor incremental ejecutado en la rama `refactoring_clean_code`.
 
-- Fase 1 completada: `/api/admin/usuarios` valida sesión, perfil activo y rol `ADMINISTRADOR` antes de usar service role.
+- Fase 1 completada: las APIs sensibles intervenidas validan sesión, perfil activo y rol dentro del handler; el proxy protege páginas privadas compartidas y rutas por rol.
 - Fase 2 completada: se agregó Vitest + React Testing Library con scripts `pnpm test` y `pnpm test:watch`.
 - Fase 3 completada para solicitudes: la fachada `createSolicitudesActionService()` delega en casos de uso y servicios internos de inventario, movimientos y notificaciones.
 - Fase 4 completada como mitigación de aplicación: aprobaciones y entregas parciales restauran inventario y revierten estado si falla una operación posterior. La frontera BD/aplicación está documentada en `DATABASE.md`.
@@ -86,7 +86,7 @@ Cambios:
 Entregables:
 
 - Helper de autorización reutilizable: implementado en `src/lib/server-auth.ts`.
-- `/api/admin/usuarios` protegido: implementado.
+- `/api/admin/usuarios`, APIs operativas, comprobantes y proxies de consulta de identidad protegidos: implementado.
 - Documentación de patrón de autorización para API routes: documentado en `ARCHITECTURE.md`.
 
 Criterios de aceptación:
@@ -219,7 +219,7 @@ Criterios de aceptación:
 
 ## 6. Orden Recomendado
 
-1. Seguridad de `/api/admin/usuarios`.
+1. Seguridad de APIs sensibles y páginas privadas.
 2. Base de pruebas automatizadas.
 3. Separación de servicios de solicitudes.
 4. Consistencia transaccional de inventario.

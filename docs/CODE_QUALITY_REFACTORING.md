@@ -25,17 +25,19 @@ El proyecto no implementa Clean Architecture estricta. Los servicios de aplicaci
 
 ### 1. Seguridad en API Routes
 
-`src/app/api/admin/usuarios/route.ts` usa `SUPABASE_SERVICE_ROLE_KEY` mediante `createAdminSupabaseClient`, pero ahora valida sesión, perfil activo y rol `ADMINISTRADOR` dentro del handler antes de ejecutar operaciones privilegiadas.
+`src/app/api/admin/usuarios/route.ts` usa `SUPABASE_SERVICE_ROLE_KEY` mediante `createAdminSupabaseClient`, pero ahora valida sesión, perfil activo y rol `ADMINISTRADOR` dentro del handler antes de ejecutar operaciones privilegiadas. El mismo patrón se extendió a APIs operativas y de comprobantes.
 
-Estado: resuelto para `/api/admin/usuarios`.
+Estado: resuelto para `/api/admin/usuarios`, `/api/admin/cancelaciones-donaciones`, APIs de bajas/alertas de operador, comprobantes y proxies de consulta de identidad.
 
 Cambios aplicados:
 
-- `src/lib/server-auth.ts` centraliza `getAuthenticatedUser`, `getActiveUserProfile`, `requireRole` y validaciones de roles/estados.
+- `src/lib/server-auth.ts` centraliza `getAuthenticatedUser`, `getActiveUserProfile`, `requireRole`, `requireActiveUserRole` y validaciones de roles/estados.
 - `PATCH` usa whitelist explícita de campos editables.
 - Campos fuera de whitelist devuelven `400`.
 - Usuarios sin sesión reciben `401`.
 - Usuarios activos sin rol admin reciben `403`.
+- APIs de operador exigen `ADMINISTRADOR` u `OPERADOR` activo.
+- APIs de cédula/RUC exigen sesión autenticada sin exigir perfil completo.
 
 ### 2. Servicios con Demasiadas Responsabilidades
 
@@ -79,6 +81,7 @@ Cobertura inicial:
 
 - Helpers de autorización y whitelist.
 - `PATCH`/`POST /api/admin/usuarios` con mocks.
+- Autorización de APIs operativas y proxies de consulta de identidad.
 - Casos de uso de solicitudes: aprobación, rechazo, entrega y entrega parcial.
 - Componente compartido `UserSettingsContent`.
 
@@ -102,11 +105,10 @@ Estado: resuelto.
 
 ## Pendientes Recomendados
 
-1. Extender el helper de autorización a otras API routes con permisos elevados.
-2. Agregar tests para donaciones, bajas e inventario operativo.
-3. Evaluar una RPC SQL transaccional para aprobación de solicitudes si el flujo requiere garantías más estrictas que la compensación de aplicación.
-4. Migrar dashboards y reportes de solo lectura a Server Components con islas cliente para filtros/modales.
-5. Mantener documentación actualizada después de cada refactor funcional.
+1. Agregar más tests de negocio para donaciones e inventario operativo.
+2. Evaluar una RPC SQL transaccional para aprobación de solicitudes si el flujo requiere garantías más estrictas que la compensación de aplicación.
+3. Migrar dashboards y reportes de solo lectura a Server Components con islas cliente para filtros/modales.
+4. Mantener documentación actualizada después de cada refactor funcional.
 
 La propuesta formal de ejecución está en [PROPUESTA_REFACTOR_CLEAN_CODE.md](./PROPUESTA_REFACTOR_CLEAN_CODE.md).
 

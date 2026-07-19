@@ -102,6 +102,7 @@ NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=tu_token_mapbox
 - No crees usuarios manualmente desde SQL; los perfiles nacen desde Supabase Auth y el trigger `public.handle_new_user()`
 - Habilita autenticación por email en Supabase Auth
 - `SUPABASE_SERVICE_ROLE_KEY` se usa solo en servidor para endpoints privilegiados como `/api/admin/usuarios` y `/api/notificaciones`
+- Las APIs operativas validan sesión, perfil activo y rol dentro del handler; el proxy protege páginas privadas, pero no reemplaza la autorización server-side de APIs
 - `DATABASE_URL` debe ser una URL Postgres válida; si copias el connection string del dashboard, reemplaza el password sin dejar corchetes literales
 
 5. **Ejecutar en desarrollo:**

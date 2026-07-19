@@ -233,7 +233,7 @@ sequenceDiagram
         
         ServerComponent->>Browser: HTML renderizado (SSR)
     else Usuario no autorizado
-        Middleware->>Browser: Redirect a dashboard correcto
+        Middleware->>Browser: Redirect a login con error=forbidden
     end
 ```
 
@@ -248,38 +248,68 @@ sequenceDiagram
 export async function proxy(request: NextRequest) {
   // 1. Crear cliente Supabase con cookies
   const supabase = await createServerSupabaseClient();
-  
+
   // 2. Verificar sesión
   const { data: { user } } = await supabase.auth.getUser();
-  
-  // 3. Validar ruta pública
-  if (RUTAS_PUBLICAS.includes(pathname)) {
+
+  // 3. Regla especial para completar perfil
+  if (isCompletarPerfilPath(pathname)) {
+    return handleProfileCompletionRoute(request, supabase, user);
+  }
+
+  // 4. Validar ruta pública con match exacto o por segmento
+  if (isAnyRouteMatch(pathname, RUTAS_PUBLICAS)) {
     return NextResponse.next();
   }
-  
-  // 4. Verificar autenticación
-  if (!user) {
-    return NextResponse.redirect('/auth/iniciar-sesion');
+
+  // 5. Identificar rutas privadas compartidas o por rol
+  const roleAccess = getRoleAccessForPath(pathname);
+  const isPrivatePage =
+    pathname === '/dashboard' ||
+    isAnyRouteMatch(pathname, SHARED_PRIVATE_ROUTES) ||
+    roleAccess;
+
+  if (!isPrivatePage) {
+    return NextResponse.next();
   }
-  
-  // 5. Obtener perfil y validar rol
-  const perfil = await obtenerPerfil(user.id);
-  
-  // 6. Validar autorización por rol
-  if (pathname.startsWith('/admin') && perfil.rol !== 'ADMINISTRADOR') {
-    return NextResponse.redirect(`/${perfil.rol.toLowerCase()}/dashboard`);
-  }
-  
-  // 7. Permitir acceso
-  return NextResponse.next();
+
+  // 6. Rutas privadas: sesión, usuario activo, perfil completo y rol si aplica
+  return protectPrivateRoute(request, supabase, user, roleAccess?.role);
 }
 ```
 
+**Mapa de rutas protegidas por `proxy.ts`:**
+
+```typescript
+const SHARED_PRIVATE_ROUTES = [
+  '/perfil/actualizar',
+  '/notificaciones',
+  '/configuracion-notificaciones',
+  '/comprobante',
+];
+
+const ROLE_PROTECTED_ROUTES = [
+  { route: '/admin', role: 'ADMINISTRADOR' },
+  { route: '/operador', role: 'OPERADOR' },
+  { route: '/donante', role: 'DONANTE' },
+  { route: '/user', role: 'SOLICITANTE' },
+];
+```
+
+**Reglas de redirección:**
+
+- Sin sesión en ruta privada: `/auth/iniciar-sesion?error=unauthorized&callbackUrl=...`.
+- Perfil incompleto: `/perfil/completar`.
+- Perfil completo intentando `/perfil/completar`: dashboard según rol.
+- Usuario `bloqueado` o `desactivado`: cierre de sesión y login con error.
+- Rol incorrecto en prefijo por rol: login con `error=forbidden`.
+
 **Puntos clave**:
-- Se ejecuta ANTES de cualquier página o API route
+- Se ejecuta ANTES de cualquier página o API route no estática
 - Tiene acceso a cookies de sesión
 - Puede leer y modificar la request/response
 - Realiza queries a la base de datos para validar roles
+- Las API routes sensibles no dependen solo del proxy; validan sesión, perfil activo y rol dentro del handler
 
 ---
 
@@ -415,7 +445,7 @@ SELECT * FROM donaciones;
 
 ### 🛡️ Middleware de Autenticación y Autorización
 
-El archivo `proxy.ts` es un **Middleware de Next.js** que intercepta TODAS las peticiones antes de que lleguen a su destino.
+El archivo `proxy.ts` es un **Middleware de Next.js** que intercepta las peticiones no estáticas antes de que lleguen a su destino.
 
 #### ¿Por qué se llama "proxy"?
 
@@ -428,16 +458,20 @@ graph TD
     A[Request entrante] --> B{Middleware proxy.ts}
     B --> C{¿Ruta pública?}
     C -->|Sí| D[Permitir acceso]
-    C -->|No| E{¿Usuario autenticado?}
-    E -->|No| F[Redirect a /auth/iniciar-sesion]
-    E -->|Sí| G{¿Estado activo?}
+    C -->|No| E{¿Ruta privada?}
+    E -->|No| D
+    E -->|Sí| F{¿Usuario autenticado?}
+    F -->|No| R[Redirect a /auth/iniciar-sesion]
+    F -->|Sí| G{¿Estado activo?}
     G -->|No| H[Cerrar sesión + Redirect]
-    G -->|Sí| I{¿Rol autorizado?}
-    I -->|No| J[Redirect a dashboard correcto]
-    I -->|Sí| K[Permitir acceso]
+    G -->|Sí| I{¿Perfil completo?}
+    I -->|No| M[Redirect a /perfil/completar]
+    I -->|Sí| J{¿Rol autorizado?}
+    J -->|No| N[Redirect a login con forbidden]
+    J -->|Sí| K[Permitir acceso]
     
-    D --> L[Página/API Route]
-    K --> L
+    D --> P[Página/API Route]
+    K --> P
 ```
 
 #### Código Explicado:
@@ -494,74 +528,22 @@ export async function proxy(request: NextRequest) {
     }
 
     // 5. Verificar si la ruta es pública
-    const esRutaPublica = RUTAS_PUBLICAS.some(ruta => pathname.startsWith(ruta));
-    if (esRutaPublica) {
+    if (isAnyRouteMatch(pathname, RUTAS_PUBLICAS)) {
       return supabaseResponse;
     }
 
-    // 6. Para rutas protegidas, verificar autenticación
-    if (pathname.startsWith('/dashboard') || 
-        pathname.startsWith('/admin') || 
-        pathname.startsWith('/operador') || 
-        pathname.startsWith('/donante') || 
-        pathname.startsWith('/user')) {
-      
-      if (!isAuthenticated || !user) {
-        // No autenticado, redirigir a login
-        const url = new URL('/auth/iniciar-sesion', request.url);
-        url.searchParams.set('callbackUrl', pathname);
-        return NextResponse.redirect(url);
-      }
-
-      // 7. Verificar el estado del usuario y autorización
-      const { data: perfil } = await supabase
-        .from('usuarios')
-        .select('estado, rol')
-        .eq('id', user.id)
-        .single();
-
-      if (perfil) {
-        const { estado, rol } = perfil;
-        
-        // Validar estado
-        if (estado === 'bloqueado' || estado === 'desactivado') {
-          await supabase.auth.signOut();
-          const url = new URL('/auth/iniciar-sesion', request.url);
-          url.searchParams.set('error', estado === 'bloqueado' ? 'blocked' : 'deactivated');
-          return NextResponse.redirect(url);
-        }
-
-        // 8. Verificar autorización por rol
-        if (pathname.startsWith('/admin') && rol !== 'ADMINISTRADOR') {
-          // Usuario no autorizado para /admin
-          return NextResponse.redirect(
-            new URL(`/${rol.toLowerCase()}/dashboard`, request.url)
-          );
-        }
-
-        if (pathname.startsWith('/operador') && rol !== 'OPERADOR') {
-          return NextResponse.redirect(
-            new URL(`/${rol.toLowerCase()}/dashboard`, request.url)
-          );
-        }
-
-        if (pathname.startsWith('/donante') && rol !== 'DONANTE') {
-          return NextResponse.redirect(
-            new URL(`/${rol.toLowerCase()}/dashboard`, request.url)
-          );
-        }
-
-        if (pathname.startsWith('/user') && rol !== 'SOLICITANTE') {
-          return NextResponse.redirect(
-            new URL(`/${rol.toLowerCase()}/dashboard`, request.url)
-          );
-        }
-      }
+    // 6. Para rutas privadas, verificar sesión, perfil, estado y rol.
+    const roleAccess = getRoleAccessForPath(pathname);
+    if (pathname === '/dashboard' ||
+        isAnyRouteMatch(pathname, SHARED_PRIVATE_ROUTES) ||
+        roleAccess) {
+      return protectPrivateRoute(request, supabase, user, roleAccess?.role);
     }
 
     return supabaseResponse;
   } catch (error) {
     console.error('Error inesperado en middleware:', error);
+    // Las rutas protegidas fallan cerradas y redirigen a login.
     return supabaseResponse;
   }
 }
@@ -583,11 +565,24 @@ export const config = {
 
 #### Puntos Clave:
 
-1. **Se ejecuta en TODAS las peticiones** (excepto archivos estáticos)
+1. **Se ejecuta en las peticiones no estáticas** (excepto assets e imágenes)
 2. **Tiene acceso a cookies** (donde Supabase guarda el token)
 3. **Puede hacer queries a la BD** para obtener perfil del usuario
 4. **Puede redirigir** antes de que la petición llegue a la página
-5. **Centraliza la lógica de autenticación** (no se repite en cada página)
+5. **Centraliza la protección de páginas privadas** (no se repite en cada página)
+6. **Falla cerrado en rutas privadas** si ocurre un error de validación del proxy
+
+#### Rutas por Categoría
+
+| Categoría | Rutas | Regla |
+|-----------|-------|-------|
+| Públicas | `/`, `/contribuyentes`, `/auth/iniciar-sesion`, `/auth/registrar`, `/auth/olvide-contrasena`, `/auth/restablecer-contrasena`, `/auth/verificar-email` | Sin sesión |
+| Completar perfil | `/perfil/completar` | Sesión requerida; permite perfil incompleto |
+| Compartidas privadas | `/perfil/actualizar`, `/notificaciones`, `/configuracion-notificaciones`, `/comprobante/*` | Sesión, perfil activo y perfil completo |
+| Por rol | `/admin/*`, `/operador/*`, `/donante/*`, `/user/*` | Sesión, perfil activo, perfil completo y rol correspondiente |
+| Dashboard genérico | `/dashboard` | Redirige al dashboard del rol |
+
+Las rutas `/api/*` pasan por el matcher del proxy, pero las APIs sensibles validan autorización dentro del handler. No se debe asumir que el proxy reemplaza la autorización server-side de una API.
 
 ---
 
@@ -634,6 +629,22 @@ Reglas:
 - `PATCH` rechaza campos fuera de whitelist.
 - `rol` solo acepta `ADMINISTRADOR`, `OPERADOR`, `DONANTE`, `SOLICITANTE`.
 - `estado` solo acepta `activo`, `bloqueado`, `desactivado`.
+
+### 🔒 Flujo: APIs Operativas Protegidas
+
+Las APIs con datos operativos usan `requireActiveUserRole(supabase, roles)` para unificar sesión, perfil activo y rol permitido.
+
+| API | Roles permitidos |
+|-----|------------------|
+| `/api/admin/cancelaciones-donaciones` | `ADMINISTRADOR` |
+| `/api/operador/bajas` | `ADMINISTRADOR`, `OPERADOR` |
+| `/api/operador/bajas/estadisticas` | `ADMINISTRADOR`, `OPERADOR` |
+| `/api/operador/alertas-vencimiento` | `ADMINISTRADOR`, `OPERADOR` |
+| `/api/comprobante/[codigo]` | Usuario activo; admin/operador o dueño del comprobante |
+| `/api/proxy/consultar-cedula` | Usuario autenticado |
+| `/api/proxy/consultar-ruc` | Usuario autenticado |
+
+Las APIs de cédula/RUC no exigen perfil completo porque se usan durante el flujo de completar perfil. Sí exigen sesión para evitar uso anónimo del proxy externo.
 
 ### 🔔 Flujo: Crear Notificaciones Seguras
 
