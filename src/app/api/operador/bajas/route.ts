@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { requireActiveUserRole } from '@/lib/server-auth';
 import {
   parseEnumParam,
   parseIsoDateParam,
@@ -27,43 +28,10 @@ const MOTIVOS_BAJA_FILTRO = ['todos', ...MOTIVOS_BAJA] as const;
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
-    
-    // Verificar autenticación
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      );
-    }
+    const authResult = await requireActiveUserRole(supabase, ['ADMINISTRADOR', 'OPERADOR']);
 
-    // Verificar rol
-    const { data: usuario, error: usuarioError } = await supabase
-      .from('usuarios')
-      .select('rol, estado')
-      .eq('id', user.id)
-      .single();
-
-    if (usuarioError || !usuario) {
-      return NextResponse.json(
-        { error: 'Usuario no encontrado' },
-        { status: 404 }
-      );
-    }
-
-    if (!['ADMINISTRADOR', 'OPERADOR'].includes(usuario.rol)) {
-      return NextResponse.json(
-        { error: 'No tienes permisos para realizar esta operación' },
-        { status: 403 }
-      );
-    }
-
-    if (usuario.estado !== 'activo') {
-      return NextResponse.json(
-        { error: 'Usuario inactivo' },
-        { status: 403 }
-      );
+    if (authResult.response) {
+      return authResult.response;
     }
 
     // Obtener y validar datos del request
@@ -91,7 +59,7 @@ export async function POST(request: NextRequest) {
         p_id_inventario: idInventario.value,
         p_cantidad: cantidad.value,
         p_motivo: motivo.value,
-        p_usuario_id: user.id,
+        p_usuario_id: authResult.user.id,
         p_observaciones: observaciones.value
       });
 
@@ -138,29 +106,10 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
-    
-    // Verificar autenticación
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      );
-    }
+    const authResult = await requireActiveUserRole(supabase, ['ADMINISTRADOR', 'OPERADOR']);
 
-    // Verificar rol y estado
-    const { data: usuario, error: usuarioError } = await supabase
-      .from('usuarios')
-      .select('rol, estado')
-      .eq('id', user.id)
-      .single();
-
-    if (usuarioError || !usuario || usuario.estado !== 'activo') {
-      return NextResponse.json(
-        { error: 'Acceso denegado' },
-        { status: 403 }
-      );
+    if (authResult.response) {
+      return authResult.response;
     }
 
     // Obtener parámetros de búsqueda

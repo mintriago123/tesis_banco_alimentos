@@ -5,6 +5,7 @@ import {
   getAuthenticatedUser,
   isValidUserRole,
   isValidUserStatus,
+  requireActiveUserRole,
   requireRole,
   sanitizeAdminUserPatchUpdates,
   type ActiveUserProfile,
@@ -108,5 +109,36 @@ describe('server-auth helpers', () => {
 
     expect(requireRole(profile, ['ADMINISTRADOR']).response?.status).toBe(403);
     expect(requireRole({ ...profile, rol: 'ADMINISTRADOR' }, ['ADMINISTRADOR']).authorized).toBe(true);
+  });
+
+  it('requires an active user with an allowed role', async () => {
+    const client = {
+      auth: {
+        getUser: vi.fn(async () => ({
+          data: { user: { id: 'user-1' } },
+          error: null,
+        })),
+      },
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            maybeSingle: vi.fn(async () => ({
+              data: {
+                id: 'user-1',
+                rol: 'DONANTE',
+                estado: 'activo',
+              },
+              error: null,
+            })),
+          })),
+        })),
+      })),
+    } as unknown as SupabaseClient;
+
+    const denied = await requireActiveUserRole(client, ['OPERADOR']);
+    expect(denied.response?.status).toBe(403);
+
+    const allowed = await requireActiveUserRole(client, ['DONANTE']);
+    expect(allowed.profile?.rol).toBe('DONANTE');
   });
 });

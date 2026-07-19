@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { POST } from './route';
+import { GET, POST } from './route';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const INVENTARIO_ID = '22222222-2222-4222-8222-222222222222';
@@ -26,7 +26,7 @@ const jsonRequest = (body: unknown) =>
 const createUsuarioQuery = (profile: unknown) => ({
   select: vi.fn(() => ({
     eq: vi.fn(() => ({
-      single: vi.fn(async () => ({
+      maybeSingle: vi.fn(async () => ({
         data: profile,
         error: null,
       })),
@@ -45,6 +45,7 @@ beforeEach(() => {
     error: null,
   });
   mocks.from.mockReturnValue(createUsuarioQuery({
+    id: USER_ID,
     rol: 'OPERADOR',
     estado: 'activo',
   }));
@@ -82,6 +83,19 @@ describe('/api/operador/bajas', () => {
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
+  it('rejects active users without operator permissions', async () => {
+    mocks.from.mockReturnValue(createUsuarioQuery({
+      id: USER_ID,
+      rol: 'DONANTE',
+      estado: 'activo',
+    }));
+
+    const response = await GET(new NextRequest('http://localhost/api/operador/bajas'));
+
+    expect(response.status).toBe(403);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
   it('rejects invalid body before calling the RPC', async () => {
     const response = await POST(jsonRequest({
       id_inventario: 'not-a-uuid',
@@ -111,4 +125,3 @@ describe('/api/operador/bajas', () => {
     });
   });
 });
-

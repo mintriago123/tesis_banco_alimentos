@@ -7,6 +7,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { decodificarQRPayload, formatearFecha, formatearFechaSolo } from '@/lib/comprobante';
 import type { DatosComprobante, QRPayload } from '@/lib/comprobante/types';
 import { parsePositiveIntParam, parseUuid, type ApiValidationResult } from '@/lib/api-validation';
+import { requireActiveUserRole } from '@/lib/server-auth';
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;
 
@@ -97,38 +98,24 @@ async function obtenerAccesoUsuario(supabase: ServerSupabaseClient): Promise<{
   usuario: AccesoUsuario | null;
   errorResponse?: NextResponse;
 }> {
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  const authResult = await requireActiveUserRole(supabase, [
+    'ADMINISTRADOR',
+    'OPERADOR',
+    'DONANTE',
+    'SOLICITANTE',
+  ]);
 
-  if (userError || !user) {
+  if (authResult.response) {
     return {
       usuario: null,
-      errorResponse: NextResponse.json(
-        { error: 'Necesitas iniciar sesión para ver este comprobante' },
-        { status: 401 }
-      )
-    };
-  }
-
-  const { data: perfil, error: perfilError } = await supabase
-    .from('usuarios')
-    .select('rol')
-    .eq('id', user.id)
-    .single();
-
-  if (perfilError || !perfil) {
-    return {
-      usuario: null,
-      errorResponse: NextResponse.json(
-        { error: 'No tienes permisos para ver este comprobante' },
-        { status: 403 }
-      )
+      errorResponse: authResult.response,
     };
   }
 
   return {
     usuario: {
-      id: user.id,
-      rol: perfil.rol ?? null
+      id: authResult.user.id,
+      rol: authResult.profile.rol
     }
   };
 }

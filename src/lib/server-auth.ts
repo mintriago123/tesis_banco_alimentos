@@ -33,6 +33,9 @@ export interface ActiveUserProfile {
 export type AuthResult = { user: User; response?: never } | { user?: never; response: NextResponse };
 export type ProfileResult = { profile: ActiveUserProfile; response?: never } | { profile?: never; response: NextResponse };
 export type AuthorizationResult = { authorized: true; response?: never } | { authorized?: never; response: NextResponse };
+export type ActiveRoleResult =
+  | { user: User; profile: ActiveUserProfile; response?: never }
+  | { user?: never; profile?: never; response: NextResponse };
 export type PatchValidationResult =
   | { success: true; updates: AdminUserPatchUpdates }
   | { success: false; error: string };
@@ -152,4 +155,32 @@ export function requireRole(profile: ActiveUserProfile, roles: readonly AppUserR
   }
 
   return { authorized: true };
+}
+
+export async function requireActiveUserRole(
+  supabase: SupabaseClient,
+  roles: readonly AppUserRole[]
+): Promise<ActiveRoleResult> {
+  const authResult = await getAuthenticatedUser(supabase);
+
+  if (authResult.response) {
+    return { response: authResult.response };
+  }
+
+  const profileResult = await getActiveUserProfile(supabase, authResult.user.id);
+
+  if (profileResult.response) {
+    return { response: profileResult.response };
+  }
+
+  const roleResult = requireRole(profileResult.profile, roles);
+
+  if (roleResult.response) {
+    return { response: roleResult.response };
+  }
+
+  return {
+    user: authResult.user,
+    profile: profileResult.profile,
+  };
 }

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validarRucEcuatoriano } from '@/lib/validaciones';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { getAuthenticatedUser } from '@/lib/server-auth';
 
 /**
  * Proxy para consultas de RUC
@@ -7,6 +9,13 @@ import { validarRucEcuatoriano } from '@/lib/validaciones';
  */
 export async function GET(request: NextRequest) {
   try {
+    const supabase = await createServerSupabaseClient();
+    const authResult = await getAuthenticatedUser(supabase);
+
+    if (authResult.response) {
+      return authResult.response;
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const ruc = searchParams.get('ruc');
 

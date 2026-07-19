@@ -13,6 +13,7 @@ import {
   parsePaginationParams,
 } from '@/lib/api-validation';
 import { isUuid } from '@/lib/validation-core';
+import { requireActiveUserRole } from '@/lib/server-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,36 +35,10 @@ const MOTIVOS_CANCELACION_FILTRO = [
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
-    
-    // Verificar autenticación
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      );
-    }
+    const authResult = await requireActiveUserRole(supabase, ['ADMINISTRADOR']);
 
-    // Verificar rol de administrador
-    const { data: usuario, error: usuarioError } = await supabase
-      .from('usuarios')
-      .select('rol, estado')
-      .eq('id', user.id)
-      .single();
-
-    if (usuarioError || !usuario) {
-      return NextResponse.json(
-        { error: 'Usuario no encontrado' },
-        { status: 404 }
-      );
-    }
-
-    if (usuario.rol !== 'ADMINISTRADOR') {
-      return NextResponse.json(
-        { error: 'No tienes permisos para acceder a este recurso' },
-        { status: 403 }
-      );
+    if (authResult.response) {
+      return authResult.response;
     }
 
     // Obtener parámetros de consulta

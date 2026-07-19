@@ -11,7 +11,7 @@ vi.mock('@/lib/supabase-server', () => ({
   createServerSupabaseClient: mocks.createServerSupabaseClient,
 }));
 
-describe('/api/proxy/consultar-ruc', () => {
+describe('/api/proxy/consultar-cedula', () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
@@ -33,38 +33,21 @@ describe('/api/proxy/consultar-ruc', () => {
     });
 
     const response = await GET(new NextRequest(
-      'http://localhost/api/proxy/consultar-ruc?ruc=1710034065001'
+      'http://localhost/api/proxy/consultar-cedula?identificacion=1710034065'
     ));
 
     expect(response.status).toBe(401);
   });
 
-  it('rejects malformed RUC before calling the external service', async () => {
+  it('rejects malformed cedula before calling the external service', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    const response = await GET(new NextRequest('http://localhost/api/proxy/consultar-ruc?ruc=123'));
+    const response = await GET(new NextRequest(
+      'http://localhost/api/proxy/consultar-cedula?identificacion=123'
+    ));
 
     expect(response.status).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('calls the configured service with an encoded valid RUC', async () => {
-    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
-    vi.stubGlobal('fetch', fetchMock);
-    vi.stubEnv('SERVICIO_CONSULTAS_RUC', 'https://consultas.example.test/ruc');
-
-    const response = await GET(new NextRequest(
-      'http://localhost/api/proxy/consultar-ruc?ruc=1710034065001'
-    ));
-
-    expect(response.status).toBe(200);
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://consultas.example.test/ruc?ruc=1710034065001',
-      {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
   });
 });

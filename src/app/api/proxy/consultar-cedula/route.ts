@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validarCedulaEcuatoriana } from '@/lib/validaciones';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { getAuthenticatedUser } from '@/lib/server-auth';
 
 /**
  * Proxy para consultas a DINARAP
@@ -7,6 +9,13 @@ import { validarCedulaEcuatoriana } from '@/lib/validaciones';
  */
 export async function GET(request: NextRequest) {
   try {
+    const supabase = await createServerSupabaseClient();
+    const authResult = await getAuthenticatedUser(supabase);
+
+    if (authResult.response) {
+      return authResult.response;
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const identificacion = searchParams.get('identificacion');
 
