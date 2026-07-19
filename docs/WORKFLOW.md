@@ -635,6 +635,34 @@ Reglas:
 - `rol` solo acepta `ADMINISTRADOR`, `OPERADOR`, `DONANTE`, `SOLICITANTE`.
 - `estado` solo acepta `activo`, `bloqueado`, `desactivado`.
 
+### 🔔 Flujo: Crear Notificaciones Seguras
+
+`/api/notificaciones` usa `SUPABASE_SERVICE_ROLE_KEY`, pero el cliente solo puede enviar eventos controlados:
+
+```json
+{
+  "event": "catalog_food_request_created",
+  "entityId": "55555555-5555-4555-8555-555555555555"
+}
+```
+
+Reglas:
+
+- La ruta valida sesión con el cliente normal de Supabase.
+- La ruta valida perfil activo con el cliente admin.
+- `notificationEventDispatcher` valida el rol permitido y el ownership/contexto de `entityId`.
+- El servidor construye `titulo`, `mensaje`, destinatario, URL, metadata y email.
+- La ruta rechaza campos sensibles enviados desde cliente, como `destinatarioId`, `rolDestinatario`, `email`, `titulo` o `mensaje`.
+
+Eventos permitidos:
+
+| Evento | Roles que pueden dispararlo | Destinatario |
+|--------|-----------------------------|--------------|
+| `catalog_food_request_created` | `DONANTE` | `ADMINISTRADOR` |
+| `catalog_food_request_reviewed` | `ADMINISTRADOR` | Donante dueño de la solicitud |
+| `food_request_status_changed` | `ADMINISTRADOR`, `OPERADOR` | Solicitante dueño |
+| `donation_status_changed` | `ADMINISTRADOR`, `OPERADOR` | Donante dueño |
+
 ### 📦 Flujo: Aprobar Solicitud con Inventario
 
 La fachada `createSolicitudesActionService()` conserva la API pública usada por hooks y páginas, pero delega en casos de uso internos.
@@ -686,7 +714,6 @@ sequenceDiagram
     participant S as DonacionService
     participant SB as Supabase
     participant DB as PostgreSQL
-    participant NS as NotificationService
     
     D->>M: GET /donante/nueva-donacion
     M->>SB: Verificar sesión
@@ -711,8 +738,7 @@ sequenceDiagram
     DB-->>SB: Donación creada
     SB-->>S: {id, estado: 'Pendiente'}
     
-    S->>NS: Crear notificación para OPERADOR
-    NS->>DB: INSERT INTO notificaciones
+    Note over S: La creación queda en Pendiente. Las notificaciones de donación se emiten cuando admin/operador cambia el estado.
     
     S-->>API: {success: true, data}
     API-->>P: Response 200
@@ -734,6 +760,7 @@ sequenceDiagram
     participant S as SolicitudService
     participant IS as InventarioService
     participant DB as PostgreSQL (con Triggers)
+    participant NAPI as /api/notificaciones
     participant NS as NotificationService
     
     O->>P: Ver solicitud pendiente
@@ -760,7 +787,9 @@ sequenceDiagram
     
     S->>DB: COMMIT TRANSACTION
     
-    S->>NS: Crear notificación para beneficiario
+    S->>NAPI: POST {event: food_request_status_changed, entityId}
+    NAPI->>NAPI: Validar sesión, perfil activo y rol permitido
+    NAPI->>NS: Construir notificación server-side
     NS->>DB: INSERT INTO notificaciones
     
     S-->>API: {success: true, comprobante}
@@ -879,33 +908,33 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant E as Evento (ej: Nueva donación)
-    participant T as Database Trigger
-    participant F as Function crear_notificacion()
-    participant DB as notificaciones table
+    participant E as Evento de negocio
     participant API as /api/notificaciones
+    participant D as notificationEventDispatcher
+    participant NS as NotificationService
+    participant DB as notificaciones table
     participant U as Usuario (Frontend)
     
-    E->>T: INSERT INTO donaciones
-    T->>F: Ejecutar trigger_notificacion_donacion()
+    E->>API: POST {event, entityId}
+    API->>API: Validar sesión y perfil activo
+    API->>D: Autorizar evento y consultar entidad
+    D-->>API: titulo, mensaje, destinatario, metadata
     
-    F->>F: Determinar destinatarios (rol: OPERADOR)
+    API->>NS: createNotification(input seguro)
+    NS->>DB: INSERT INTO notificaciones
+    NS->>DB: SELECT usuarios/preferencias para email
     
-    F->>DB: INSERT INTO notificaciones (para cada operador)
-    
-    Note over U: Frontend hace polling cada 30s
-    U->>API: GET /api/notificaciones
-    API->>DB: SELECT notificaciones WHERE destinatario_id = ? AND leida = false
-    DB-->>API: Lista de notificaciones
-    API-->>U: Notificaciones no leídas
+    Note over U: Frontend carga por RLS y escucha realtime por destinatario_id
+    U->>DB: SELECT notificaciones visibles
+    DB-->>U: Notificaciones visibles
     
     U->>U: Mostrar badge con contador
     U->>U: Usuario hace clic en notificación
-    U->>API: PATCH /api/notificaciones/[id] {leida: true}
-    API->>DB: UPDATE notificaciones SET leida = true
-    DB-->>API: Updated
-    API-->>U: Success
+    U->>DB: UPDATE notificaciones SET leida = true
+    DB-->>U: Success
 ```
+
+`/api/notificaciones` no acepta `titulo`, `mensaje`, `destinatarioId`, `rolDestinatario`, `email`, `metadatos` ni `urlAccion` desde el cliente. El contrato público es `{ event, entityId }`. Las notificaciones por `rol_destinatario` se listan por RLS; el realtime actual escucha `destinatario_id` y puede requerir una mejora adicional para eventos por rol.
 
 ---
 

@@ -463,7 +463,8 @@ export async function createServerSupabaseClient() {
   
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
       cookies: {
         get(name: string) {
@@ -661,7 +662,12 @@ if ('response' in context) {
 }
 ```
 
-`/api/admin/usuarios` usa este patrón para `POST` y `PATCH`.
+Rutas que usan este patrón:
+
+- `/api/admin/usuarios`: valida sesión, perfil activo y rol `ADMINISTRADOR` antes de crear o actualizar usuarios con service role.
+- `/api/notificaciones`: valida sesión y perfil activo, acepta solo `{ event, entityId }`, y delega en `notificationEventDispatcher` para autorizar el evento y construir la notificación server-side antes de usar service role.
+
+El cliente no puede escoger `titulo`, `mensaje`, `destinatarioId`, `rolDestinatario`, `email`, `metadatos` ni `urlAccion` para `/api/notificaciones`. El servidor deriva esos campos desde la entidad de negocio y el evento permitido.
 
 ---
 
@@ -685,6 +691,8 @@ Cobertura inicial:
 
 - Helpers de autorización y whitelist de usuarios.
 - `POST` y `PATCH` de `/api/admin/usuarios` con mocks de Supabase.
+- `POST` de `/api/notificaciones` con payload por evento, rechazo de campos sensibles y mapeo de errores del dispatcher.
+- `notificationEventDispatcher` para autorización por rol, validación de entidad y construcción segura de notificaciones.
 - Casos de uso de solicitudes con mocks de inventario, movimientos y notificaciones.
 - Componente compartido `UserSettingsContent`.
 

@@ -75,8 +75,9 @@ Crear archivo `.env.local` en la raíz:
 ```env
 # Supabase (Requerido)
 NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_clave_publica
-SUPABASE_SERVICE_ROLE_KEY=tu_clave_privada
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=tu_clave_publica
+SUPABASE_SERVICE_ROLE_KEY=tu_clave_privada_server_only
+DATABASE_URL=postgresql://postgres:tu_password@db.tu-proyecto.supabase.co:5432/postgres
 
 # Validación de Identidad - Ecuador (Requerido)
 NEXT_PUBLIC_SERVICIO_CONSULTAS_RUC=https://api-ruc.ec
@@ -100,6 +101,8 @@ NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=tu_token_mapbox
 - El seed incluido crea el catálogo base de alimentos, unidades, conversiones y depósitos iniciales
 - No crees usuarios manualmente desde SQL; los perfiles nacen desde Supabase Auth y el trigger `public.handle_new_user()`
 - Habilita autenticación por email en Supabase Auth
+- `SUPABASE_SERVICE_ROLE_KEY` se usa solo en servidor para endpoints privilegiados como `/api/admin/usuarios` y `/api/notificaciones`
+- `DATABASE_URL` debe ser una URL Postgres válida; si copias el connection string del dashboard, reemplaza el password sin dejar corchetes literales
 
 5. **Ejecutar en desarrollo:**
 

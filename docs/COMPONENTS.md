@@ -837,24 +837,25 @@ export function DataTable<T extends Record<string, any>>({
 
 **Ubicación**: `src/modules/shared/hooks/useNotificaciones.ts`
 
-**Propósito**: Gestión de notificaciones en tiempo real
+**Propósito**: Gestión de notificaciones visibles para el usuario y creación mediante eventos server-side.
 
 ```tsx
-export function useNotificaciones() {
+import type { NotificationEventPayload } from '@/modules/shared/services/notificationEvents';
+
+export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
   const [loading, setLoading] = useState(true);
-  const supabase = createClientComponentClient();
-  const { user } = useUser();
   
   // Cargar notificaciones
   useEffect(() => {
     if (!user) return;
     
     async function cargarNotificaciones() {
+      const userRole = await obtenerRolDelUsuario(user.id);
       const { data, error } = await supabase
         .from('notificaciones')
         .select('*')
-        .or(`destinatario_id.eq.${user.id},rol_destinatario.eq.${user.rol}`)
+        .or(`destinatario_id.eq.${user.id},rol_destinatario.eq.${userRole},rol_destinatario.eq.TODOS`)
         .eq('activa', true)
         .order('fecha_creacion', { ascending: false });
       
@@ -866,11 +867,29 @@ export function useNotificaciones() {
     
     cargarNotificaciones();
     
-    // Polling cada 30 segundos
-    const interval = setInterval(cargarNotificaciones, 30000);
+    const channel = supabase
+      .channel('notificaciones_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notificaciones', filter: `destinatario_id=eq.${user.id}` },
+        (payload) => actualizarEstadoLocal(payload)
+      )
+      .subscribe();
     
-    return () => clearInterval(interval);
+    return () => supabase.removeChannel(channel);
   }, [user]);
+
+  const crearNotificacion = async (payload: NotificationEventPayload) => {
+    const response = await fetch('/api/notificaciones', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error('No se pudo crear la notificación');
+    }
+  };
   
   // Marcar como leída
   const marcarComoLeida = async (notificacionId: string) => {
@@ -889,11 +908,14 @@ export function useNotificaciones() {
   return {
     notificaciones,
     loading,
+    crearNotificacion,
     marcarComoLeida,
     noLeidas: notificaciones.filter(n => !n.leida).length
   };
 }
 ```
+
+`crearNotificacion` no acepta `titulo`, `mensaje`, `destinatarioId`, `rolDestinatario`, `email` ni metadata libre. Debe recibir un `NotificationEventPayload` como `{ event: 'catalog_food_request_created', entityId }`. La carga inicial incluye notificaciones por `destinatario_id`, `rol_destinatario` y `TODOS`; el realtime actual escucha `destinatario_id` y puede no emitir en vivo las notificaciones por rol hasta una recarga o una mejora posterior.
 
 ---
 

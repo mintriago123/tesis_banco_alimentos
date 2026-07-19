@@ -301,7 +301,7 @@ erDiagram
 
 **Triggers**:
 - `trigger_crear_producto`: Crea producto en inventario cuando estado = 'Entregada'
-- `trigger_donacion_notificacion`: Crea notificaciones automáticas
+- Las notificaciones de estado se generan desde la capa de aplicación mediante `/api/notificaciones` y eventos controlados.
 
 ---
 
@@ -338,8 +338,8 @@ erDiagram
 - `idx_solicitudes_unidad_id` en `unidad_id`
 - `idx_solicitudes_codigo_comprobante` en `codigo_comprobante`
 
-**Triggers**:
-- `trigger_solicitud_notificacion`: Crea notificaciones automáticas
+**Notificaciones**:
+- Los cambios de estado relevantes disparan `/api/notificaciones` desde la capa de aplicación con eventos controlados.
 
 ---
 
@@ -546,6 +546,12 @@ VALUES (5, 6, 1000);
 - `idx_notificaciones_categoria` en `categoria`
 - `idx_notificaciones_fecha_creacion` en `fecha_creacion DESC`
 
+**Contrato de escritura**:
+- El cliente no inserta notificaciones con payload libre.
+- La API pública de aplicación es `POST /api/notificaciones` con `{ event, entityId }`.
+- El servidor valida sesión, perfil activo, rol permitido y ownership/contexto de la entidad.
+- `NotificationService` usa `SUPABASE_SERVICE_ROLE_KEY` solo en servidor para insertar la notificación, resolver destinatarios y consultar preferencias de email.
+
 ---
 
 ### ⚠️ bajas_productos
@@ -631,39 +637,20 @@ Para nuevas operaciones que modifiquen más de una tabla crítica, la preferenci
 
 ### 🔧 Funciones Principales
 
-#### 1. `crear_notificacion()`
+#### 1. Notificaciones por evento
 
-**Propósito**: Crear notificaciones de forma segura
+**Propósito**: Crear notificaciones sin aceptar contenido sensible desde el cliente.
 
-```sql
-CREATE FUNCTION crear_notificacion(
-  p_titulo VARCHAR,
-  p_mensaje TEXT,
-  p_tipo VARCHAR,
-  p_destinatario_id UUID,
-  p_rol_destinatario VARCHAR,
-  p_categoria VARCHAR,
-  p_url_accion VARCHAR DEFAULT NULL,
-  p_metadatos JSONB DEFAULT '{}'
-) RETURNS UUID
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_notificacion_id uuid;
-BEGIN
-  INSERT INTO notificaciones (
-    titulo, mensaje, tipo, destinatario_id,
-    rol_destinatario, categoria, url_accion, metadatos
-  ) VALUES (
-    p_titulo, p_mensaje, p_tipo, p_destinatario_id,
-    p_rol_destinatario, p_categoria, p_url_accion, p_metadatos
-  )
-  RETURNING id INTO v_notificacion_id;
-  
-  RETURN v_notificacion_id;
-END;
-$$;
+El frontend llama a `/api/notificaciones` con un evento permitido:
+
+```json
+{
+  "event": "catalog_food_request_created",
+  "entityId": "55555555-5555-4555-8555-555555555555"
+}
 ```
+
+La capa de aplicación consulta la entidad, valida rol/ownership y construye internamente `titulo`, `mensaje`, `destinatario_id`, `rol_destinatario`, `url_accion`, `metadatos` y email. La tabla `notificaciones` queda como persistencia del resultado, no como contrato de negocio para clientes.
 
 ---
 
@@ -926,39 +913,25 @@ CREATE TRIGGER trigger_crear_producto
 
 ---
 
-#### 2. `trigger_donacion_notificacion`
+#### 2. Notificaciones de donaciones
 
-```sql
-CREATE TRIGGER trigger_donacion_notificacion
-  AFTER INSERT OR UPDATE ON donaciones
-  FOR EACH ROW
-  EXECUTE FUNCTION trigger_notificacion_donacion();
-```
-
-**Cuándo se ejecuta**: Al crear o actualizar una donación
+**Cuándo se ejecuta**: Cuando un `ADMINISTRADOR` u `OPERADOR` procesa una donación y cambia su estado.
 
 **Qué hace**:
-1. Crea notificación para operadores cuando hay nueva donación
-2. Notifica al donante cuando cambia el estado
-3. Incluye metadatos relevantes (ID, cantidad, producto)
+1. Envía `{ event: "donation_status_changed", entityId }` a `/api/notificaciones`.
+2. El dispatcher valida que el usuario sea `ADMINISTRADOR` u `OPERADOR` para cambios de estado.
+3. El servidor construye la notificación para el donante asociado y agrega metadatos relevantes.
 
 ---
 
-#### 3. `trigger_solicitud_notificacion`
+#### 3. Notificaciones de solicitudes
 
-```sql
-CREATE TRIGGER trigger_solicitud_notificacion
-  AFTER INSERT OR UPDATE ON solicitudes
-  FOR EACH ROW
-  EXECUTE FUNCTION trigger_notificacion_solicitud();
-```
-
-**Cuándo se ejecuta**: Al crear o actualizar una solicitud
+**Cuándo se ejecuta**: Cuando la capa de aplicación cambia el estado de una solicitud.
 
 **Qué hace**:
-1. Notifica a operadores cuando hay nueva solicitud
-2. Notifica al solicitante cuando es aprobada/rechazada
-3. Genera comprobante si es aprobada
+1. Envía `{ event: "food_request_status_changed", entityId }` a `/api/notificaciones`.
+2. El dispatcher valida que el usuario sea `ADMINISTRADOR` u `OPERADOR`.
+3. El servidor construye la notificación para el solicitante cuando la solicitud queda aprobada, rechazada o entregada.
 
 ---
 
