@@ -23,6 +23,9 @@ const hasText = (value: unknown): value is string =>
 const isProfileComplete = (perfil: ProxyUserProfile) =>
   hasText(perfil.rol) && hasText(perfil.nombre) && (hasText(perfil.cedula) || hasText(perfil.ruc));
 
+const isCompletarPerfilPath = (pathname: string) =>
+  pathname === '/perfil/completar' || pathname.startsWith('/perfil/completar/');
+
 const dashboardUrlForRole = (rol: string, requestUrl: string) => {
   if (rol === 'ADMINISTRADOR') return new URL('/admin/dashboard', requestUrl);
   if (rol === 'OPERADOR') return new URL('/operador/dashboard', requestUrl);
@@ -93,6 +96,52 @@ export async function proxy(request: NextRequest) {
         // Si hay error obteniendo el perfil, permitir acceso a auth
         console.error('Error obteniendo perfil en middleware:', error);
         return supabaseResponse;
+      }
+    }
+
+    if (isCompletarPerfilPath(pathname)) {
+      if (!isAuthenticated || !user) {
+        const url = new URL('/auth/iniciar-sesion', request.url);
+        url.searchParams.set('callbackUrl', pathname);
+        url.searchParams.set('error', 'unauthorized');
+        return NextResponse.redirect(url);
+      }
+
+      try {
+        const { data: perfil, error: perfilError } = await supabase
+          .from('usuarios')
+          .select('estado, rol, nombre, cedula, ruc')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (perfilError) {
+          console.error('Error obteniendo perfil en middleware:', perfilError);
+          const url = new URL('/auth/iniciar-sesion', request.url);
+          return NextResponse.redirect(url);
+        }
+
+        if (!perfil) {
+          return supabaseResponse;
+        }
+
+        const estadoUsuario = perfil.estado || 'activo';
+
+        if (estadoUsuario === 'bloqueado' || estadoUsuario === 'desactivado') {
+          await supabase.auth.signOut();
+          const url = new URL('/auth/iniciar-sesion', request.url);
+          url.searchParams.set('error', estadoUsuario === 'bloqueado' ? 'blocked' : 'deactivated');
+          return NextResponse.redirect(url);
+        }
+
+        if (isProfileComplete(perfil)) {
+          return NextResponse.redirect(dashboardUrlForRole(perfil.rol ?? '', request.url));
+        }
+
+        return supabaseResponse;
+      } catch (error) {
+        console.error('Error en middleware al verificar perfil completo:', error);
+        const url = new URL('/auth/iniciar-sesion', request.url);
+        return NextResponse.redirect(url);
       }
     }
 
