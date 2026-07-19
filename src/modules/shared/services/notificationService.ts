@@ -3,6 +3,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { sendEmail, type EmailOptions } from '@/lib/email';
 import { buildNotificationEmailTemplate } from '@/lib/email/templates/notificationEmail';
+import { safeInternalPath } from '@/lib/safe-internal-path';
 import { isUuid } from '@/lib/validation-core';
 
 type NotificationType = 'info' | 'success' | 'warning' | 'error';
@@ -69,6 +70,7 @@ export class NotificationService {
 
   async createNotification(input: CreateNotificationInput): Promise<NotificacionRecord> {
     const categoria = input.categoria ?? DEFAULT_CATEGORY;
+    const urlAccion = safeInternalPath(input.urlAccion);
 
     const { data, error } = await this.supabase
       .from('notificaciones')
@@ -79,7 +81,7 @@ export class NotificationService {
         categoria,
         destinatario_id: input.destinatarioId ?? null,
         rol_destinatario: input.rolDestinatario ?? null,
-        url_accion: input.urlAccion ?? null,
+        url_accion: urlAccion,
         metadatos: input.metadatos ?? {},
         expira_en: input.expiraEn ?? null,
         fecha_creacion: new Date().toISOString(),

@@ -12,6 +12,7 @@ import {
   AccionesNotificaciones,
   EmptyStateNotificaciones
 } from '@/modules/shared/components/notificaciones';
+import { safeInternalPath } from '@/lib/safe-internal-path';
 import { useRouter } from 'next/navigation';
 
 export default function NotificacionesPage() {
@@ -56,8 +57,9 @@ export default function NotificacionesPage() {
     }
 
     // Redireccionar si tiene URL de acción
-    if (notificacion.url_accion) {
-      router.push(notificacion.url_accion);
+    const urlAccion = safeInternalPath(notificacion.url_accion);
+    if (urlAccion) {
+      router.push(urlAccion);
     }
   };
 

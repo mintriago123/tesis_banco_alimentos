@@ -7,6 +7,7 @@ import { useSupabase } from '@/app/components/SupabaseProvider';
 import { useNotificaciones } from '@/modules/shared';
 import { useRouter } from 'next/navigation';
 import { formatShortDate } from '@/lib/dateUtils';
+import { safeInternalPath } from '@/lib/safe-internal-path';
 
 interface NotificacionesDropdownProps {
   readonly isCollapsed?: boolean;
@@ -56,8 +57,9 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
     }
 
     // Redireccionar si tiene URL de acción
-    if (notificacion.url_accion) {
-      let urlFinal = notificacion.url_accion;
+    const urlAccion = safeInternalPath(notificacion.url_accion);
+    if (urlAccion) {
+      let urlFinal = urlAccion;
       
       // Correcciones de rutas para el rol ADMIN
       if (roleColor === 'red') { // Admin
@@ -148,7 +150,10 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
         }
       }
       
-      router.push(urlFinal);
+      const safeUrlFinal = safeInternalPath(urlFinal);
+      if (safeUrlFinal) {
+        router.push(safeUrlFinal);
+      }
     }
 
     setIsOpen(false);
