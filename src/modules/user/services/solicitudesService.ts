@@ -9,12 +9,21 @@ import type {
   SolicitudEditData,
   FiltroEstadoSolicitud,
 } from '../types';
+import {
+  parseEnumValue,
+  parseFiniteNumberValue,
+  parseOptionalTextValue,
+  parsePositiveIntegerValue,
+  parseUuidValue,
+} from '@/lib/validation-core';
 
 type SolicitudWithUnidad = Solicitud & {
   unidades?: {
     simbolo?: string | null;
   } | null;
 };
+
+const ESTADOS_SOLICITUD_FILTRO = ['pendiente', 'aprobada', 'rechazada', 'entregada'] as const;
 
 export class SolicitudesService {
   constructor(private supabase: SupabaseClient) {}
@@ -27,6 +36,11 @@ export class SolicitudesService {
     filtroEstado?: FiltroEstadoSolicitud
   ): Promise<{ data: SolicitudWithUnidad[] | null; error: unknown }> {
     try {
+      const parsedUsuarioId = parseUuidValue(usuarioId, { name: 'usuarioId' });
+      if (!parsedUsuarioId.success) {
+        return { data: null, error: parsedUsuarioId.error };
+      }
+
       let query = this.supabase
         .from('solicitudes')
         .select(`
@@ -35,12 +49,17 @@ export class SolicitudesService {
             simbolo
           )
         `)
-        .eq('usuario_id', usuarioId)
+        .eq('usuario_id', parsedUsuarioId.value)
         .order('created_at', { ascending: false });
 
       // Aplicar filtro de estado si no es TODOS
       if (filtroEstado && filtroEstado !== 'TODOS') {
-        query = query.eq('estado', filtroEstado);
+        const estado = parseEnumValue(filtroEstado, ESTADOS_SOLICITUD_FILTRO, { name: 'filtroEstado' });
+        if (!estado.success) {
+          return { data: null, error: estado.error };
+        }
+
+        query = query.eq('estado', estado.value);
       }
 
       const { data, error } = await query;
@@ -73,17 +92,49 @@ export class SolicitudesService {
     solicitudData: SolicitudFormData
   ): Promise<{ data: Solicitud | null; error: unknown }> {
     try {
+      const parsedUsuarioId = parseUuidValue(usuarioId, { name: 'usuarioId' });
+      if (!parsedUsuarioId.success) {
+        return { data: null, error: parsedUsuarioId.error };
+      }
+
+      const cantidad = parseFiniteNumberValue(solicitudData.cantidad, {
+        name: 'cantidad',
+        min: 0,
+      });
+      if (!cantidad.success || cantidad.value <= 0) {
+        return {
+          data: null,
+          error: cantidad.success ? 'cantidad debe ser mayor a 0.' : cantidad.error,
+        };
+      }
+
+      const unidadId = parsePositiveIntegerValue(solicitudData.unidad_id, {
+        name: 'unidad_id',
+        min: 1,
+      });
+      if (!unidadId.success) {
+        return { data: null, error: unidadId.error };
+      }
+
+      const comentarios = parseOptionalTextValue(solicitudData.comentarios, {
+        name: 'comentarios',
+        maxLength: 500,
+      });
+      if (!comentarios.success) {
+        return { data: null, error: comentarios.error };
+      }
+
       console.log('[SolicitudesService] Intentando crear solicitud:', {
         usuarioId,
         solicitudData
       });
 
       const insertData = {
-        usuario_id: usuarioId,
+        usuario_id: parsedUsuarioId.value,
         tipo_alimento: solicitudData.tipo_alimento,
-        cantidad: solicitudData.cantidad,
-        unidad_id: solicitudData.unidad_id,
-        comentarios: solicitudData.comentarios || null,
+        cantidad: cantidad.value,
+        unidad_id: unidadId.value,
+        comentarios: comentarios.value,
         latitud: solicitudData.latitud || null,
         longitud: solicitudData.longitud || null,
       };
@@ -117,10 +168,23 @@ export class SolicitudesService {
     updateData: SolicitudEditData
   ): Promise<{ data: Solicitud | null; error: unknown }> {
     try {
+      const parsedSolicitudId = parseUuidValue(solicitudId, { name: 'solicitudId' });
+      if (!parsedSolicitudId.success) {
+        return { data: null, error: parsedSolicitudId.error };
+      }
+
+      const comentarios = parseOptionalTextValue(updateData.comentarios, {
+        name: 'comentarios',
+        maxLength: 500,
+      });
+      if (!comentarios.success) {
+        return { data: null, error: comentarios.error };
+      }
+
       const { data, error } = await this.supabase
         .from('solicitudes')
-        .update(updateData)
-        .eq('id', solicitudId)
+        .update({ comentarios: comentarios.value })
+        .eq('id', parsedSolicitudId.value)
         .select()
         .single();
 
@@ -135,10 +199,15 @@ export class SolicitudesService {
    */
   async deleteSolicitud(id: string): Promise<{ error: unknown }> {
     try {
+      const parsedSolicitudId = parseUuidValue(id, { name: 'id' });
+      if (!parsedSolicitudId.success) {
+        return { error: parsedSolicitudId.error };
+      }
+
       const { error } = await this.supabase
         .from('solicitudes')
         .delete()
-        .eq('id', id);
+        .eq('id', parsedSolicitudId.value);
 
       return { error };
     } catch (error) {
@@ -153,10 +222,15 @@ export class SolicitudesService {
     solicitudId: string
   ): Promise<{ data: Solicitud | null; error: unknown }> {
     try {
+      const parsedSolicitudId = parseUuidValue(solicitudId, { name: 'solicitudId' });
+      if (!parsedSolicitudId.success) {
+        return { data: null, error: parsedSolicitudId.error };
+      }
+
       const { data, error } = await this.supabase
         .from('solicitudes')
         .select('*')
-        .eq('id', solicitudId)
+        .eq('id', parsedSolicitudId.value)
         .single();
 
       return { data, error };

@@ -5,6 +5,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { InventarioItem, ServiceResult } from '../types';
 import { createInventoryDataService } from './inventoryDataService';
+import {
+  isUuid,
+  parseFiniteNumberValue,
+  parseUuidValue,
+} from '@/lib/validation-core';
 
 const logger = {
   info: (message: string, details?: unknown) => console.info(`[InventoryActionService] ${message}`, details),
@@ -19,14 +24,23 @@ export const createInventoryActionService = (supabaseClient: SupabaseClient) => 
     item: InventarioItem,
     nuevaCantidad: number
   ): Promise<ServiceResult<{ message: string }>> => {
-    if (nuevaCantidad < 0) {
+    const idInventario = parseUuidValue(item.id_inventario, { name: 'item.id_inventario' });
+    if (!idInventario.success) {
+      return { success: false, error: idInventario.error };
+    }
+
+    const cantidad = parseFiniteNumberValue(nuevaCantidad, {
+      name: 'nuevaCantidad',
+      min: 0,
+    });
+    if (!cantidad.success) {
       return {
         success: false,
-        error: 'La cantidad no puede ser negativa'
+        error: cantidad.error
       };
     }
 
-    const diferencia = nuevaCantidad - item.cantidad_disponible;
+    const diferencia = cantidad.value - item.cantidad_disponible;
     if (diferencia === 0) {
       return {
         success: true,
@@ -41,7 +55,7 @@ export const createInventoryActionService = (supabaseClient: SupabaseClient) => 
           cantidad_disponible: nuevaCantidad,
           fecha_actualizacion: new Date().toISOString()
         })
-        .eq('id_inventario', item.id_inventario);
+        .eq('id_inventario', idInventario.value);
 
       if (error) {
         logger.error('Error actualizando inventario', error);
@@ -52,15 +66,15 @@ export const createInventoryActionService = (supabaseClient: SupabaseClient) => 
         };
       }
 
-      const movimientoResult = await registrarMovimientoAjuste(item, diferencia, nuevaCantidad);
+      const movimientoResult = await registrarMovimientoAjuste(item, diferencia, cantidad.value);
       if (!movimientoResult.success) {
         const { error: rollbackError } = await supabaseClient
           .from('inventario')
           .update({
-            cantidad_disponible: item.cantidad_disponible,
-            fecha_actualizacion: item.fecha_actualizacion ?? null
-          })
-          .eq('id_inventario', item.id_inventario);
+          cantidad_disponible: item.cantidad_disponible,
+          fecha_actualizacion: item.fecha_actualizacion ?? null
+        })
+          .eq('id_inventario', idInventario.value);
 
         if (rollbackError) {
           logger.error('Error revirtiendo inventario tras falla en movimiento', rollbackError);
@@ -111,12 +125,27 @@ export const createInventoryActionService = (supabaseClient: SupabaseClient) => 
         };
       }
 
+      const usuarioId = parseUuidValue(auth.user.id, { name: 'usuarioId' });
+      if (!usuarioId.success) {
+        return {
+          success: false,
+          error: usuarioId.error
+        };
+      }
+
+      if (!isUuid(item.id_producto)) {
+        return {
+          success: false,
+          error: 'item.id_producto debe ser un UUID valido'
+        };
+      }
+
       const { data: cabecera, error: cabeceraError } = await supabaseClient
         .from('movimiento_inventario_cabecera')
         .insert({
           fecha_movimiento: new Date().toISOString(),
-          id_donante: auth.user.id,
-          id_solicitante: auth.user.id,
+          id_donante: usuarioId.value,
+          id_solicitante: usuarioId.value,
           estado_movimiento: 'completado',
           observaciones: `Ajuste manual de inventario - ${item.producto.nombre_producto} (${diferencia > 0 ? '+' : ''}${diferencia} unidades, nuevo stock: ${cantidadPosterior})`
         })

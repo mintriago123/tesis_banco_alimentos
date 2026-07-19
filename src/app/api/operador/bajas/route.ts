@@ -5,15 +5,20 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import {
+  parseEnumParam,
+  parseIsoDateParam,
+  parseOptionalText,
+  parsePaginationParams,
+  parsePositiveNumber,
+  parseUuid,
+  readJsonObject,
+} from '@/lib/api-validation';
 
 export const dynamic = 'force-dynamic';
 
-interface BajaProductoRequest {
-  id_inventario: string;
-  cantidad: number;
-  motivo: 'vencido' | 'dañado' | 'contaminado' | 'rechazado' | 'otro';
-  observaciones?: string;
-}
+const MOTIVOS_BAJA = ['vencido', 'dañado', 'contaminado', 'rechazado', 'otro'] as const;
+const MOTIVOS_BAJA_FILTRO = ['todos', ...MOTIVOS_BAJA] as const;
 
 /**
  * POST /api/operador/bajas
@@ -61,41 +66,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Obtener datos del request
-    const body: BajaProductoRequest = await request.json();
-    const { id_inventario, cantidad, motivo, observaciones } = body;
+    // Obtener y validar datos del request
+    const jsonBody = await readJsonObject(request);
+    if (!jsonBody.success) return jsonBody.response;
 
-    // Validaciones
-    if (!id_inventario || !cantidad || !motivo) {
-      return NextResponse.json(
-        { error: 'Datos incompletos. Se requiere id_inventario, cantidad y motivo' },
-        { status: 400 }
-      );
-    }
+    const idInventario = parseUuid(jsonBody.value.id_inventario, { name: 'id_inventario' });
+    if (!idInventario.success) return idInventario.response;
 
-    if (cantidad <= 0) {
-      return NextResponse.json(
-        { error: 'La cantidad debe ser mayor a 0' },
-        { status: 400 }
-      );
-    }
+    const cantidad = parsePositiveNumber(jsonBody.value.cantidad, { name: 'cantidad' });
+    if (!cantidad.success) return cantidad.response;
 
-    const motivosValidos = ['vencido', 'dañado', 'contaminado', 'rechazado', 'otro'];
-    if (!motivosValidos.includes(motivo)) {
-      return NextResponse.json(
-        { error: `Motivo inválido. Opciones: ${motivosValidos.join(', ')}` },
-        { status: 400 }
-      );
-    }
+    const motivo = parseEnumParam(jsonBody.value.motivo, MOTIVOS_BAJA, { name: 'motivo' });
+    if (!motivo.success) return motivo.response;
+
+    const observaciones = parseOptionalText(jsonBody.value.observaciones, {
+      name: 'observaciones',
+      maxLength: 500,
+    });
+    if (!observaciones.success) return observaciones.response;
 
     // Llamar a la función de base de datos
     const { data, error } = await supabase
       .rpc('dar_baja_producto', {
-        p_id_inventario: id_inventario,
-        p_cantidad: cantidad,
-        p_motivo: motivo,
+        p_id_inventario: idInventario.value,
+        p_cantidad: cantidad.value,
+        p_motivo: motivo.value,
         p_usuario_id: user.id,
-        p_observaciones: observaciones || null
+        p_observaciones: observaciones.value
       });
 
     if (error) {
@@ -168,11 +165,32 @@ export async function GET(request: NextRequest) {
 
     // Obtener parámetros de búsqueda
     const searchParams = request.nextUrl.searchParams;
-    const motivo = searchParams.get('motivo');
-    const fecha_inicio = searchParams.get('fecha_inicio');
-    const fecha_fin = searchParams.get('fecha_fin');
-    const limit = parseInt(searchParams.get('limit') || '100');
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const motivo = parseEnumParam(searchParams.get('motivo'), MOTIVOS_BAJA_FILTRO, {
+      name: 'motivo',
+      fallback: 'todos',
+    });
+    if (!motivo.success) return motivo.response;
+
+    const fechaInicio = parseIsoDateParam(searchParams.get('fecha_inicio'), { name: 'fecha_inicio' });
+    if (!fechaInicio.success) return fechaInicio.response;
+
+    const fechaFin = parseIsoDateParam(searchParams.get('fecha_fin'), { name: 'fecha_fin' });
+    if (!fechaFin.success) return fechaFin.response;
+
+    if (fechaInicio.value && fechaFin.value && new Date(fechaInicio.value) > new Date(fechaFin.value)) {
+      return NextResponse.json(
+        { error: 'fecha_inicio no puede ser posterior a fecha_fin.' },
+        { status: 400 }
+      );
+    }
+
+    const pagination = parsePaginationParams(searchParams, {
+      defaultLimit: 100,
+      maxLimit: 200,
+    });
+    if (!pagination.success) return pagination.response;
+
+    const { limit, offset } = pagination.value;
 
     // Construir query
     let query = supabase
@@ -182,16 +200,16 @@ export async function GET(request: NextRequest) {
       .range(offset, offset + limit - 1);
 
     // Aplicar filtros
-    if (motivo && motivo !== 'todos') {
-      query = query.eq('motivo_baja', motivo);
+    if (motivo.value !== 'todos') {
+      query = query.eq('motivo_baja', motivo.value);
     }
 
-    if (fecha_inicio) {
-      query = query.gte('fecha_baja', fecha_inicio);
+    if (fechaInicio.value) {
+      query = query.gte('fecha_baja', fechaInicio.value);
     }
 
-    if (fecha_fin) {
-      query = query.lte('fecha_baja', fecha_fin);
+    if (fechaFin.value) {
+      query = query.lte('fecha_baja', fechaFin.value);
     }
 
     const { data, error, count } = await query;

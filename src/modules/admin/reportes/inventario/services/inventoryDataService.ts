@@ -9,6 +9,7 @@ import type {
   ServiceResult,
   SupabaseInventarioRow,
 } from '../types';
+import { isUuid } from '@/lib/validation-core';
 
 const logger = {
   info: (message: string, details?: unknown) => console.info(`[InventoryDataService] ${message}`, details),
@@ -151,7 +152,7 @@ const fetchDonorDepositsByDonorId = async (
   const donorIds = Array.from(new Set(
     inventarioRows
       .map(row => normalizeRelation(row.productos)?.id_usuario)
-      .filter((id): id is string => Boolean(id))
+      .filter((id): id is string => Boolean(id) && isUuid(id))
   ));
 
   if (donorIds.length === 0) {

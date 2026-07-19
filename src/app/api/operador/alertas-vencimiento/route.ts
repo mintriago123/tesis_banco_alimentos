@@ -4,10 +4,16 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import {
+  parseBooleanParam,
+  parseEnumParam,
+  parsePositiveIntParam,
+} from '@/lib/api-validation';
 
 export const dynamic = 'force-dynamic';
 
 type PrioridadAlerta = 'vencido' | 'alta' | 'media' | 'baja';
+const PRIORIDADES_ALERTA_FILTRO = ['todos', 'vencido', 'alta', 'media', 'baja'] as const;
 
 type AlertaVencimientoRpcRow = {
   id_inventario: string;
@@ -56,14 +62,30 @@ export async function GET(request: NextRequest) {
 
     // Obtener parámetros
     const searchParams = request.nextUrl.searchParams;
-    const dias_umbral = parseInt(searchParams.get('dias') || '7');
-    const solo_vencidos = searchParams.get('solo_vencidos') === 'true';
-    const prioridad = searchParams.get('prioridad'); // alta, media, baja, vencido
+    const diasUmbral = parsePositiveIntParam(searchParams.get('dias'), {
+      name: 'dias',
+      fallback: 7,
+      min: 1,
+      max: 365,
+    });
+    if (!diasUmbral.success) return diasUmbral.response;
+
+    const soloVencidos = parseBooleanParam(searchParams.get('solo_vencidos'), {
+      name: 'solo_vencidos',
+      fallback: false,
+    });
+    if (!soloVencidos.success) return soloVencidos.response;
+
+    const prioridad = parseEnumParam(searchParams.get('prioridad'), PRIORIDADES_ALERTA_FILTRO, {
+      name: 'prioridad',
+      fallback: 'todos',
+    });
+    if (!prioridad.success) return prioridad.response;
 
     // Llamar función de base de datos
     const { data, error } = await supabase
       .rpc('obtener_productos_proximos_vencer', {
-        p_dias_umbral: dias_umbral
+        p_dias_umbral: diasUmbral.value
       });
 
     if (error) {
@@ -77,12 +99,12 @@ export async function GET(request: NextRequest) {
     let alertas = (data || []) as AlertaVencimientoRpcRow[];
 
     // Aplicar filtros adicionales
-    if (solo_vencidos) {
+    if (soloVencidos.value) {
       alertas = alertas.filter((alerta) => alerta.prioridad === 'vencido');
     }
 
-    if (prioridad && prioridad !== 'todos') {
-      alertas = alertas.filter((alerta) => alerta.prioridad === prioridad);
+    if (prioridad.value !== 'todos') {
+      alertas = alertas.filter((alerta) => alerta.prioridad === prioridad.value);
     }
 
     // Clasificar alertas por prioridad
@@ -117,8 +139,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       configuracion: {
-        dias_umbral,
-        solo_vencidos
+        dias_umbral: diasUmbral.value,
+        solo_vencidos: soloVencidos.value
       },
       estadisticas,
       alertas: alertas.map((alerta) => ({

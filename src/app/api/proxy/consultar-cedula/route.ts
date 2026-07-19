@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validarCedulaEcuatoriana } from '@/lib/validaciones';
 
 /**
  * Proxy para consultas a DINARAP
@@ -16,6 +17,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const identificacionLimpia = identificacion.trim();
+
+    if (!/^\d{10}$/.test(identificacionLimpia) || !validarCedulaEcuatoriana(identificacionLimpia)) {
+      return NextResponse.json(
+        { error: 'Formato de identificación inválido' },
+        { status: 400 }
+      );
+    }
+
     // Obtener la URL del servicio externo desde variables de entorno del servidor
     const servicioUrl = process.env.SERVICIO_CONSULTAS_DINARAP || process.env.NEXT_PUBLIC_SERVICIO_CONSULTAS_DINARAP;
     
@@ -27,10 +37,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const url = `${servicioUrl}?identificacion=${identificacion}`;
+    const url = new URL(servicioUrl);
+    url.searchParams.set('identificacion', identificacionLimpia);
     
     // Realizar la petición HTTP desde el servidor (permitido)
-    const response = await fetch(url, {
+    const response = await fetch(url.toString(), {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });

@@ -7,6 +7,12 @@ import type {
   SolicitudAltaAlimento,
   SolicitudAltaUnidad
 } from './types';
+import {
+  parseOptionalTextValue,
+  parsePositiveIntegerArrayValue,
+  parsePositiveIntegerValue,
+  parseUuidValue,
+} from '@/lib/validation-core';
 
 type SolicitudAltaRow = Omit<SolicitudAltaAlimento, 'unidades' | 'solicitante'> & {
   unidades?: SolicitudAltaUnidad[] | null;
@@ -40,6 +46,9 @@ const solicitudSelect = `
     unidad:unidades(id, nombre, simbolo)
   )
 `;
+
+const MAX_UNIDADES_SOLICITUD = 50;
+const MAX_COMENTARIO_LENGTH = 500;
 
 export const createCatalogoSolicitudesService = (supabase: SupabaseClient) => {
   const listarSolicitudes = async (): Promise<CatalogoSolicitudResult<SolicitudAltaAlimento[]>> => {
@@ -83,27 +92,52 @@ export const createCatalogoSolicitudesService = (supabase: SupabaseClient) => {
     try {
       const nombre = input.nombre.trim();
       const categoria = input.categoria.trim();
-      const unidadIds = Array.from(new Set(input.unidadIds));
+      const solicitanteId = parseUuidValue(input.solicitanteId, { name: 'solicitanteId' });
+      if (!solicitanteId.success) {
+        return { success: false, error: solicitanteId.error };
+      }
+
+      const unidadIdsResult = parsePositiveIntegerArrayValue(input.unidadIds, {
+        name: 'unidadIds',
+        min: 1,
+        maxItems: MAX_UNIDADES_SOLICITUD,
+      });
+      if (!unidadIdsResult.success) {
+        return { success: false, error: unidadIdsResult.error };
+      }
+
+      const unidadPrincipal = input.unidadPrincipalId === undefined
+        ? { success: true as const, value: undefined }
+        : parsePositiveIntegerValue(input.unidadPrincipalId, { name: 'unidadPrincipalId', min: 1 });
+      if (!unidadPrincipal.success) {
+        return { success: false, error: unidadPrincipal.error };
+      }
+
+      const comentarioDonante = parseOptionalTextValue(input.comentarioDonante, {
+        name: 'comentarioDonante',
+        maxLength: MAX_COMENTARIO_LENGTH,
+      });
+      if (!comentarioDonante.success) {
+        return { success: false, error: comentarioDonante.error };
+      }
+
+      const unidadIds = unidadIdsResult.value;
 
       if (!nombre || !categoria) {
         return { success: false, error: 'Nombre y categoría son obligatorios' };
       }
 
-      if (unidadIds.length === 0) {
-        return { success: false, error: 'Selecciona al menos una unidad de medida' };
-      }
-
-      if (input.unidadPrincipalId && !unidadIds.includes(input.unidadPrincipalId)) {
+      if (unidadPrincipal.value !== undefined && !unidadIds.includes(unidadPrincipal.value)) {
         return { success: false, error: 'La unidad principal debe estar seleccionada' };
       }
 
       const { data, error } = await supabase
         .from('solicitudes_alta_alimentos')
         .insert({
-          solicitante_id: input.solicitanteId,
+          solicitante_id: solicitanteId.value,
           nombre,
           categoria,
-          comentario_donante: input.comentarioDonante?.trim() || null
+          comentario_donante: comentarioDonante.value
         })
         .select('id')
         .single();
@@ -119,7 +153,7 @@ export const createCatalogoSolicitudesService = (supabase: SupabaseClient) => {
       const unidadesPayload = unidadIds.map(unidadId => ({
         solicitud_id: data.id,
         unidad_id: unidadId,
-        es_unidad_principal: unidadId === input.unidadPrincipalId
+        es_unidad_principal: unidadId === unidadPrincipal.value
       }));
 
       const { error: unidadesError } = await supabase
@@ -146,14 +180,46 @@ export const createCatalogoSolicitudesService = (supabase: SupabaseClient) => {
 
   const aprobarSolicitud = async (input: RevisarSolicitudAltaInput): Promise<CatalogoSolicitudResult<number>> => {
     try {
-      const unidadIds = Array.from(new Set(input.unidadIds));
+      const solicitudId = parseUuidValue(input.solicitudId, { name: 'solicitudId' });
+      if (!solicitudId.success) {
+        return { success: false, error: solicitudId.error };
+      }
+
+      const unidadIdsResult = parsePositiveIntegerArrayValue(input.unidadIds, {
+        name: 'unidadIds',
+        min: 1,
+        maxItems: MAX_UNIDADES_SOLICITUD,
+      });
+      if (!unidadIdsResult.success) {
+        return { success: false, error: unidadIdsResult.error };
+      }
+
+      const unidadPrincipal = input.unidadPrincipalId === undefined
+        ? { success: true as const, value: undefined }
+        : parsePositiveIntegerValue(input.unidadPrincipalId, { name: 'unidadPrincipalId', min: 1 });
+      if (!unidadPrincipal.success) {
+        return { success: false, error: unidadPrincipal.error };
+      }
+
+      const nombre = input.nombre.trim();
+      const categoria = input.categoria.trim();
+
+      if (!nombre || !categoria) {
+        return { success: false, error: 'Nombre y categoría son obligatorios' };
+      }
+
+      const unidadIds = unidadIdsResult.value;
+
+      if (unidadPrincipal.value !== undefined && !unidadIds.includes(unidadPrincipal.value)) {
+        return { success: false, error: 'La unidad principal debe estar seleccionada' };
+      }
 
       const { data, error } = await supabase.rpc('aprobar_solicitud_alta_alimento', {
-        p_solicitud_id: input.solicitudId,
-        p_nombre: input.nombre.trim(),
-        p_categoria: input.categoria.trim(),
+        p_solicitud_id: solicitudId.value,
+        p_nombre: nombre,
+        p_categoria: categoria,
         p_unidad_ids: unidadIds,
-        p_unidad_principal_id: input.unidadPrincipalId ?? null
+        p_unidad_principal_id: unidadPrincipal.value ?? null
       });
 
       if (error) {
@@ -164,7 +230,17 @@ export const createCatalogoSolicitudesService = (supabase: SupabaseClient) => {
         };
       }
 
-      return { success: true, data: Number(data) };
+      const alimentoId = Number(data);
+
+      if (!Number.isSafeInteger(alimentoId) || alimentoId <= 0) {
+        return {
+          success: false,
+          error: 'La solicitud fue aprobada, pero la respuesta del alimento creado no es válida',
+          errorDetails: data
+        };
+      }
+
+      return { success: true, data: alimentoId };
     } catch (err) {
       return {
         success: false,
@@ -176,7 +252,25 @@ export const createCatalogoSolicitudesService = (supabase: SupabaseClient) => {
 
   const rechazarSolicitud = async (input: RechazarSolicitudAltaInput): Promise<CatalogoSolicitudResult> => {
     try {
-      const comentarioAdmin = input.comentarioAdmin.trim();
+      const solicitudId = parseUuidValue(input.solicitudId, { name: 'solicitudId' });
+      if (!solicitudId.success) {
+        return { success: false, error: solicitudId.error };
+      }
+
+      const adminId = parseUuidValue(input.adminId, { name: 'adminId' });
+      if (!adminId.success) {
+        return { success: false, error: adminId.error };
+      }
+
+      const comentarioAdminResult = parseOptionalTextValue(input.comentarioAdmin, {
+        name: 'comentarioAdmin',
+        maxLength: MAX_COMENTARIO_LENGTH,
+      });
+      if (!comentarioAdminResult.success) {
+        return { success: false, error: comentarioAdminResult.error };
+      }
+
+      const comentarioAdmin = comentarioAdminResult.value;
 
       if (!comentarioAdmin) {
         return {
@@ -190,10 +284,10 @@ export const createCatalogoSolicitudesService = (supabase: SupabaseClient) => {
         .update({
           estado: 'rechazada',
           comentario_admin: comentarioAdmin,
-          revisado_por: input.adminId,
+          revisado_por: adminId.value,
           fecha_revision: new Date().toISOString()
         })
-        .eq('id', input.solicitudId)
+        .eq('id', solicitudId.value)
         .eq('estado', 'pendiente');
 
       if (error) {

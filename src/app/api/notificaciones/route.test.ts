@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { POST } from './route';
 import { NotificationDispatchError } from '@/modules/shared/services/notificationEventDispatcher';
 
+const REQUEST_ID = '11111111-1111-4111-8111-111111111111';
+
 const mocks = vi.hoisted(() => ({
   createServerSupabaseClient: vi.fn(),
   createAdminSupabaseClient: vi.fn(),
@@ -119,7 +121,7 @@ describe('/api/notificaciones', () => {
 
     const response = await POST(jsonRequest({
       event: 'catalog_food_request_created',
-      entityId: 'request-1',
+      entityId: REQUEST_ID,
     }));
 
     expect(response.status).toBe(401);
@@ -132,7 +134,7 @@ describe('/api/notificaciones', () => {
 
     const response = await POST(jsonRequest({
       event: 'catalog_food_request_created',
-      entityId: 'request-1',
+      entityId: REQUEST_ID,
     }));
 
     expect(response.status).toBe(403);
@@ -145,7 +147,7 @@ describe('/api/notificaciones', () => {
 
     const response = await POST(jsonRequest({
       event: 'catalog_food_request_created',
-      entityId: 'request-1',
+      entityId: REQUEST_ID,
       titulo: 'Titulo elegido por cliente',
       destinatarioId: 'otro-usuario',
       email: { html: '<p>HTML arbitrario</p>' },
@@ -164,7 +166,7 @@ describe('/api/notificaciones', () => {
 
     const response = await POST(jsonRequest({
       event: 'catalog_food_request_reviewed',
-      entityId: 'request-1',
+      entityId: REQUEST_ID,
     }));
 
     expect(response.status).toBe(200);
@@ -177,7 +179,7 @@ describe('/api/notificaciones', () => {
       }),
       {
         event: 'catalog_food_request_reviewed',
-        entityId: 'request-1',
+        entityId: REQUEST_ID,
       }
     );
     expect(mocks.createNotification).toHaveBeenCalledWith({

@@ -7,6 +7,11 @@ import {
   updateSolicitudById,
 } from './solicitudStatePersistence';
 import type { SolicitudActionResult, SolicitudUseCaseDeps } from './types';
+import {
+  parseFiniteNumberValue,
+  parseOptionalTextValue,
+  parseUuidValue,
+} from '@/lib/validation-core';
 
 export interface ApproveSolicitudParams {
   solicitud: Solicitud;
@@ -27,14 +32,77 @@ export const approveSolicitud = async (
     depositoId,
     cantidadAprobada,
   } = params;
+  const solicitudId = parseUuidValue(solicitud.id, { name: 'solicitud.id' });
+  if (!solicitudId.success) {
+    return { success: false, error: solicitudId.error };
+  }
+
+  const usuarioId = parseUuidValue(solicitud.usuario_id, { name: 'solicitud.usuario_id' });
+  if (!usuarioId.success) {
+    return { success: false, error: usuarioId.error };
+  }
+
+  let depositoIdValidado: string | undefined;
+  if (depositoId) {
+    const parsedDepositoId = parseUuidValue(depositoId, { name: 'depositoId' });
+    if (!parsedDepositoId.success) {
+      return { success: false, error: parsedDepositoId.error };
+    }
+    depositoIdValidado = parsedDepositoId.value;
+  }
+
+  let operadorIdValidado: string | undefined;
+  if (operadorId) {
+    const parsedOperadorId = parseUuidValue(operadorId, { name: 'operadorId' });
+    if (!parsedOperadorId.success) {
+      return { success: false, error: parsedOperadorId.error };
+    }
+    operadorIdValidado = parsedOperadorId.value;
+  }
+
+  const comentario = parseOptionalTextValue(comentarioAdmin, {
+    name: 'comentarioAdmin',
+    maxLength: 500,
+  });
+  if (!comentario.success) {
+    return { success: false, error: comentario.error };
+  }
+
+  const cantidadSolicitud = parseFiniteNumberValue(solicitud.cantidad, {
+    name: 'solicitud.cantidad',
+    min: 0,
+  });
+  if (!cantidadSolicitud.success || cantidadSolicitud.value <= 0) {
+    return {
+      success: false,
+      error: cantidadSolicitud.success ? 'solicitud.cantidad debe ser mayor a 0.' : cantidadSolicitud.error,
+    };
+  }
+
+  if (cantidadAprobada !== undefined) {
+    const cantidadAprobadaResult = parseFiniteNumberValue(cantidadAprobada, {
+      name: 'cantidadAprobada',
+      min: 0,
+      max: cantidadSolicitud.value,
+    });
+    if (!cantidadAprobadaResult.success || cantidadAprobadaResult.value <= 0) {
+      return {
+        success: false,
+        error: cantidadAprobadaResult.success
+          ? 'cantidadAprobada debe ser mayor a 0.'
+          : cantidadAprobadaResult.error,
+      };
+    }
+  }
+
   const cantidadObjetivo = Math.max(0.01, Math.min(cantidadAprobada ?? solicitud.cantidad, solicitud.cantidad));
   const solicitudConCantidad = {
     ...solicitud,
     cantidad: cantidadObjetivo,
   };
 
-  const validacionStock = depositoId
-    ? await deps.inventoryService.validarStockDisponiblePorDeposito(solicitud, depositoId, cantidadObjetivo)
+  const validacionStock = depositoIdValidado
+    ? await deps.inventoryService.validarStockDisponiblePorDeposito(solicitud, depositoIdValidado, cantidadObjetivo)
     : await deps.inventoryService.validarStockDisponible(solicitudConCantidad);
 
   if (!validacionStock.suficiente) {
@@ -47,8 +115,8 @@ export const approveSolicitud = async (
   }
 
   const previousState = snapshotSolicitudState(solicitud);
-  const codigoComprobante = generarCodigoComprobante('solicitud', solicitud.id);
-  const resultadoInventario = await deps.inventoryService.descontarDelInventario(solicitudConCantidad, depositoId);
+  const codigoComprobante = generarCodigoComprobante('solicitud', solicitudId.value);
+  const resultadoInventario = await deps.inventoryService.descontarDelInventario(solicitudConCantidad, depositoIdValidado);
 
   if (resultadoInventario.error || resultadoInventario.noStock || resultadoInventario.cantidadRestante > 0) {
     if (resultadoInventario.detalleEntregado.length > 0) {
@@ -65,13 +133,13 @@ export const approveSolicitud = async (
   const updateData = {
     estado: 'aprobada',
     fecha_respuesta: new Date().toISOString(),
-    comentario_admin: comentarioAdmin?.trim() ? comentarioAdmin.trim() : null,
-    operador_aprobacion_id: operadorId || null,
+    comentario_admin: comentario.value,
+    operador_aprobacion_id: operadorIdValidado || null,
     fecha_aprobacion: new Date().toISOString(),
     codigo_comprobante: codigoComprobante,
   };
 
-  const { error: updateError } = await updateSolicitudById(deps.supabaseClient, solicitud.id, updateData);
+  const { error: updateError } = await updateSolicitudById(deps.supabaseClient, solicitudId.value, updateData);
 
   if (updateError) {
     await deps.inventoryService.restaurarInventario(resultadoInventario.detalleEntregado);

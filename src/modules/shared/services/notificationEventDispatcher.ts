@@ -27,12 +27,21 @@ import {
   isNotificationEventType,
   SENSITIVE_NOTIFICATION_PAYLOAD_FIELDS,
   type NotificationEventPayload,
+  type NotificationEventType,
 } from './notificationEvents';
+import {
+  parsePositiveIntegerValue,
+  parseUuidValue,
+} from '@/lib/validation-core';
 
 type DispatchStatus = 400 | 403 | 404 | 422 | 500;
 
 type ParseNotificationEventPayloadResult =
   | { success: true; payload: NotificationEventPayload }
+  | { success: false; error: string };
+
+type EntityIdValidationResult =
+  | { success: true; value: string }
   | { success: false; error: string };
 
 type RelatedOne<T> = T | T[] | null | undefined;
@@ -149,14 +158,42 @@ export const parseNotificationEventPayload = (body: unknown): ParseNotificationE
     return { success: false, error: 'entityId es obligatorio.' };
   }
 
+  const entityId = validateEntityIdForEvent(body.event, body.entityId.trim());
+  if (!entityId.success) {
+    return { success: false, error: entityId.error };
+  }
+
   return {
     success: true,
     payload: {
       event: body.event,
-      entityId: body.entityId.trim(),
+      entityId: entityId.value,
     },
   };
 };
+
+function validateEntityIdForEvent(
+  event: NotificationEventType,
+  entityId: string
+): EntityIdValidationResult {
+  if (event === 'donation_status_changed') {
+    const donationId = parsePositiveIntegerValue(entityId, {
+      name: 'entityId',
+      min: 1,
+      max: 2147483647,
+    });
+
+    return donationId.success
+      ? { success: true, value: String(donationId.value) }
+      : { success: false, error: 'entityId de donacion invalido.' };
+  }
+
+  const uuid = parseUuidValue(entityId, { name: 'entityId' });
+
+  return uuid.success
+    ? { success: true, value: uuid.value }
+    : { success: false, error: 'entityId debe ser un UUID valido para este evento.' };
+}
 
 export async function buildNotificationForEvent(
   supabase: SupabaseClient,
@@ -400,16 +437,25 @@ async function buildDonationStatusChangedNotification(
   supabase: SupabaseClient,
   entityId: string
 ): Promise<CreateNotificationInput> {
-  const donationId = Number(entityId);
+  const donationId = parsePositiveIntegerValue(entityId, {
+    name: 'entityId',
+    min: 1,
+    max: 2147483647,
+  });
 
-  if (!Number.isInteger(donationId) || donationId <= 0) {
+  if (!donationId.success) {
     throw new NotificationDispatchError(400, 'entityId de donacion invalido.');
   }
 
-  const donation = await getDonation(supabase, donationId);
+  const donation = await getDonation(supabase, donationId.value);
 
   if (!donation.user_id) {
     throw new NotificationDispatchError(422, 'La donacion no tiene donante asociado.');
+  }
+
+  const donorId = parseUuidValue(donation.user_id, { name: 'user_id' });
+  if (!donorId.success) {
+    throw new NotificationDispatchError(422, 'La donacion tiene un donante invalido.');
   }
 
   const baseUrl = getBaseUrl();
@@ -417,7 +463,7 @@ async function buildDonationStatusChangedNotification(
   const codigoComprobante =
     donation.codigo_comprobante ?? generarCodigoComprobante('donacion', String(donation.id));
   const datosUsuario = {
-    id: donation.user_id,
+    id: donorId.value,
     nombre: donation.nombre_donante,
     email: donation.email,
     telefono: donation.telefono ?? undefined,
@@ -462,7 +508,7 @@ async function buildDonationStatusChangedNotification(
       mensaje: `Estimado/a ${datosUsuario.nombre}, le informamos que su donacion de ${donation.tipo_producto} ha sido cancelada.${motivoTexto}${observacionesTexto} Si tiene alguna duda, no dude en contactarnos.`,
       categoria: 'donacion',
       tipo: 'warning',
-      destinatarioId: donation.user_id,
+      destinatarioId: donorId.value,
       urlAccion: '/donante/nueva-donacion',
       metadatos: {
         event: 'donation_status_changed',
@@ -479,7 +525,7 @@ async function buildDonationStatusChangedNotification(
     baseUrl,
     comprobante.codigoComprobante,
     'donacion',
-    donation.user_id,
+    donorId.value,
     String(donation.id)
   );
   const qrImageBase64 = await generarQRBase64(urlComprobante);
@@ -495,7 +541,7 @@ async function buildDonationStatusChangedNotification(
       mensaje: `Estimado/a ${datosUsuario.nombre}, su donacion de ${cantidad} ${datosPedido.unidad} de ${donation.tipo_producto} ha sido aprobada e incorporada a nuestro inventario. Gracias por su generosidad. Su aporte ayudara a familias que lo necesitan.`,
       categoria: 'donacion',
       tipo: 'success',
-      destinatarioId: donation.user_id,
+      destinatarioId: donorId.value,
       urlAccion: '/donante/donaciones',
       metadatos: {
         event: 'donation_status_changed',
@@ -512,7 +558,7 @@ async function buildDonationStatusChangedNotification(
     mensaje: `Estimado/a ${datosUsuario.nombre}, su donacion de ${cantidad} ${datosPedido.unidad} de ${donation.tipo_producto} ha sido registrada. Nuestro equipo la procesara pronto.`,
     categoria: 'donacion',
     tipo: 'info',
-    destinatarioId: donation.user_id,
+    destinatarioId: donorId.value,
     urlAccion: '/donante/donaciones',
     metadatos: {
       event: 'donation_status_changed',
@@ -528,10 +574,15 @@ async function getCatalogFoodRequest(
   supabase: SupabaseClient,
   entityId: string
 ): Promise<CatalogFoodRequestRow> {
+  const solicitudId = parseUuidValue(entityId, { name: 'entityId' });
+  if (!solicitudId.success) {
+    throw new NotificationDispatchError(400, 'entityId debe ser un UUID valido para este evento.');
+  }
+
   const { data, error } = await supabase
     .from('solicitudes_alta_alimentos')
     .select('id, solicitante_id, nombre, categoria, estado, comentario_admin')
-    .eq('id', entityId)
+    .eq('id', solicitudId.value)
     .maybeSingle();
 
   if (error) {
@@ -553,6 +604,11 @@ async function getFoodRequest(
   supabase: SupabaseClient,
   entityId: string
 ): Promise<FoodRequestRow> {
+  const solicitudId = parseUuidValue(entityId, { name: 'entityId' });
+  if (!solicitudId.success) {
+    throw new NotificationDispatchError(400, 'entityId debe ser un UUID valido para este evento.');
+  }
+
   const { data, error } = await supabase
     .from('solicitudes')
     .select(`
@@ -583,7 +639,7 @@ async function getFoodRequest(
         tipo_persona
       )
     `)
-    .eq('id', entityId)
+    .eq('id', solicitudId.value)
     .maybeSingle();
 
   if (error) {
@@ -601,10 +657,15 @@ async function getLatestPartialDelivery(
   supabase: SupabaseClient,
   solicitudId: string
 ): Promise<PartialDeliveryRow | null> {
+  const parsedSolicitudId = parseUuidValue(solicitudId, { name: 'solicitudId' });
+  if (!parsedSolicitudId.success) {
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('historial_donaciones')
     .select('cantidad_entregada, cantidad_solicitada, porcentaje_entregado, comentario')
-    .eq('solicitud_id', solicitudId)
+    .eq('solicitud_id', parsedSolicitudId.value)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -621,6 +682,15 @@ async function getDonation(
   supabase: SupabaseClient,
   donationId: number
 ): Promise<DonationRow> {
+  const parsedDonationId = parsePositiveIntegerValue(donationId, {
+    name: 'donationId',
+    min: 1,
+    max: 2147483647,
+  });
+  if (!parsedDonationId.success) {
+    throw new NotificationDispatchError(400, 'entityId de donacion invalido.');
+  }
+
   const { data, error } = await supabase
     .from('donaciones')
     .select(`
@@ -641,7 +711,7 @@ async function getDonation(
       motivo_cancelacion,
       observaciones_cancelacion
     `)
-    .eq('id', donationId)
+    .eq('id', parsedDonationId.value)
     .maybeSingle();
 
   if (error) {

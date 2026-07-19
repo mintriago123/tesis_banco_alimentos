@@ -12,6 +12,15 @@ import type {
 import { SYSTEM_MESSAGES } from '../constants';
 import { sendNotification } from '@/modules/shared/services/notificationClient';
 import { generarCodigoComprobante } from '@/lib/comprobante';
+import {
+  escapeLikePattern,
+  isUuid,
+  parseEnumValue,
+  parseFiniteNumberValue,
+  parseOptionalTextValue,
+  parsePositiveIntegerValue,
+  parseUuidValue,
+} from '@/lib/validation-core';
 
 const logger = {
   info: (message: string, details?: unknown) => console.info(`[DonationActionService] ${message}`, details),
@@ -29,6 +38,16 @@ const logger = {
 
 // Cache para prevenir procesamiento simultáneo de la misma donación
 const processingCache = new Map<number, Promise<ServiceResult<{ message: string; warning?: boolean }>>>();
+const MOTIVOS_CANCELACION = [
+  'error_donante',
+  'no_disponible',
+  'calidad_inadecuada',
+  'logistica_imposible',
+  'duplicado',
+  'solicitud_donante',
+  'otro',
+] as const satisfies readonly MotivoCancelacion[];
+const MAX_OBSERVACIONES_CANCELACION = 500;
 
 export const createDonationActionService = (supabaseClient: SupabaseClient) => {
   const isApprovedLikeState = (estado: string | null | undefined): boolean => {
@@ -37,10 +56,20 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
   };
 
   const getCurrentDonationEstado = async (donationId: number): Promise<string | null> => {
+    const parsedDonationId = parsePositiveIntegerValue(donationId, {
+      name: 'donationId',
+      min: 1,
+      max: 2147483647,
+    });
+    if (!parsedDonationId.success) {
+      logger.warn('ID de donación inválido al leer estado actual', { donationId });
+      return null;
+    }
+
     const { data, error } = await supabaseClient
       .from('donaciones')
       .select('estado')
-      .eq('id', donationId)
+      .eq('id', parsedDonationId.value)
       .maybeSingle();
 
     if (error) {
@@ -56,11 +85,47 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
 
   const rollbackDonationFromInventory = async (donation: Donation): Promise<ServiceResult<void>> => {
     try {
+      const donationValidation = validateDonationForMutation(donation);
+      if (!donationValidation.success) {
+        return donationValidation;
+      }
+
+      const donorId = parseUuidValue(donation.user_id, { name: 'donation.user_id' });
+      const unidadId = parsePositiveIntegerValue(donation.unidad_id, {
+        name: 'donation.unidad_id',
+        min: 1,
+      });
+      const cantidad = parseFiniteNumberValue(donation.cantidad, {
+        name: 'donation.cantidad',
+        min: 0,
+      });
+
+      if (!donorId.success || !unidadId.success || !cantidad.success || cantidad.value <= 0) {
+        return {
+          success: false,
+          error: !donorId.success
+            ? donorId.error
+            : !unidadId.success
+              ? unidadId.error
+              : cantidad.success
+                ? 'donation.cantidad debe ser mayor a 0.'
+                : cantidad.error,
+        };
+      }
+
+      const productoBusqueda = donation.tipo_producto.trim();
+      if (!productoBusqueda) {
+        return {
+          success: false,
+          error: 'La donación no tiene un producto válido para revertir inventario',
+        };
+      }
+
       let depositoPreferido: string | null = null;
       const preferredDeposit = await supabaseClient
         .from('donante_depositos')
         .select('id_deposito, es_principal, created_at')
-        .eq('donante_id', donation.user_id)
+        .eq('donante_id', donorId.value)
         .eq('activo', true)
         .order('es_principal', { ascending: false })
         .order('created_at', { ascending: true })
@@ -74,9 +139,9 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
       const { data: productsData, error: productError } = await supabaseClient
         .from('productos_donados')
         .select('id_producto, cantidad')
-        .eq('id_usuario', donation.user_id)
-        .eq('unidad_id', donation.unidad_id)
-        .ilike('nombre_producto', donation.tipo_producto)
+        .eq('id_usuario', donorId.value)
+        .eq('unidad_id', unidadId.value)
+        .ilike('nombre_producto', escapeLikePattern(productoBusqueda))
         .order('id_producto', { ascending: false })
         .limit(20);
 
@@ -93,10 +158,17 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
         return { success: true };
       }
 
-      let cantidadPendiente = donation.cantidad;
+      let cantidadPendiente = cantidad.value;
 
       for (const productData of productsData) {
         if (cantidadPendiente <= 0) break;
+        if (!isUuid(productData.id_producto)) {
+          logger.warn('Producto con id inválido durante rollback de donación', {
+            donationId: donation.id,
+            productId: productData.id_producto,
+          });
+          continue;
+        }
 
         const { data: invRows, error: invError } = await supabaseClient
           .from('inventario')
@@ -154,6 +226,13 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
         let pendienteInventario = cantidadARevertir;
         for (const invRow of inventories) {
           if (pendienteInventario <= 0) break;
+          if (!isUuid(invRow.id_inventario)) {
+            logger.warn('Inventario con id inválido durante rollback de donación', {
+              donationId: donation.id,
+              idInventario: invRow.id_inventario,
+            });
+            continue;
+          }
 
           const disponible = Number(invRow.cantidad_disponible ?? 0);
           const descuento = Math.min(disponible, pendienteInventario);
@@ -192,7 +271,7 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
       logger.info('Rollback de inventario aplicado para donación', {
         donationId: donation.id,
         cantidadOriginal: donation.cantidad,
-        cantidadRevertida: donation.cantidad - cantidadPendiente
+        cantidadRevertida: cantidad.value - cantidadPendiente
       });
 
       return { success: true };
@@ -207,10 +286,25 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
   };
 
   const updateDonationEstadoInDatabase = async (donationId: number, updateData: Record<string, unknown>) => {
+    const parsedDonationId = parsePositiveIntegerValue(donationId, {
+      name: 'donationId',
+      min: 1,
+      max: 2147483647,
+    });
+    if (!parsedDonationId.success) {
+      return {
+        error: {
+          message: parsedDonationId.error,
+          code: 'VALIDATION_ERROR',
+        },
+        usedLegacyEstado: false,
+      };
+    }
+
     const primary = await supabaseClient
       .from('donaciones')
       .update(updateData)
-      .eq('id', donationId);
+      .eq('id', parsedDonationId.value);
 
     if (!primary.error) {
       return { error: null as null | typeof primary.error, usedLegacyEstado: false };
@@ -228,7 +322,7 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
       const legacy = await supabaseClient
         .from('donaciones')
         .update(fallbackData)
-        .eq('id', donationId);
+        .eq('id', parsedDonationId.value);
 
       if (!legacy.error) {
         logger.warn('BD con constraint legacy detectada. Se guardó estado Entregada como equivalente de Aprobada.', {
@@ -245,10 +339,18 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
 
   const ensureDonorDepositMapping = async (donorId: string): Promise<ServiceResult<{ depositoId: string }>> => {
     try {
+      const parsedDonorId = parseUuidValue(donorId, { name: 'donorId' });
+      if (!parsedDonorId.success) {
+        return {
+          success: false,
+          error: parsedDonorId.error,
+        };
+      }
+
       const existing = await supabaseClient
         .from('donante_depositos')
         .select('id_deposito, es_principal, created_at')
-        .eq('donante_id', donorId)
+        .eq('donante_id', parsedDonorId.value)
         .eq('activo', true)
         .order('es_principal', { ascending: false })
         .order('created_at', { ascending: true })
@@ -274,8 +376,8 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
       const newDeposito = await supabaseClient
         .from('depositos')
         .insert({
-          nombre: `Depósito Donante ${donorId.slice(0, 8)}`,
-          descripcion: `Depósito asignado automáticamente al donante ${donorId}`
+          nombre: `Depósito Donante ${parsedDonorId.value.slice(0, 8)}`,
+          descripcion: `Depósito asignado automáticamente al donante ${parsedDonorId.value}`
         })
         .select('id_deposito')
         .single();
@@ -292,7 +394,7 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
       const donorMapping = await supabaseClient
         .from('donante_depositos')
         .insert({
-          donante_id: donorId,
+          donante_id: parsedDonorId.value,
           id_deposito: newDeposito.data.id_deposito,
           es_principal: true,
           activo: true
@@ -328,6 +430,24 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
     nuevoEstado: DonationEstado,
     cancelacionData?: { motivo: MotivoCancelacion; observaciones?: string }
   ): Promise<ServiceResult<{ message: string; warning?: boolean }>> => {
+    const donationValidation = validateDonationForMutation(donation);
+    if (!donationValidation.success) {
+      return {
+        success: false,
+        error: donationValidation.error,
+        errorDetails: donationValidation.errorDetails,
+      };
+    }
+
+    const cancelacionValidation = validateCancelacionData(nuevoEstado, cancelacionData);
+    if (!cancelacionValidation.success) {
+      return {
+        success: false,
+        error: cancelacionValidation.error,
+      };
+    }
+    const cancelacionPayload = cancelacionValidation.data;
+
     // Prevenir procesamiento duplicado de la misma donación
     const cacheKey = donation.id;
     
@@ -384,8 +504,15 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
 
       // Si es cancelación, agregar datos de cancelación
       if (nuevoEstado === 'Cancelada' && cancelacionData) {
-        updateData.motivo_cancelacion = cancelacionData.motivo;
-        updateData.observaciones_cancelacion = cancelacionData.observaciones || null;
+        if (!cancelacionPayload) {
+          return {
+            success: false,
+            error: 'Se requiere motivo y observaciones para cancelar una donación'
+          };
+        }
+
+        updateData.motivo_cancelacion = cancelacionPayload.motivo;
+        updateData.observaciones_cancelacion = cancelacionPayload.observaciones;
         updateData.usuario_cancelacion_id = user?.id || null;
         updateData.fecha_cancelacion = new Date().toISOString();
       }
@@ -493,3 +620,88 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
     updateDonationEstado
   };
 };
+
+function validateDonationForMutation(donation: Donation): ServiceResult<void> {
+  const donationId = parsePositiveIntegerValue(donation.id, {
+    name: 'donation.id',
+    min: 1,
+    max: 2147483647,
+  });
+  if (!donationId.success) {
+    return { success: false, error: donationId.error };
+  }
+
+  const userId = parseUuidValue(donation.user_id, { name: 'donation.user_id' });
+  if (!userId.success) {
+    return { success: false, error: userId.error };
+  }
+
+  const unidadId = parsePositiveIntegerValue(donation.unidad_id, {
+    name: 'donation.unidad_id',
+    min: 1,
+  });
+  if (!unidadId.success) {
+    return { success: false, error: unidadId.error };
+  }
+
+  const cantidad = parseFiniteNumberValue(donation.cantidad, {
+    name: 'donation.cantidad',
+    min: 0,
+  });
+  if (!cantidad.success || cantidad.value <= 0) {
+    return {
+      success: false,
+      error: cantidad.success ? 'donation.cantidad debe ser mayor a 0.' : cantidad.error,
+    };
+  }
+
+  if (!donation.tipo_producto.trim()) {
+    return { success: false, error: 'donation.tipo_producto es requerido.' };
+  }
+
+  return { success: true };
+}
+
+function validateCancelacionData(
+  nuevoEstado: DonationEstado,
+  cancelacionData?: { motivo: MotivoCancelacion; observaciones?: string }
+): ServiceResult<{ motivo: MotivoCancelacion; observaciones: string | null }> {
+  if (nuevoEstado !== 'Cancelada') {
+    return { success: true, data: { motivo: 'otro', observaciones: null } };
+  }
+
+  if (!cancelacionData) {
+    return {
+      success: false,
+      error: 'Se requiere motivo y observaciones para cancelar una donación',
+    };
+  }
+
+  const motivo = parseEnumValue(cancelacionData.motivo, MOTIVOS_CANCELACION, { name: 'motivo' });
+  if (!motivo.success) {
+    return { success: false, error: motivo.error };
+  }
+
+  const observaciones = parseOptionalTextValue(cancelacionData.observaciones, {
+    name: 'observaciones',
+    maxLength: MAX_OBSERVACIONES_CANCELACION,
+  });
+  if (!observaciones.success) {
+    return { success: false, error: observaciones.error };
+  }
+
+  if (motivo.value === 'otro' && !observaciones.value) {
+    return {
+      success: false,
+      error: 'Las observaciones son obligatorias cuando el motivo es otro',
+    };
+  }
+
+  return {
+    success: true,
+    data: {
+      motivo: motivo.value,
+      observaciones: observaciones.value,
+    },
+  };
+}

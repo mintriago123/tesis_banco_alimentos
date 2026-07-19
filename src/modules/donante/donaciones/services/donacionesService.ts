@@ -1,5 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Donacion } from '../types';
+import {
+  parseIsoDateValue,
+  parseOptionalTextValue,
+  parsePositiveIntegerValue,
+  parsePositiveNumberValue,
+  parseUuidValue,
+} from '@/lib/validation-core';
 
 type DonacionWithUnidad = Donacion & {
   unidades?: {
@@ -12,6 +19,11 @@ export class DonacionesService {
   constructor(private supabase: SupabaseClient) {}
 
   async obtenerDonaciones(userId: string): Promise<Donacion[]> {
+    const usuarioId = parseUuidValue(userId, { name: 'userId' });
+    if (!usuarioId.success) {
+      throw new Error(usuarioId.error);
+    }
+
     const { data, error } = await this.supabase
       .from('donaciones')
       .select(`
@@ -21,7 +33,7 @@ export class DonacionesService {
           simbolo
         )
       `)
-      .eq('user_id', userId)
+      .eq('user_id', usuarioId.value)
       .order('creado_en', { ascending: false });
 
     if (error) {
@@ -36,12 +48,21 @@ export class DonacionesService {
   }
 
   async eliminarDonacion(id: number): Promise<void> {
+    const donacionId = parsePositiveIntegerValue(id, {
+      name: 'id',
+      min: 1,
+      max: 2147483647,
+    });
+    if (!donacionId.success) {
+      throw new Error(donacionId.error);
+    }
+
     console.log('🗑️ Intentando eliminar donación con ID:', id);
     
     const { data, error } = await this.supabase
       .from('donaciones')
       .delete()
-      .eq('id', id)
+      .eq('id', donacionId.value)
       .select();
 
     if (error) {
@@ -59,19 +80,48 @@ export class DonacionesService {
   }
 
   async actualizarDonacion(donacion: Donacion): Promise<void> {
+    const donacionId = parsePositiveIntegerValue(donacion.id, {
+      name: 'donacion.id',
+      min: 1,
+      max: 2147483647,
+    });
+    if (!donacionId.success) {
+      throw new Error(donacionId.error);
+    }
+
+    const cantidad = parsePositiveNumberValue(donacion.cantidad, { name: 'cantidad' });
+    if (!cantidad.success) {
+      throw new Error(cantidad.error);
+    }
+
+    const fechaDisponible = parseIsoDateValue(donacion.fecha_disponible, {
+      name: 'fecha_disponible',
+    });
+    if (!fechaDisponible.success || !fechaDisponible.value) {
+      throw new Error(fechaDisponible.success ? 'fecha_disponible es requerida.' : fechaDisponible.error);
+    }
+
+    const observaciones = parseOptionalTextValue(donacion.observaciones, {
+      name: 'observaciones',
+      maxLength: 500,
+    });
+    if (!observaciones.success) {
+      throw new Error(observaciones.error);
+    }
+
     const { error } = await this.supabase
       .from('donaciones')
       .update({
         tipo_producto: donacion.tipo_producto,
         categoria_comida: donacion.categoria_comida,
-        cantidad: donacion.cantidad,
-        fecha_disponible: donacion.fecha_disponible,
+        cantidad: cantidad.value,
+        fecha_disponible: fechaDisponible.value,
         direccion_entrega: donacion.direccion_entrega,
         horario_preferido: donacion.horario_preferido,
-        observaciones: donacion.observaciones,
+        observaciones: observaciones.value,
         actualizado_en: new Date().toISOString(),
       })
-      .eq('id', donacion.id);
+      .eq('id', donacionId.value);
 
     if (error) {
       throw new Error(`Error al actualizar donación: ${error.message}`);

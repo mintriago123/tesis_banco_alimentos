@@ -5,6 +5,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CantidadFormateada, ConversionData } from '@/lib/unidadConversion';
 import { convertirCantidad } from '@/lib/unidadConversion';
+import {
+  escapeLikePattern,
+  parseFiniteNumberValue,
+  parseOptionalTextValue,
+} from '@/lib/validation-core';
 
 export interface StockInfo {
   id_inventario: string;
@@ -108,7 +113,19 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
    * Obtiene el stock disponible de un producto por nombre
    */
   const getStockByProductName = async (nombreProducto: string): Promise<ServiceResult<StockSummary>> => {
-    if (!nombreProducto.trim()) {
+    const nombre = parseOptionalTextValue(nombreProducto, {
+      name: 'nombreProducto',
+      maxLength: 150,
+    });
+
+    if (!nombre.success) {
+      return {
+        success: false,
+        error: nombre.error,
+      };
+    }
+
+    if (!nombre.value) {
       return {
         success: true,
         data: {
@@ -120,7 +137,7 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
     }
 
     try {
-      logger.info(`Consultando stock para producto: "${nombreProducto}"`);
+      logger.info(`Consultando stock para producto: "${nombre.value}"`);
       
       // Obtener conversiones disponibles
       const conversiones = await obtenerConversiones();
@@ -143,7 +160,7 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
             nombre
           )
         `)
-        .ilike('productos_donados.nombre_producto', `%${nombreProducto}%`)
+        .ilike('productos_donados.nombre_producto', `%${escapeLikePattern(nombre.value)}%`)
         .gt('cantidad_disponible', 0)
         .order('cantidad_disponible', { ascending: false });
 
@@ -281,6 +298,17 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
     available: number; 
     missing: number;
   }>> => {
+    const cantidad = parseFiniteNumberValue(cantidadSolicitada, {
+      name: 'cantidadSolicitada',
+      min: 0,
+    });
+    if (!cantidad.success || cantidad.value <= 0) {
+      return {
+        success: false,
+        error: cantidad.success ? 'cantidadSolicitada debe ser mayor a 0.' : cantidad.error,
+      };
+    }
+
     const stockResult = await getStockByProductName(nombreProducto);
     
     if (!stockResult.success || !stockResult.data) {
@@ -291,8 +319,8 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
     }
 
     const available = stockResult.data.total_disponible;
-    const sufficient = available >= cantidadSolicitada;
-    const missing = sufficient ? 0 : cantidadSolicitada - available;
+    const sufficient = available >= cantidad.value;
+    const missing = sufficient ? 0 : cantidad.value - available;
 
     return {
       success: true,
@@ -324,6 +352,17 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
     requestedInBaseUnit: number | null;
     missing: number;
   }>> => {
+    const cantidad = parseFiniteNumberValue(cantidadSolicitada, {
+      name: 'cantidadSolicitada',
+      min: 0,
+    });
+    if (!cantidad.success || cantidad.value <= 0) {
+      return {
+        success: false,
+        error: cantidad.success ? 'cantidadSolicitada debe ser mayor a 0.' : cantidad.error,
+      };
+    }
+
     const stockResult = await getStockByProductName(nombreProducto);
 
     if (!stockResult.success || !stockResult.data) {
@@ -339,8 +378,8 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
 
     // Si las unidades son iguales, comparación directa
     if (simboloUnidadSolicitada === stockSymbol) {
-      const sufficient = available >= cantidadSolicitada;
-      const missing = sufficient ? 0 : cantidadSolicitada - available;
+      const sufficient = available >= cantidad.value;
+      const missing = sufficient ? 0 : cantidad.value - available;
 
       return {
         success: true,
@@ -348,9 +387,9 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
           sufficient,
           available,
           availableSymbol: stockSymbol,
-          requested: cantidadSolicitada,
+          requested: cantidad.value,
           requestedSymbol: simboloUnidadSolicitada,
-          requestedInBaseUnit: cantidadSolicitada,
+          requestedInBaseUnit: cantidad.value,
           missing
         }
       };
@@ -364,7 +403,7 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
     
     // Convertir la cantidad solicitada a la unidad base del inventario
     const cantidadConvertida = convertirEntreUnidades(
-      cantidadSolicitada,
+      cantidad.value,
       simboloUnidadSolicitada,
       stockSymbol,
       conversiones
@@ -388,7 +427,7 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
         sufficient,
         available,
         availableSymbol: stockSymbol,
-        requested: cantidadSolicitada,
+        requested: cantidad.value,
         requestedSymbol: simboloUnidadSolicitada,
         requestedInBaseUnit: cantidadConvertida,
         missing

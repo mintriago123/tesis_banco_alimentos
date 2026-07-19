@@ -3,6 +3,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { sendEmail, type EmailOptions } from '@/lib/email';
 import { buildNotificationEmailTemplate } from '@/lib/email/templates/notificationEmail';
+import { isUuid } from '@/lib/validation-core';
 
 type NotificationType = 'info' | 'success' | 'warning' | 'error';
 type NotificationEmailOptions = Partial<
@@ -201,6 +202,10 @@ export class NotificationService {
   }
 
   private async obtenerUsuarioPorId(usuarioId: string): Promise<UsuarioRecord | null> {
+    if (!isUuid(usuarioId)) {
+      return null;
+    }
+
     const { data, error } = await this.supabase
       .from('usuarios')
       .select('id, email, nombre, estado, rol, recibir_notificaciones')
@@ -277,7 +282,9 @@ export class NotificationService {
       return true;
     });
 
-    const ids = activosConCorreo.map((usuario) => usuario.id);
+    const ids = activosConCorreo
+      .map((usuario) => usuario.id)
+      .filter(isUuid);
 
     const preferencias = await this.obtenerPreferencias(ids, categoria);
 
@@ -302,14 +309,16 @@ export class NotificationService {
   ): Promise<Map<string, boolean>> {
     const mapa = new Map<string, boolean>();
 
-    if (usuarioIds.length === 0) {
+    const idsValidos = usuarioIds.filter(isUuid);
+
+    if (idsValidos.length === 0) {
       return mapa;
     }
 
     const { data, error } = await this.supabase
       .from('configuracion_notificaciones')
       .select('usuario_id, email_activo')
-      .in('usuario_id', usuarioIds)
+      .in('usuario_id', idsValidos)
       .eq('categoria', categoria);
 
     if (error) {

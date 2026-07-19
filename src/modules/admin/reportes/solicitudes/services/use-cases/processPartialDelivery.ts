@@ -6,6 +6,11 @@ import {
   updateSolicitudById,
 } from './solicitudStatePersistence';
 import type { SolicitudActionResult, SolicitudUseCaseDeps } from './types';
+import {
+  parseFiniteNumberValue,
+  parseOptionalTextValue,
+  parseUuidValue,
+} from '@/lib/validation-core';
 
 export interface ProcessPartialDeliveryParams {
   solicitud: Solicitud;
@@ -36,10 +41,78 @@ export const processPartialDelivery = async (
     };
   }
 
+  const solicitudId = parseUuidValue(solicitud.id, { name: 'solicitud.id' });
+  if (!solicitudId.success) {
+    return { success: false, error: solicitudId.error };
+  }
+
+  const usuarioId = parseUuidValue(solicitud.usuario_id, { name: 'solicitud.usuario_id' });
+  if (!usuarioId.success) {
+    return { success: false, error: usuarioId.error };
+  }
+
+  const parsedDepositoId = parseUuidValue(depositoId, { name: 'depositoId' });
+  if (!parsedDepositoId.success) {
+    return { success: false, error: parsedDepositoId.error };
+  }
+
+  let operadorIdValidado: string | undefined;
+  if (operadorId) {
+    const parsedOperadorId = parseUuidValue(operadorId, { name: 'operadorId' });
+    if (!parsedOperadorId.success) {
+      return { success: false, error: parsedOperadorId.error };
+    }
+    operadorIdValidado = parsedOperadorId.value;
+  }
+
+  const cantidadSolicitud = parseFiniteNumberValue(solicitud.cantidad, {
+    name: 'solicitud.cantidad',
+    min: 0,
+  });
+  if (!cantidadSolicitud.success || cantidadSolicitud.value <= 0) {
+    return {
+      success: false,
+      error: cantidadSolicitud.success ? 'solicitud.cantidad debe ser mayor a 0.' : cantidadSolicitud.error,
+    };
+  }
+
+  const cantidadDonarResult = parseFiniteNumberValue(cantidadDonar, {
+    name: 'cantidadDonar',
+    min: 0,
+    max: cantidadSolicitud.value,
+  });
+  if (!cantidadDonarResult.success || cantidadDonarResult.value <= 0) {
+    return {
+      success: false,
+      error: cantidadDonarResult.success ? 'cantidadDonar debe ser mayor a 0.' : cantidadDonarResult.error,
+    };
+  }
+
+  const porcentajeResult = parseFiniteNumberValue(porcentaje, {
+    name: 'porcentaje',
+    min: 0,
+    max: 100,
+  });
+  if (!porcentajeResult.success) {
+    return { success: false, error: porcentajeResult.error };
+  }
+
+  const comentarioResult = parseOptionalTextValue(comentario, {
+    name: 'comentario',
+    maxLength: 500,
+  });
+  if (!comentarioResult.success) {
+    return { success: false, error: comentarioResult.error };
+  }
+
+  const cantidadDonarValidada = cantidadDonarResult.value;
+  const porcentajeValidado = porcentajeResult.value;
+  const depositoValidado = parsedDepositoId.value;
+
   const validacionStock = await deps.inventoryService.validarStockDisponiblePorDeposito(
     solicitud,
-    depositoId,
-    cantidadDonar
+    depositoValidado,
+    cantidadDonarValidada
   );
 
   if (validacionStock.disponible === 0) {
@@ -49,27 +122,27 @@ export const processPartialDelivery = async (
     };
   }
 
-  if (cantidadDonar <= 0 || cantidadDonar > solicitud.cantidad) {
+  if (cantidadDonarValidada <= 0 || cantidadDonarValidada > solicitud.cantidad) {
     return {
       success: false,
       error: `La cantidad a donar debe ser mayor a 0 y máximo ${solicitud.cantidad} ${solicitud.unidades?.simbolo ?? 'unidades'}`,
     };
   }
 
-  if (validacionStock.disponible < cantidadDonar) {
+  if (validacionStock.disponible < cantidadDonarValidada) {
     return {
       success: false,
-      error: `Stock insuficiente para donar ${cantidadDonar} unidades. Disponible: ${validacionStock.disponible} ${solicitud.unidades?.simbolo ?? 'unidades'}`,
+      error: `Stock insuficiente para donar ${cantidadDonarValidada} unidades. Disponible: ${validacionStock.disponible} ${solicitud.unidades?.simbolo ?? 'unidades'}`,
     };
   }
 
   const previousState = snapshotSolicitudState(solicitud);
-  const codigoComprobante = generarCodigoComprobante('solicitud', solicitud.id);
+  const codigoComprobante = generarCodigoComprobante('solicitud', solicitudId.value);
   const cantidadAnterior = solicitud.cantidad_entregada || 0;
-  const nuevaCantidadTotal = cantidadAnterior + cantidadDonar;
+  const nuevaCantidadTotal = cantidadAnterior + cantidadDonarValidada;
   const esEntregaCompleta = nuevaCantidadTotal >= solicitud.cantidad;
-  const solicitudTemporal = { ...solicitud, cantidad: cantidadDonar };
-  const resultadoInventario = await deps.inventoryService.descontarDelInventario(solicitudTemporal, depositoId);
+  const solicitudTemporal = { ...solicitud, cantidad: cantidadDonarValidada };
+  const resultadoInventario = await deps.inventoryService.descontarDelInventario(solicitudTemporal, depositoValidado);
 
   if (resultadoInventario.error || resultadoInventario.noStock || resultadoInventario.cantidadRestante > 0) {
     if (resultadoInventario.detalleEntregado.length > 0) {
@@ -88,13 +161,13 @@ export const processPartialDelivery = async (
     cantidad_entregada: nuevaCantidadTotal,
     tiene_entregas_parciales: !esEntregaCompleta || cantidadAnterior > 0,
     codigo_comprobante: codigoComprobante,
-    comentario_admin: comentario?.trim() || null,
+    comentario_admin: comentarioResult.value,
     fecha_respuesta: new Date().toISOString(),
-    operador_aprobacion_id: operadorId || null,
+    operador_aprobacion_id: operadorIdValidado || null,
     fecha_aprobacion: new Date().toISOString(),
   };
 
-  const { error: updateError } = await updateSolicitudById(deps.supabaseClient, solicitud.id, updateData);
+  const { error: updateError } = await updateSolicitudById(deps.supabaseClient, solicitudId.value, updateData);
 
   if (updateError) {
     await deps.inventoryService.restaurarInventario(resultadoInventario.detalleEntregado);
@@ -124,12 +197,12 @@ export const processPartialDelivery = async (
   const { error: historialError } = await deps.supabaseClient
     .from('historial_donaciones')
     .insert({
-      solicitud_id: solicitud.id,
-      cantidad_entregada: cantidadDonar,
-      porcentaje_entregado: porcentaje,
+      solicitud_id: solicitudId.value,
+      cantidad_entregada: cantidadDonarValidada,
+      porcentaje_entregado: porcentajeValidado,
       cantidad_solicitada: solicitud.cantidad,
-      operador_id: operadorId,
-      comentario: comentario?.trim() || null,
+      operador_id: operadorIdValidado,
+      comentario: comentarioResult.value,
     });
 
   if (historialError) {
@@ -148,13 +221,13 @@ export const processPartialDelivery = async (
       cantidadTotal: solicitud.cantidad,
     });
   } else {
-    mensaje = `Entrega parcial registrada: ${cantidadDonar} ${solicitud.unidades?.simbolo ?? 'unidades'} (${porcentaje}% del total). Total entregado: ${nuevaCantidadTotal}/${solicitud.cantidad}`;
+    mensaje = `Entrega parcial registrada: ${cantidadDonarValidada} ${solicitud.unidades?.simbolo ?? 'unidades'} (${porcentajeValidado}% del total). Total entregado: ${nuevaCantidadTotal}/${solicitud.cantidad}`;
     await deps.notificationService.notificarCambioEstado(solicitud, 'aprobada', {
       mensajeInventario: mensaje,
       comentarioAdmin: comentario,
       codigoComprobanteGuardado: codigoComprobante,
       esParcial: true,
-      cantidadParcial: cantidadDonar,
+      cantidadParcial: cantidadDonarValidada,
       cantidadTotal: solicitud.cantidad,
     });
   }

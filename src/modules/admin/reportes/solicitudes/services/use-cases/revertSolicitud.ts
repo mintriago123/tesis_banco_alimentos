@@ -5,6 +5,7 @@ import type {
 } from '../../types';
 import { updateSolicitudById } from './solicitudStatePersistence';
 import type { SolicitudActionResult, SolicitudUseCaseDeps } from './types';
+import { parseUuidValue } from '@/lib/validation-core';
 
 interface RevertSolicitudParams {
   solicitudId: string;
@@ -33,6 +34,11 @@ export const revertSolicitud = async (
   deps: SolicitudUseCaseDeps
 ): SolicitudActionResult => {
   const { solicitudId } = params;
+  const parsedSolicitudId = parseUuidValue(solicitudId, { name: 'solicitudId' });
+  if (!parsedSolicitudId.success) {
+    return { success: false, error: parsedSolicitudId.error };
+  }
+
   deps.logger.info(`Iniciando reversión de solicitud ${solicitudId}`);
 
   const { data: solicitudData, error: fetchError } = await deps.supabaseClient
@@ -67,7 +73,7 @@ export const revertSolicitud = async (
         tipo_persona
       )
     `)
-    .eq('id', solicitudId)
+    .eq('id', parsedSolicitudId.value)
     .single();
 
   if (fetchError || !solicitudData) {
@@ -128,7 +134,7 @@ export const revertSolicitud = async (
     deps.logger.warn('No se encontraron movimientos de egreso relacionados con la solicitud. Continuando con la reversión del estado únicamente.');
   }
 
-  const { error: updateError } = await updateSolicitudById(deps.supabaseClient, solicitudId, {
+  const { error: updateError } = await updateSolicitudById(deps.supabaseClient, parsedSolicitudId.value, {
     estado: 'pendiente',
     fecha_respuesta: null,
   });

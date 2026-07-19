@@ -8,16 +8,28 @@ import type {
   Solicitud,
 } from '../types';
 import { solicitudesLogger, type SolicitudesLogger } from './solicitudesLogger';
+import {
+  escapeLikePattern,
+  isUuid,
+  parseFiniteNumberValue,
+  parsePositiveIntegerValue,
+  parseUuidValue,
+} from '@/lib/validation-core';
 
 export const createSolicitudesInventoryService = (
   supabaseClient: SupabaseClient,
   logger: SolicitudesLogger = solicitudesLogger
 ) => {
   const buscarProductosCoincidentes = async (tipoAlimento: string): Promise<ProductoInventario[]> => {
+    const termino = tipoAlimento.trim();
+    if (!termino) {
+      return [];
+    }
+
     const { data, error } = await supabaseClient
       .from('productos_donados')
       .select('id_producto, nombre_producto, unidad_id')
-      .ilike('nombre_producto', `%${tipoAlimento}%`);
+      .ilike('nombre_producto', `%${escapeLikePattern(termino)}%`);
 
     if (error) {
       throw error;
@@ -30,6 +42,14 @@ export const createSolicitudesInventoryService = (
     unidadOrigenId: number,
     unidadDestinoId: number
   ): Promise<number | null> => {
+    const origen = parsePositiveIntegerValue(unidadOrigenId, { name: 'unidadOrigenId', min: 1 });
+    const destino = parsePositiveIntegerValue(unidadDestinoId, { name: 'unidadDestinoId', min: 1 });
+
+    if (!origen.success || !destino.success) {
+      logger.warn('IDs de unidad inválidos para conversión', { unidadOrigenId, unidadDestinoId });
+      return null;
+    }
+
     if (unidadOrigenId === unidadDestinoId) {
       return 1;
     }
@@ -38,7 +58,7 @@ export const createSolicitudesInventoryService = (
       const { data: unidades, error: unidadesError } = await supabaseClient
         .from('unidades')
         .select('id, tipo_magnitud_id, es_base')
-        .in('id', [unidadOrigenId, unidadDestinoId]);
+        .in('id', [origen.value, destino.value]);
 
       if (unidadesError || !unidades || unidades.length !== 2) {
         logger.warn('No se pudieron obtener las unidades para conversión', unidadesError);
@@ -56,8 +76,8 @@ export const createSolicitudesInventoryService = (
       const { data: conversionDirecta, error: convError1 } = await supabaseClient
         .from('conversiones')
         .select('factor_conversion')
-        .eq('unidad_origen_id', unidadOrigenId)
-        .eq('unidad_destino_id', unidadDestinoId)
+        .eq('unidad_origen_id', origen.value)
+        .eq('unidad_destino_id', destino.value)
         .maybeSingle();
 
       if (!convError1 && conversionDirecta) {
@@ -67,8 +87,8 @@ export const createSolicitudesInventoryService = (
       const { data: conversionInversa, error: convError2 } = await supabaseClient
         .from('conversiones')
         .select('factor_conversion')
-        .eq('unidad_origen_id', unidadDestinoId)
-        .eq('unidad_destino_id', unidadOrigenId)
+        .eq('unidad_origen_id', destino.value)
+        .eq('unidad_destino_id', origen.value)
         .maybeSingle();
 
       if (!convError2 && conversionInversa) {
@@ -87,13 +107,27 @@ export const createSolicitudesInventoryService = (
     solicitud: Solicitud
   ): Promise<{ suficiente: boolean; disponible: number; solicitado: number }> => {
     try {
+      const cantidad = parseFiniteNumberValue(solicitud.cantidad, {
+        name: 'solicitud.cantidad',
+        min: 0,
+      });
+
+      if (!cantidad.success || cantidad.value <= 0) {
+        logger.warn('Cantidad inválida para validar stock', { solicitudId: solicitud.id });
+        return {
+          suficiente: false,
+          disponible: 0,
+          solicitado: Number.isFinite(solicitud.cantidad) ? solicitud.cantidad : 0,
+        };
+      }
+
       const productosCoincidentes = await buscarProductosCoincidentes(solicitud.tipo_alimento);
 
       if (!productosCoincidentes || productosCoincidentes.length === 0) {
         return {
           suficiente: false,
           disponible: 0,
-          solicitado: solicitud.cantidad,
+          solicitado: cantidad.value,
         };
       }
 
@@ -122,9 +156,9 @@ export const createSolicitudesInventoryService = (
       }
 
       return {
-        suficiente: totalDisponible >= solicitud.cantidad,
+        suficiente: totalDisponible >= cantidad.value,
         disponible: totalDisponible,
-        solicitado: solicitud.cantidad,
+        solicitado: cantidad.value,
       };
     } catch (error) {
       logger.error('Error validando stock disponible', error);
@@ -142,13 +176,31 @@ export const createSolicitudesInventoryService = (
     cantidadObjetivo: number
   ): Promise<{ suficiente: boolean; disponible: number; solicitado: number }> => {
     try {
+      const parsedDepositoId = parseUuidValue(depositoId, { name: 'depositoId' });
+      const cantidad = parseFiniteNumberValue(cantidadObjetivo, {
+        name: 'cantidadObjetivo',
+        min: 0,
+      });
+
+      if (!parsedDepositoId.success || !cantidad.success || cantidad.value <= 0) {
+        logger.warn('Parámetros inválidos para validar stock por depósito', {
+          depositoId,
+          cantidadObjetivo,
+        });
+        return {
+          suficiente: false,
+          disponible: 0,
+          solicitado: Number.isFinite(cantidadObjetivo) ? cantidadObjetivo : 0,
+        };
+      }
+
       const productosCoincidentes = await buscarProductosCoincidentes(solicitud.tipo_alimento);
 
       if (!productosCoincidentes || productosCoincidentes.length === 0) {
         return {
           suficiente: false,
           disponible: 0,
-          solicitado: cantidadObjetivo,
+          solicitado: cantidad.value,
         };
       }
 
@@ -159,7 +211,7 @@ export const createSolicitudesInventoryService = (
           .from('inventario')
           .select('cantidad_disponible')
           .eq('id_producto', producto.id_producto)
-          .eq('id_deposito', depositoId)
+          .eq('id_deposito', parsedDepositoId.value)
           .gt('cantidad_disponible', 0);
 
         if (error || !data) continue;
@@ -178,9 +230,9 @@ export const createSolicitudesInventoryService = (
       }
 
       return {
-        suficiente: totalDisponible >= cantidadObjetivo,
+        suficiente: totalDisponible >= cantidad.value,
         disponible: totalDisponible,
-        solicitado: cantidadObjetivo,
+        solicitado: cantidad.value,
       };
     } catch (error) {
       logger.error('Error validando stock por depósito', error);
@@ -194,6 +246,34 @@ export const createSolicitudesInventoryService = (
 
   const descontarDelInventario = async (solicitud: Solicitud, depositoId?: string): Promise<ResultadoInventario> => {
     try {
+      const cantidad = parseFiniteNumberValue(solicitud.cantidad, {
+        name: 'solicitud.cantidad',
+        min: 0,
+      });
+
+      if (!cantidad.success || cantidad.value <= 0) {
+        return {
+          cantidadRestante: 0,
+          productosActualizados: 0,
+          error: true,
+          errorDetails: cantidad.success ? 'solicitud.cantidad debe ser mayor a 0.' : cantidad.error,
+          detalleEntregado: [],
+        };
+      }
+
+      if (depositoId) {
+        const parsedDepositoId = parseUuidValue(depositoId, { name: 'depositoId' });
+        if (!parsedDepositoId.success) {
+          return {
+            cantidadRestante: solicitud.cantidad,
+            productosActualizados: 0,
+            error: true,
+            errorDetails: parsedDepositoId.error,
+            detalleEntregado: [],
+          };
+        }
+      }
+
       const productosCoincidentes = await buscarProductosCoincidentes(solicitud.tipo_alimento);
 
       if (!productosCoincidentes || productosCoincidentes.length === 0) {
@@ -226,6 +306,20 @@ export const createSolicitudesInventoryService = (
       let productosActualizados = 0;
 
       for (const movimiento of movimientos) {
+        if (!isUuid(movimiento.producto.id_producto)) {
+          logger.warn('Movimiento con id_producto inválido; se omite restauración', movimiento.producto);
+          continue;
+        }
+
+        const cantidadEntregada = parseFiniteNumberValue(movimiento.cantidadEntregada, {
+          name: 'cantidadEntregada',
+          min: 0,
+        });
+        if (!cantidadEntregada.success || cantidadEntregada.value <= 0) {
+          logger.warn('Movimiento con cantidad inválida; se omite restauración', movimiento);
+          continue;
+        }
+
         const { data: inventarioItems, error: inventarioError } = await supabaseClient
           .from('inventario')
           .select('id_inventario, cantidad_disponible, id_deposito, id_producto')
@@ -239,7 +333,7 @@ export const createSolicitudesInventoryService = (
 
         if (inventarioItems && inventarioItems.length > 0) {
           const item = inventarioItems[0];
-          const nuevaCantidad = (item.cantidad_disponible ?? 0) + movimiento.cantidadEntregada;
+          const nuevaCantidad = (item.cantidad_disponible ?? 0) + cantidadEntregada.value;
 
           const { error: updateError } = await supabaseClient
             .from('inventario')
@@ -273,7 +367,7 @@ export const createSolicitudesInventoryService = (
             .insert({
               id_producto: movimiento.producto.id_producto,
               id_deposito: depositos.id_deposito,
-              cantidad_disponible: movimiento.cantidadEntregada,
+              cantidad_disponible: cantidadEntregada.value,
               fecha_actualizacion: new Date().toISOString(),
             });
 
@@ -352,6 +446,16 @@ export const createSolicitudesInventoryService = (
     solicitud: Solicitud,
     depositoId?: string
   ): Promise<DescuentoProductoResult> => {
+    if (!isUuid(producto.id_producto)) {
+      return {
+        cantidadRestante: cantidadNecesaria,
+        productosActualizados: 0,
+        cantidadEntregada: 0,
+        error: true,
+        errorDetails: 'producto.id_producto debe ser un UUID valido.',
+      };
+    }
+
     let query = supabaseClient
       .from('inventario')
       .select('id_inventario, cantidad_disponible, id_deposito')
@@ -359,7 +463,17 @@ export const createSolicitudesInventoryService = (
       .gt('cantidad_disponible', 0);
 
     if (depositoId) {
-      query = query.eq('id_deposito', depositoId);
+      const parsedDepositoId = parseUuidValue(depositoId, { name: 'depositoId' });
+      if (!parsedDepositoId.success) {
+        return {
+          cantidadRestante: cantidadNecesaria,
+          productosActualizados: 0,
+          cantidadEntregada: 0,
+          error: true,
+          errorDetails: parsedDepositoId.error,
+        };
+      }
+      query = query.eq('id_deposito', parsedDepositoId.value);
     }
 
     const { data, error } = await query.order('fecha_actualizacion', { ascending: true });

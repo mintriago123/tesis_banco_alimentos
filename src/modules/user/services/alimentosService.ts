@@ -4,6 +4,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Alimento } from '../types';
+import { parsePositiveIntegerValue } from '@/lib/validation-core';
 
 export class AlimentosService {
   constructor(private supabase: SupabaseClient) {}
@@ -37,10 +38,18 @@ export class AlimentosService {
     alimentoId: number
   ): Promise<{ data: Alimento | null; error: unknown }> {
     try {
+      const parsedAlimentoId = parsePositiveIntegerValue(alimentoId, {
+        name: 'alimentoId',
+        min: 1,
+      });
+      if (!parsedAlimentoId.success) {
+        return { data: null, error: parsedAlimentoId.error };
+      }
+
       const { data, error } = await this.supabase
         .from('alimentos')
         .select('id, nombre, categoria, descripcion')
-        .eq('id', alimentoId)
+        .eq('id', parsedAlimentoId.value)
         .single();
 
       return { data, error };

@@ -26,9 +26,15 @@ interface RecordedInsert {
   data: Record<string, unknown>;
 }
 
+const SOLICITUD_ID = '11111111-1111-4111-8111-111111111111';
+const USER_ID = '22222222-2222-4222-8222-222222222222';
+const OPERADOR_ID = '33333333-3333-4333-8333-333333333333';
+const DEPOSITO_ID = '44444444-4444-4444-8444-444444444444';
+const PRODUCTO_ID = '55555555-5555-4555-8555-555555555555';
+
 const baseSolicitud: Solicitud = {
-  id: 'solicitud-1',
-  usuario_id: 'user-1',
+  id: SOLICITUD_ID,
+  usuario_id: USER_ID,
   tipo_alimento: 'Arroz',
   cantidad: 10,
   estado: 'pendiente',
@@ -89,7 +95,7 @@ const createDeps = () => {
       productosActualizados: 1,
       detalleEntregado: [{
         producto: {
-          id_producto: 'producto-1',
+          id_producto: PRODUCTO_ID,
           nombre_producto: 'Arroz',
           unidad_id: 1,
         },
@@ -147,7 +153,7 @@ describe('solicitudes use cases', () => {
         codigo_comprobante: 'CODIGO-TEST',
       },
       field: 'id',
-      value: 'solicitud-1',
+      value: SOLICITUD_ID,
     });
     expect(movementService.registrarMovimientoSolicitud).toHaveBeenCalledTimes(1);
     expect(notificationService.notificarCambioEstado).toHaveBeenCalledWith(
@@ -196,7 +202,7 @@ describe('solicitudes use cases', () => {
       solicitud: baseSolicitud,
       comentarioAdmin: 'No cumple criterios',
       motivoRechazo: 'Stock reservado',
-      operadorId: 'operador-1',
+      operadorId: OPERADOR_ID,
     }, deps);
 
     expect(result.success).toBe(true);
@@ -204,7 +210,7 @@ describe('solicitudes use cases', () => {
       estado: 'rechazada',
       comentario_admin: 'No cumple criterios',
       motivo_rechazo: 'Stock reservado',
-      operador_rechazo_id: 'operador-1',
+      operador_rechazo_id: OPERADOR_ID,
     });
     expect(notificationService.notificarCambioEstado).toHaveBeenCalledWith(
       baseSolicitud,
@@ -243,8 +249,8 @@ describe('solicitudes use cases', () => {
       cantidadDonar: 4,
       porcentaje: 40,
       comentario: 'Entrega inicial',
-      operadorId: 'operador-1',
-      depositoId: 'deposito-1',
+      operadorId: OPERADOR_ID,
+      depositoId: DEPOSITO_ID,
     }, deps);
 
     expect(result.success).toBe(true);
@@ -257,7 +263,7 @@ describe('solicitudes use cases', () => {
     expect(supabase.inserts[0]).toMatchObject({
       table: 'historial_donaciones',
       data: {
-        solicitud_id: 'solicitud-1',
+        solicitud_id: SOLICITUD_ID,
         cantidad_entregada: 4,
         porcentaje_entregado: 40,
       },

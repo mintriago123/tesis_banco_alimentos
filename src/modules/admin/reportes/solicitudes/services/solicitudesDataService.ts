@@ -12,6 +12,10 @@ import type {
   SupabaseSolicitudRow,
   SupabaseSolicitudUsuario
 } from '../types';
+import {
+  escapeLikePattern,
+  parsePositiveIntegerValue,
+} from '@/lib/validation-core';
 
 const logger = {
   info: (message: string, details?: unknown) => console.info(`[SolicitudesDataService] ${message}`, details),
@@ -87,6 +91,14 @@ export const createSolicitudesDataService = (supabaseClient: SupabaseClient) => 
 
   const fetchInventarioDisponible = async (solicitud: Pick<Solicitud, 'tipo_alimento' | 'unidad_id'>): Promise<ServiceResult<InventarioDisponible[]>> => {
     try {
+      const termino = solicitud.tipo_alimento.trim();
+      if (!termino) {
+        return {
+          success: true,
+          data: []
+        };
+      }
+
       const { data, error } = await supabaseClient
         .from('inventario')
         .select(`
@@ -107,7 +119,7 @@ export const createSolicitudesDataService = (supabaseClient: SupabaseClient) => 
             nombre
           )
         `)
-        .ilike('productos_donados.nombre_producto', `%${solicitud.tipo_alimento}%`)
+        .ilike('productos_donados.nombre_producto', `%${escapeLikePattern(termino)}%`)
         .gt('cantidad_disponible', 0)
         .order('fecha_actualizacion', { ascending: true, nullsFirst: false });
 
@@ -280,10 +292,15 @@ const obtenerUnidadPorId = async (
   supabaseClient: SupabaseClient,
   unidadId: number
 ): Promise<{ nombre?: string | null; simbolo?: string | null } | null> => {
+  const parsedUnidadId = parsePositiveIntegerValue(unidadId, { name: 'unidadId', min: 1 });
+  if (!parsedUnidadId.success) {
+    return null;
+  }
+
   const { data, error } = await supabaseClient
     .from('unidades')
     .select('nombre, simbolo')
-    .eq('id', unidadId)
+    .eq('id', parsedUnidadId.value)
     .maybeSingle();
 
   if (error || !data) {
@@ -298,6 +315,13 @@ const obtenerFactorConversion = async (
   unidadOrigenId: number,
   unidadDestinoId: number
 ): Promise<number | null> => {
+  const origen = parsePositiveIntegerValue(unidadOrigenId, { name: 'unidadOrigenId', min: 1 });
+  const destino = parsePositiveIntegerValue(unidadDestinoId, { name: 'unidadDestinoId', min: 1 });
+
+  if (!origen.success || !destino.success) {
+    return null;
+  }
+
   if (unidadOrigenId === unidadDestinoId) {
     return 1;
   }
@@ -305,8 +329,8 @@ const obtenerFactorConversion = async (
   const { data: conversionDirecta } = await supabaseClient
     .from('conversiones')
     .select('factor_conversion')
-    .eq('unidad_origen_id', unidadOrigenId)
-    .eq('unidad_destino_id', unidadDestinoId)
+    .eq('unidad_origen_id', origen.value)
+    .eq('unidad_destino_id', destino.value)
     .maybeSingle();
 
   if (conversionDirecta?.factor_conversion !== undefined && conversionDirecta?.factor_conversion !== null) {
@@ -316,8 +340,8 @@ const obtenerFactorConversion = async (
   const { data: conversionInversa } = await supabaseClient
     .from('conversiones')
     .select('factor_conversion')
-    .eq('unidad_origen_id', unidadDestinoId)
-    .eq('unidad_destino_id', unidadOrigenId)
+    .eq('unidad_origen_id', destino.value)
+    .eq('unidad_destino_id', origen.value)
     .maybeSingle();
 
   if (conversionInversa?.factor_conversion !== undefined && conversionInversa?.factor_conversion !== null) {

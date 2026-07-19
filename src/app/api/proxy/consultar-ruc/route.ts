@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validarRucEcuatoriano } from '@/lib/validaciones';
 
 /**
  * Proxy para consultas de RUC
@@ -16,6 +17,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const rucLimpio = ruc.trim();
+
+    if (!/^\d{13}$/.test(rucLimpio) || !validarRucEcuatoriano(rucLimpio)) {
+      return NextResponse.json(
+        { error: 'Formato de RUC inválido' },
+        { status: 400 }
+      );
+    }
+
     // Obtener la URL del servicio externo desde variables de entorno del servidor
     const servicioUrl = process.env.SERVICIO_CONSULTAS_RUC || process.env.NEXT_PUBLIC_SERVICIO_CONSULTAS_RUC;
     
@@ -27,10 +37,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const url = `${servicioUrl}?ruc=${ruc}`;
+    const url = new URL(servicioUrl);
+    url.searchParams.set('ruc', rucLimpio);
     
     // Realizar la petición HTTP desde el servidor (permitido)
-    const response = await fetch(url, {
+    const response = await fetch(url.toString(), {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });

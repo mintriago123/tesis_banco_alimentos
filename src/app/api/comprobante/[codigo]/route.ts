@@ -5,7 +5,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { decodificarQRPayload, formatearFecha, formatearFechaSolo } from '@/lib/comprobante';
-import type { DatosComprobante } from '@/lib/comprobante/types';
+import type { DatosComprobante, QRPayload } from '@/lib/comprobante/types';
+import { parsePositiveIntParam, parseUuid, type ApiValidationResult } from '@/lib/api-validation';
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;
 
@@ -16,11 +17,19 @@ donantes y distribuirlos de manera equitativa a personas y familias en situació
 vulnerabilidad alimentaria.
 `.trim();
 
+const MAX_CODIGO_LENGTH = 2048;
+const QR_TIMESTAMP_MIN = Date.UTC(2000, 0, 1);
+const QR_TIMESTAMP_MAX = Date.UTC(2100, 0, 1);
+
 /**
  * Verifica si el código es un código legible (SOL-xxx o DON-xxx)
  */
 function esCodigoLegible(codigo: string): boolean {
   return /^(SOL|DON)-[A-Z0-9]+-[A-Z0-9]+$/i.test(codigo);
+}
+
+function esPayloadCodificadoSeguro(codigo: string): boolean {
+  return /^[A-Za-z0-9_-]+$/.test(codigo);
 }
 
 type AccesoUsuario = {
@@ -69,6 +78,20 @@ type DonacionComprobanteRow = {
   unidad_simbolo: string | null;
   estado: string;
 };
+
+type PayloadQRValidado =
+  | {
+      tipo: 'solicitud';
+      pedidoId: string;
+      codigoComprobante: string;
+      fechaEmision: string;
+    }
+  | {
+      tipo: 'donacion';
+      pedidoId: number;
+      codigoComprobante: string;
+      fechaEmision: string;
+    };
 
 async function obtenerAccesoUsuario(supabase: ServerSupabaseClient): Promise<{
   usuario: AccesoUsuario | null;
@@ -138,6 +161,13 @@ export async function GET(
       );
     }
 
+    if (codigo.length > MAX_CODIGO_LENGTH) {
+      return NextResponse.json(
+        { error: 'Código de comprobante demasiado largo' },
+        { status: 400 }
+      );
+    }
+
     const supabase = await createServerSupabaseClient();
     const acceso = await obtenerAccesoUsuario(supabase);
 
@@ -158,6 +188,13 @@ export async function GET(
       return await buscarPorCodigoLegible(supabase, codigo, usuario);
     }
 
+    if (!esPayloadCodificadoSeguro(codigo)) {
+      return NextResponse.json(
+        { error: 'Código de comprobante inválido' },
+        { status: 400 }
+      );
+    }
+
     // Si no es código legible, intentar decodificar como payload QR
     const payload = decodificarQRPayload(codigo);
     if (!payload) {
@@ -167,12 +204,28 @@ export async function GET(
       );
     }
 
-    // Obtener datos según el tipo del payload QR
-    if (payload.t === 'S') {
-      return await obtenerSolicitudPorId(supabase, payload.p, payload.c, payload.f, usuario);
-    } else {
-      return await obtenerDonacionPorId(supabase, parseInt(payload.p), payload.c, payload.f, usuario);
+    const payloadValidado = validarPayloadQR(payload);
+    if (!payloadValidado.success) {
+      return payloadValidado.response;
     }
+
+    if (payloadValidado.value.tipo === 'solicitud') {
+      return await obtenerSolicitudPorId(
+        supabase,
+        payloadValidado.value.pedidoId,
+        payloadValidado.value.codigoComprobante,
+        payloadValidado.value.fechaEmision,
+        usuario
+      );
+    }
+
+    return await obtenerDonacionPorId(
+      supabase,
+      payloadValidado.value.pedidoId,
+      payloadValidado.value.codigoComprobante,
+      payloadValidado.value.fechaEmision,
+      usuario
+    );
   } catch (error) {
     console.error('Error procesando comprobante:', error);
     return NextResponse.json(
@@ -180,6 +233,72 @@ export async function GET(
       { status: 500 }
     );
   }
+}
+
+function validarPayloadQR(payload: QRPayload): ApiValidationResult<PayloadQRValidado> {
+  if (payload.t !== 'S' && payload.t !== 'D') {
+    return {
+      success: false,
+      response: NextResponse.json(
+        { error: 'Tipo de comprobante inválido' },
+        { status: 400 }
+      ),
+    };
+  }
+
+  if (typeof payload.c !== 'string' || !esCodigoLegible(payload.c)) {
+    return {
+      success: false,
+      response: NextResponse.json(
+        { error: 'Código de comprobante inválido' },
+        { status: 400 }
+      ),
+    };
+  }
+
+  const usuarioId = parseUuid(payload.u, { name: 'u' });
+  if (!usuarioId.success) return usuarioId;
+
+  const fecha = parsePositiveIntParam(payload.f, {
+    name: 'f',
+    min: QR_TIMESTAMP_MIN,
+    max: QR_TIMESTAMP_MAX,
+  });
+  if (!fecha.success) return fecha;
+
+  const fechaEmision = new Date(fecha.value).toISOString();
+
+  if (payload.t === 'S') {
+    const solicitudId = parseUuid(payload.p, { name: 'p' });
+    if (!solicitudId.success) return solicitudId;
+
+    return {
+      success: true,
+      value: {
+        tipo: 'solicitud',
+        pedidoId: solicitudId.value,
+        codigoComprobante: payload.c.toUpperCase(),
+        fechaEmision,
+      },
+    };
+  }
+
+  const donacionId = parsePositiveIntParam(payload.p, {
+    name: 'p',
+    min: 1,
+    max: 2147483647,
+  });
+  if (!donacionId.success) return donacionId;
+
+  return {
+    success: true,
+    value: {
+      tipo: 'donacion',
+      pedidoId: donacionId.value,
+      codigoComprobante: payload.c.toUpperCase(),
+      fechaEmision,
+    },
+  };
 }
 
 /**
@@ -319,7 +438,7 @@ async function obtenerDonacionPorId(supabase: ServerSupabaseClient, id: number, 
  * Genera la respuesta JSON para una solicitud
  */
 function generarRespuestaSolicitud(solicitud: SolicitudComprobanteRow, codigoComprobante: string, fecha?: string) {
-  const fechaEmision = fecha ? new Date(parseInt(fecha)).toISOString() : solicitud.fecha_respuesta || solicitud.created_at;
+  const fechaEmision = fecha ?? solicitud.fecha_respuesta ?? solicitud.created_at;
   
   const comprobante: DatosComprobante = {
     codigoComprobante: solicitud.codigo_comprobante || codigoComprobante,
@@ -370,7 +489,7 @@ function generarRespuestaSolicitud(solicitud: SolicitudComprobanteRow, codigoCom
  * Genera la respuesta JSON para una donación
  */
 function generarRespuestaDonacion(donacion: DonacionComprobanteRow, codigoComprobante: string, fecha?: string) {
-  const fechaEmision = fecha ? new Date(parseInt(fecha)).toISOString() : donacion.actualizado_en || donacion.creado_en;
+  const fechaEmision = fecha ?? donacion.actualizado_en ?? donacion.creado_en;
 
   const comprobante: DatosComprobante = {
     codigoComprobante: donacion.codigo_comprobante || codigoComprobante,

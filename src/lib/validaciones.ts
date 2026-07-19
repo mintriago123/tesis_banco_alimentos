@@ -51,7 +51,7 @@ export function validarRucEcuatoriano(ruc: string): boolean {
   // Solo números, 13 dígitos
   if (!/^\d{13}$/.test(ruc)) return false;
 
-  const tercerDigito = parseInt(ruc[2]);
+  const tercerDigito = Number(ruc[2]);
   // Persona natural (0-5)
   if (tercerDigito >= 0 && tercerDigito <= 5) {
     // Los primeros 10 dígitos deben ser una cédula válida
@@ -114,4 +114,4 @@ export function obtenerTipoPersonaPorRuc(ruc: string): 'Natural' | 'Juridica' | 
     default:
       return null;
   }
-} 
+}

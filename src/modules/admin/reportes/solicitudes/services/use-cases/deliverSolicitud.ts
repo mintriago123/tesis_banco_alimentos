@@ -1,6 +1,7 @@
 import type { Solicitud } from '../../types';
 import { updateSolicitudById } from './solicitudStatePersistence';
 import type { SolicitudActionResult, SolicitudUseCaseDeps } from './types';
+import { parseOptionalTextValue, parseUuidValue } from '@/lib/validation-core';
 
 export interface DeliverSolicitudParams {
   solicitud: Solicitud;
@@ -13,6 +14,19 @@ export const deliverSolicitud = async (
   deps: SolicitudUseCaseDeps
 ): SolicitudActionResult => {
   const { solicitud, comentarioAdmin, codigoComprobanteVerificado } = params;
+  const solicitudId = parseUuidValue(solicitud.id, { name: 'solicitud.id' });
+  if (!solicitudId.success) {
+    return { success: false, error: solicitudId.error };
+  }
+
+  const comentario = parseOptionalTextValue(comentarioAdmin, {
+    name: 'comentarioAdmin',
+    maxLength: 500,
+  });
+  if (!comentario.success) {
+    return { success: false, error: comentario.error };
+  }
+
   const codigoEsperado = solicitud.codigo_comprobante?.trim().toUpperCase();
   const codigoIngresado = codigoComprobanteVerificado?.trim().toUpperCase();
 
@@ -47,10 +61,10 @@ export const deliverSolicitud = async (
   const updateData = {
     estado: 'entregada',
     fecha_respuesta: new Date().toISOString(),
-    comentario_admin: comentarioAdmin?.trim() ? comentarioAdmin.trim() : null,
+    comentario_admin: comentario.value,
   };
 
-  const { error: updateError } = await updateSolicitudById(deps.supabaseClient, solicitud.id, updateData);
+  const { error: updateError } = await updateSolicitudById(deps.supabaseClient, solicitudId.value, updateData);
 
   if (updateError) {
     deps.logger.error('Error actualizando estado de solicitud', updateError);
