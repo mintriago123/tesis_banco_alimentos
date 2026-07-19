@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createAdminSupabaseClient } from '@/lib/supabase-admin';
 import { requireActiveUserRole } from '@/lib/server-auth';
 import {
   parseBooleanParam,
@@ -64,8 +65,10 @@ export async function GET(request: NextRequest) {
     });
     if (!prioridad.success) return prioridad.response;
 
-    // Llamar función de base de datos
-    const { data, error } = await supabase
+    const adminSupabase = createAdminSupabaseClient();
+
+    // Llamar función de base de datos desde el servidor tras validar rol.
+    const { data, error } = await adminSupabase
       .rpc('obtener_productos_proximos_vencer', {
         p_dias_umbral: diasUmbral.value
       });

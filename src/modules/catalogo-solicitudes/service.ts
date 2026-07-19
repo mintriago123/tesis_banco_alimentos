@@ -8,6 +8,7 @@ import type {
   SolicitudAltaUnidad
 } from './types';
 import {
+  isPlainRecord,
   parseOptionalTextValue,
   parsePositiveIntegerArrayValue,
   parsePositiveIntegerValue,
@@ -49,6 +50,22 @@ const solicitudSelect = `
 
 const MAX_UNIDADES_SOLICITUD = 50;
 const MAX_COMENTARIO_LENGTH = 500;
+
+const readResponseJson = async (response: Response): Promise<unknown> => {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+};
+
+const getResponseError = (payload: unknown, fallback: string): string => {
+  if (isPlainRecord(payload) && typeof payload.error === 'string') {
+    return payload.error;
+  }
+
+  return fallback;
+};
 
 export const createCatalogoSolicitudesService = (supabase: SupabaseClient) => {
   const listarSolicitudes = async (): Promise<CatalogoSolicitudResult<SolicitudAltaAlimento[]>> => {
@@ -214,29 +231,34 @@ export const createCatalogoSolicitudesService = (supabase: SupabaseClient) => {
         return { success: false, error: 'La unidad principal debe estar seleccionada' };
       }
 
-      const { data, error } = await supabase.rpc('aprobar_solicitud_alta_alimento', {
-        p_solicitud_id: solicitudId.value,
-        p_nombre: nombre,
-        p_categoria: categoria,
-        p_unidad_ids: unidadIds,
-        p_unidad_principal_id: unidadPrincipal.value ?? null
+      const response = await fetch('/api/admin/catalogo-solicitudes/aprobar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          solicitudId: solicitudId.value,
+          nombre,
+          categoria,
+          unidadIds,
+          unidadPrincipalId: unidadPrincipal.value ?? null
+        })
       });
+      const payload = await readResponseJson(response);
 
-      if (error) {
+      if (!response.ok) {
         return {
           success: false,
-          error: error.message || 'No fue posible aprobar la solicitud',
-          errorDetails: error
+          error: getResponseError(payload, 'No fue posible aprobar la solicitud'),
+          errorDetails: payload
         };
       }
 
-      const alimentoId = Number(data);
+      const alimentoId = isPlainRecord(payload) ? Number(payload.alimentoId) : Number.NaN;
 
       if (!Number.isSafeInteger(alimentoId) || alimentoId <= 0) {
         return {
           success: false,
           error: 'La solicitud fue aprobada, pero la respuesta del alimento creado no es válida',
-          errorDetails: data
+          errorDetails: payload
         };
       }
 

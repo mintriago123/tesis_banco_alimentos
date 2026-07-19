@@ -11,6 +11,7 @@ import {
   parseNotificationEventPayload,
 } from '@/modules/shared/services/notificationEventDispatcher';
 import { NotificationService } from '@/modules/shared/services/notificationService';
+import { validateCsrfRequest } from '@/lib/csrf';
 
 async function readJsonBody(request: Request): Promise<{ body: unknown } | { response: NextResponse }> {
   try {
@@ -24,6 +25,11 @@ async function readJsonBody(request: Request): Promise<{ body: unknown } | { res
 
 export async function POST(request: Request) {
   try {
+    const csrfResponse = validateCsrfRequest(request);
+    if (csrfResponse) {
+      return csrfResponse;
+    }
+
     const supabase = await createServerSupabaseClient();
     const authResult = await getAuthenticatedUser(supabase);
 

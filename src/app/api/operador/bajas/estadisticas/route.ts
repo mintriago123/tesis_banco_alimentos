@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createAdminSupabaseClient } from '@/lib/supabase-admin';
 import { parsePositiveIntParam } from '@/lib/api-validation';
 import { requireActiveUserRole } from '@/lib/server-auth';
 
@@ -37,8 +38,10 @@ export async function GET(request: NextRequest) {
     const fecha_inicio = new Date();
     fecha_inicio.setDate(fecha_inicio.getDate() - periodo.value);
 
-    // Llamar función de estadísticas
-    const { data, error } = await supabase
+    const adminSupabase = createAdminSupabaseClient();
+
+    // Llamar función de estadísticas desde el servidor tras validar rol.
+    const { data, error } = await adminSupabase
       .rpc('obtener_estadisticas_bajas', {
         p_fecha_inicio: fecha_inicio.toISOString(),
         p_fecha_fin: fecha_fin.toISOString()

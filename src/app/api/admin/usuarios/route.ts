@@ -9,6 +9,7 @@ import {
   requireRole,
   sanitizeAdminUserPatchUpdates,
 } from '@/lib/server-auth';
+import { validateCsrfRequest } from '@/lib/csrf';
 import type { PostgrestSingleResponse, SupabaseClient } from '@supabase/supabase-js';
 
 type CreateUserRequest = {
@@ -88,6 +89,11 @@ const parseCreateUserRequest = (body: unknown): CreateUserRequest | { response: 
 
 export async function POST(request: Request) {
   try {
+    const csrfResponse = validateCsrfRequest(request);
+    if (csrfResponse) {
+      return csrfResponse;
+    }
+
     const context = await requireActiveAdmin();
     if ('response' in context) {
       return context.response;
@@ -160,6 +166,11 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    const csrfResponse = validateCsrfRequest(request);
+    if (csrfResponse) {
+      return csrfResponse;
+    }
+
     const context = await requireActiveAdmin();
     if ('response' in context) {
       return context.response;

@@ -7,19 +7,28 @@ const INVENTARIO_ID = '22222222-2222-4222-8222-222222222222';
 
 const mocks = vi.hoisted(() => ({
   createServerSupabaseClient: vi.fn(),
+  createAdminSupabaseClient: vi.fn(),
   getUser: vi.fn(),
   from: vi.fn(),
   rpc: vi.fn(),
+  adminRpc: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase-server', () => ({
   createServerSupabaseClient: mocks.createServerSupabaseClient,
 }));
 
+vi.mock('@/lib/supabase-admin', () => ({
+  createAdminSupabaseClient: mocks.createAdminSupabaseClient,
+}));
+
 const jsonRequest = (body: unknown) =>
   new NextRequest('http://localhost/api/operador/bajas', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: 'http://localhost',
+    },
     body: JSON.stringify(body),
   });
 
@@ -36,9 +45,11 @@ const createUsuarioQuery = (profile: unknown) => ({
 
 beforeEach(() => {
   mocks.createServerSupabaseClient.mockReset();
+  mocks.createAdminSupabaseClient.mockReset();
   mocks.getUser.mockReset();
   mocks.from.mockReset();
   mocks.rpc.mockReset();
+  mocks.adminRpc.mockReset();
 
   mocks.getUser.mockResolvedValue({
     data: { user: { id: USER_ID } },
@@ -49,7 +60,7 @@ beforeEach(() => {
     rol: 'OPERADOR',
     estado: 'activo',
   }));
-  mocks.rpc.mockResolvedValue({
+  mocks.adminRpc.mockResolvedValue({
     data: [{
       success: true,
       message: 'Baja registrada',
@@ -62,6 +73,9 @@ beforeEach(() => {
     auth: { getUser: mocks.getUser },
     from: mocks.from,
     rpc: mocks.rpc,
+  });
+  mocks.createAdminSupabaseClient.mockReturnValue({
+    rpc: mocks.adminRpc,
   });
 });
 
@@ -80,7 +94,7 @@ describe('/api/operador/bajas', () => {
 
     expect(response.status).toBe(401);
     expect(mocks.from).not.toHaveBeenCalled();
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.adminRpc).not.toHaveBeenCalled();
   });
 
   it('rejects active users without operator permissions', async () => {
@@ -93,7 +107,7 @@ describe('/api/operador/bajas', () => {
     const response = await GET(new NextRequest('http://localhost/api/operador/bajas'));
 
     expect(response.status).toBe(403);
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.adminRpc).not.toHaveBeenCalled();
   });
 
   it('rejects invalid body before calling the RPC', async () => {
@@ -104,7 +118,7 @@ describe('/api/operador/bajas', () => {
     }));
 
     expect(response.status).toBe(400);
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.adminRpc).not.toHaveBeenCalled();
   });
 
   it('calls the RPC with sanitized valid input', async () => {
@@ -116,7 +130,7 @@ describe('/api/operador/bajas', () => {
     }));
 
     expect(response.status).toBe(200);
-    expect(mocks.rpc).toHaveBeenCalledWith('dar_baja_producto', {
+    expect(mocks.adminRpc).toHaveBeenCalledWith('dar_baja_producto', {
       p_id_inventario: INVENTARIO_ID,
       p_cantidad: 2.5,
       p_motivo: 'vencido',

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validarRucEcuatoriano } from '@/lib/validaciones';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createAdminSupabaseClient } from '@/lib/supabase-admin';
 import { getAuthenticatedUser } from '@/lib/server-auth';
+import {
+  enforceDocumentLookupRateLimit,
+  resolveServerServiceUrl,
+} from '@/lib/document-lookup-security';
 
 /**
  * Proxy para consultas de RUC
@@ -35,18 +40,24 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Obtener la URL del servicio externo desde variables de entorno del servidor
-    const servicioUrl = process.env.SERVICIO_CONSULTAS_RUC || process.env.NEXT_PUBLIC_SERVICIO_CONSULTAS_RUC;
-    
-    if (!servicioUrl) {
-      console.error('❌ Variable de entorno SERVICIO_CONSULTAS_RUC no configurada');
-      return NextResponse.json(
-        { error: 'Servicio de consultas no configurado' },
-        { status: 500 }
-      );
+    const serviceUrl = resolveServerServiceUrl('SERVICIO_CONSULTAS_RUC');
+
+    if (!serviceUrl.success) {
+      return serviceUrl.response;
     }
 
-    const url = new URL(servicioUrl);
+    const adminSupabase = createAdminSupabaseClient();
+    const rateLimit = await enforceDocumentLookupRateLimit(adminSupabase, {
+      userId: authResult.user.id,
+      endpoint: 'consultar-ruc',
+      documentValue: rucLimpio,
+    });
+
+    if (!rateLimit.allowed) {
+      return rateLimit.response;
+    }
+
+    const url = new URL(serviceUrl.url.toString());
     url.searchParams.set('ruc', rucLimpio);
     
     // Realizar la petición HTTP desde el servidor (permitido)

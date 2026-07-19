@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createAdminSupabaseClient } from '@/lib/supabase-admin';
 import { requireActiveUserRole } from '@/lib/server-auth';
 import {
   parseEnumParam,
@@ -15,6 +16,7 @@ import {
   parseUuid,
   readJsonObject,
 } from '@/lib/api-validation';
+import { validateCsrfRequest } from '@/lib/csrf';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +29,11 @@ const MOTIVOS_BAJA_FILTRO = ['todos', ...MOTIVOS_BAJA] as const;
  */
 export async function POST(request: NextRequest) {
   try {
+    const csrfResponse = validateCsrfRequest(request);
+    if (csrfResponse) {
+      return csrfResponse;
+    }
+
     const supabase = await createServerSupabaseClient();
     const authResult = await requireActiveUserRole(supabase, ['ADMINISTRADOR', 'OPERADOR']);
 
@@ -53,8 +60,10 @@ export async function POST(request: NextRequest) {
     });
     if (!observaciones.success) return observaciones.response;
 
-    // Llamar a la función de base de datos
-    const { data, error } = await supabase
+    const adminSupabase = createAdminSupabaseClient();
+
+    // Llamar a la función de base de datos desde el servidor tras validar rol.
+    const { data, error } = await adminSupabase
       .rpc('dar_baja_producto', {
         p_id_inventario: idInventario.value,
         p_cantidad: cantidad.value,

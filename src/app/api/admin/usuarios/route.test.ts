@@ -21,7 +21,10 @@ vi.mock('@/lib/supabase-admin', () => ({
 const jsonRequest = (method: 'POST' | 'PATCH', body: unknown) =>
   new Request('http://localhost/api/admin/usuarios', {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: 'http://localhost',
+    },
     body: JSON.stringify(body),
   });
 

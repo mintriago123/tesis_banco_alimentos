@@ -41,14 +41,20 @@ vi.mock('@/modules/shared/services/notificationService', () => ({
 const jsonRequest = (body: unknown) =>
   new Request('http://localhost/api/notificaciones', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: 'http://localhost',
+    },
     body: JSON.stringify(body),
   });
 
 const rawJsonRequest = (body: string) =>
   new Request('http://localhost/api/notificaciones', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: 'http://localhost',
+    },
     body,
   });
 
