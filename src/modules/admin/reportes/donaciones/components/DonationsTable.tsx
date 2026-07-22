@@ -27,6 +27,7 @@ interface DonationsTableProps {
   hasActiveFilters: boolean;
   onResetFilters: () => void;
   onChangeEstado: (donation: Donation, nuevoEstado: DonationEstado) => void;
+  canCancel?: boolean;
   processingId?: number;
   onViewDetails?: (donation: Donation) => void;
   messages: {
@@ -51,6 +52,7 @@ const DonationsTable = ({
   hasActiveFilters,
   onResetFilters,
   onChangeEstado,
+  canCancel = true,
   processingId,
   onViewDetails,
   messages
@@ -117,6 +119,7 @@ const DonationsTable = ({
             <tbody className="bg-white divide-y divide-gray-200">
             {donations.map(donation => {
               const isProcessing = processingId === donation.id;
+              const canChangeState = donation.estado === 'Pendiente';
               // Extract expiration color selection into a separate statement to avoid nested ternary
               let expiryColorClass = 'text-gray-500';
               if (donation.fecha_vencimiento) {
@@ -214,7 +217,8 @@ const DonationsTable = ({
                       <button
                         type="button"
                         onClick={() => onChangeEstado(donation, 'Pendiente')}
-                        disabled={isProcessing || donation.estado === 'Pendiente'}
+                        disabled={isProcessing || !canChangeState || donation.estado === 'Pendiente'}
+                        aria-label={`Mantener donación ${donation.id} pendiente`}
                         className="px-2 py-1 text-xs border border-yellow-200 text-yellow-600 rounded hover:bg-yellow-50 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Pendiente
@@ -222,19 +226,23 @@ const DonationsTable = ({
                       <button
                         type="button"
                         onClick={() => onChangeEstado(donation, 'Aprobada')}
-                        disabled={isProcessing || donation.estado === 'Aprobada'}
+                        disabled={isProcessing || !canChangeState}
+                        aria-label={`Aprobar donación ${donation.id}`}
                         className="px-2 py-1 text-xs border border-green-200 text-green-600 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Aprobada
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onChangeEstado(donation, 'Cancelada')}
-                        disabled={isProcessing || donation.estado === 'Cancelada'}
-                        className="px-2 py-1 text-xs border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Cancelada
-                      </button>
+                      {canCancel && (
+                        <button
+                          type="button"
+                          onClick={() => onChangeEstado(donation, 'Cancelada')}
+                          disabled={isProcessing || !canChangeState}
+                          aria-label={`Cancelar donación ${donation.id}`}
+                          className="px-2 py-1 text-xs border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Cancelar
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={onViewDetails ? () => onViewDetails(donation) : undefined}

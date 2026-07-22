@@ -100,6 +100,10 @@ const mapDonationRowToDomain = (row: SupabaseDonationWithAlimento): Donation => 
   estado: row.estado,
   creado_en: row.creado_en,
   actualizado_en: row.actualizado_en,
+  motivo_cancelacion: row.motivo_cancelacion ?? null,
+  observaciones_cancelacion: row.observaciones_cancelacion ?? null,
+  usuario_cancelacion_id: row.usuario_cancelacion_id ?? null,
+  fecha_cancelacion: row.fecha_cancelacion ?? null,
   alimento: row.alimento
     ? {
         nombre: row.alimento.nombre ?? 'Producto',

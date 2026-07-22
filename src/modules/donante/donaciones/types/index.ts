@@ -1,3 +1,7 @@
+import type { MotivoCancelacion } from '@/modules/shared/donaciones/types';
+
+export type { MotivoCancelacion } from '@/modules/shared/donaciones/types';
+
 export interface Donacion {
   id: number;
   user_id: string;
@@ -28,6 +32,10 @@ export interface Donacion {
   creado_en: string;
   actualizado_en: string;
   codigo_comprobante?: string;
+  motivo_cancelacion?: MotivoCancelacion | null;
+  observaciones_cancelacion?: string | null;
+  usuario_cancelacion_id?: string | null;
+  fecha_cancelacion?: string | null;
 }
 
 export interface DonacionEstadisticas {

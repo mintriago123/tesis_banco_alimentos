@@ -9,6 +9,7 @@ import {
   useFilter,
   useDonacionesData 
 } from '@/modules/donante/donaciones/hooks';
+import type { MotivoCancelacion } from '@/modules/shared/donaciones';
 import {
   DonacionesHeader,
   DonacionesStats,
@@ -16,9 +17,10 @@ import {
   DonacionesTable,
   DonacionDetalleModal,
   DonacionEdicionModal,
+  DonacionCancelacionModal,
   DonacionesEmptyState,
 } from '@/modules/donante/donaciones/components';
-import { Donacion } from '@/modules/donante/donaciones/types';
+import type { Donacion } from '@/modules/donante/donaciones/types';
 
 export default function MisDonacionesPage() {
   const { supabase, user } = useSupabase();
@@ -28,14 +30,16 @@ export default function MisDonacionesPage() {
     donaciones,
     cargando,
     mensaje,
+    cancelandoId,
     cargarDonaciones,
-    eliminarDonacion: eliminar,
+    cancelarDonacion,
     actualizarDonacion: actualizar,
   } = useDonacionesData(supabase, user);
 
   // Hooks para modales
   const modalEdicion = useModal<Donacion>();
   const modalDetalle = useModal<Donacion>();
+  const modalCancelacion = useModal<Donacion>();
 
   // Hook para filtros
   const { filtro: filtroEstado, setFiltro: setFiltroEstado, datosFiltrados: donacionesFiltradas } = useFilter<Donacion>(
@@ -87,6 +91,23 @@ export default function MisDonacionesPage() {
     }
   };
 
+  const handleConfirmarCancelacion = async (
+    motivo: MotivoCancelacion,
+    observaciones?: string,
+  ) => {
+    if (!modalCancelacion.data) return;
+
+    const donacionCancelada = await cancelarDonacion(
+      modalCancelacion.data.id,
+      motivo,
+      observaciones,
+    );
+
+    if (!donacionCancelada) {
+      throw new Error('No se pudo cancelar la donación. Verifica que aún esté pendiente.');
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
@@ -125,6 +146,14 @@ export default function MisDonacionesPage() {
           />
         )}
 
+        <DonacionCancelacionModal
+          donacion={modalCancelacion.data}
+          isOpen={modalCancelacion.isOpen}
+          isProcessing={cancelandoId === modalCancelacion.data?.id}
+          onClose={modalCancelacion.close}
+          onConfirm={handleConfirmarCancelacion}
+        />
+
         {cargando ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
@@ -137,7 +166,7 @@ export default function MisDonacionesPage() {
             donaciones={donacionesFiltradas}
             onVerDetalle={modalDetalle.open}
             onEditar={modalEdicion.open}
-            onEliminar={eliminar}
+            onCancelar={modalCancelacion.open}
           />
         )}
       </div>

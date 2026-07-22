@@ -307,16 +307,36 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
       };
     }
 
-    const primary = await supabaseClient
+    let primaryQuery = supabaseClient
       .from('donaciones')
       .update(updateData)
       .eq('id', parsedDonationId.value);
 
-    if (!primary.error) {
+    const estadoValue = String(updateData.estado ?? '');
+    if (estadoValue === 'Cancelada') {
+      primaryQuery = primaryQuery.eq('estado', 'Pendiente');
+    }
+
+    const primary = await primaryQuery
+      .select('id')
+      .maybeSingle();
+
+    if (!primary.error && primary.data) {
       return { error: null as null | typeof primary.error, usedLegacyEstado: false };
     }
 
-    const estadoValue = String(updateData.estado ?? '');
+    if (!primary.error) {
+      return {
+        error: {
+          message: estadoValue === 'Cancelada'
+            ? 'La donación no está pendiente o ya fue cancelada'
+            : 'No se encontró la donación para actualizar',
+          code: 'NO_MATCHING_DONATION',
+        },
+        usedLegacyEstado: false,
+      };
+    }
+
     const isConstraintError = primary.error.code === '23514';
 
     if (isConstraintError && estadoValue === 'Aprobada') {
@@ -328,9 +348,11 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
       const legacy = await supabaseClient
         .from('donaciones')
         .update(fallbackData)
-        .eq('id', parsedDonationId.value);
+        .eq('id', parsedDonationId.value)
+        .select('id')
+        .maybeSingle();
 
-      if (!legacy.error) {
+      if (!legacy.error && legacy.data) {
         logger.warn('BD con constraint legacy detectada. Se guardó estado Entregada como equivalente de Aprobada.', {
           donationId
         });
@@ -454,6 +476,13 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
     }
     const cancelacionPayload = cancelacionValidation.data;
 
+    if (nuevoEstado === 'Cancelada' && donation.estado !== 'Pendiente') {
+      return {
+        success: false,
+        error: 'Solo se pueden cancelar donaciones pendientes',
+      };
+    }
+
     // Prevenir procesamiento duplicado de la misma donación
     const cacheKey = donation.id;
     
@@ -492,6 +521,13 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
       
       // Obtener usuario actual para registrar quién cancela
       const { data: { user } } = await supabaseClient.auth.getUser();
+
+      if (nuevoEstado === 'Cancelada' && !user) {
+        return {
+          success: false,
+          error: 'No se pudo validar el usuario que cancela la donación',
+        };
+      }
       
       // Preparar datos de actualización
       const updateData: {
@@ -532,6 +568,13 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
 
       if (error) {
         logger.error('Error actualizando estado de donación', error);
+
+        if (error.code === 'NO_MATCHING_DONATION') {
+          return {
+            success: false,
+            error: 'La donación ya no está pendiente o fue cancelada por otro usuario',
+          };
+        }
         
         // Si el error es por columnas que no existen
         if (error.code === '42703' || error.message?.includes('column')) {

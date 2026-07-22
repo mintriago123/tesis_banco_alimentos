@@ -13,11 +13,32 @@ const toOrigin = (value?: string) => {
   }
 };
 
+const toWebSocketOrigin = (value?: string) => {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value);
+    const protocol = url.protocol === 'https:'
+      ? 'wss:'
+      : url.protocol === 'http:'
+        ? 'ws:'
+        : null;
+
+    return protocol ? `${protocol}//${url.host}` : null;
+  } catch {
+    return null;
+  }
+};
+
 const uniqueSources = (sources: Array<string | null | undefined>) =>
   Array.from(new Set(sources.filter((source): source is string => Boolean(source))));
 
 const buildContentSecurityPolicy = () => {
-  const supabaseOrigin = toOrigin(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseOrigin = toOrigin(supabaseUrl);
+  const supabaseWebSocketOrigin = toWebSocketOrigin(supabaseUrl);
 
   const directives: Array<[string, string[]]> = [
     ['default-src', ["'self'"]],
@@ -57,7 +78,9 @@ const buildContentSecurityPolicy = () => {
     ['connect-src', uniqueSources([
       "'self'",
       supabaseOrigin,
+      supabaseWebSocketOrigin,
       'https://*.supabase.co',
+      'wss://*.supabase.co',
       'https://api.mapbox.com',
       'https://events.mapbox.com',
     ])],

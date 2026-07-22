@@ -22,5 +22,11 @@ export type {
   DonationCounters,
   DonationEstadoFilter,
   DonationPersonType,
-  DonationPersonTypeFilter
+  DonationPersonTypeFilter,
+  MotivoCancelacion
 } from './types';
+
+export {
+  MOTIVOS_CANCELACION_OPTIONS,
+  MOTIVO_CANCELACION_LABELS
+} from './constants';

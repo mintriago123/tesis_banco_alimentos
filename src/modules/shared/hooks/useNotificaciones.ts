@@ -23,6 +23,19 @@ interface ConfiguracionNotificacion {
   sonido_activo: boolean;
 }
 
+const getSocketCloseCode = (error: unknown): number | undefined => {
+  if (typeof error !== 'object' || error === null || !('cause' in error)) {
+    return undefined;
+  }
+
+  const cause = error.cause;
+  if (typeof cause !== 'object' || cause === null || !('code' in cause)) {
+    return undefined;
+  }
+
+  return typeof cause.code === 'number' ? cause.code : undefined;
+};
+
 export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
   const [configuracion, setConfiguracion] = useState<ConfiguracionNotificacion[]>([]);
@@ -299,10 +312,12 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
       { key: 'todos', filter: 'rol_destinatario=eq.TODOS' },
     ];
 
-    const channels = subscriptions.map(({ key, filter }) =>
-      supabase
-        .channel(`notificaciones_realtime:${user.id}:${key}`)
-        .on(
+    let isEffectActive = true;
+    const channel = supabase.channel(`notificaciones_realtime:${user.id}`);
+
+    try {
+      subscriptions.forEach(({ filter }) => {
+        channel.on(
           'postgres_changes',
           {
             event: '*',
@@ -311,14 +326,33 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
             filter
           },
           handleRealtimePayload
-        )
-        .subscribe()
-    );
+        );
+      });
+
+      channel.subscribe((status, subscriptionError) => {
+        if (!isEffectActive || (status !== 'CHANNEL_ERROR' && status !== 'TIMED_OUT')) {
+          return;
+        }
+
+        const closeCode = getSocketCloseCode(subscriptionError);
+        if (closeCode === 1000 || closeCode === 1001) {
+          return;
+        }
+
+        console.warn(
+          `Realtime de notificaciones no disponible (${status})`,
+          subscriptionError
+        );
+      });
+    } catch (subscriptionError) {
+      if (isEffectActive) {
+        console.warn('Realtime de notificaciones no disponible', subscriptionError);
+      }
+    }
 
     return () => {
-      channels.forEach(channel => {
-        supabase.removeChannel(channel);
-      });
+      isEffectActive = false;
+      void supabase.removeChannel(channel);
     };
   }, [supabase, user, userRole]);
 

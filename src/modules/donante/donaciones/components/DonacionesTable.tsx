@@ -1,19 +1,19 @@
-import { Eye, Edit, Trash2, Clock, CheckCircle, XCircle, Package } from 'lucide-react';
-import { Donacion } from '../types';
+import { Eye, Edit, Clock, CheckCircle, XCircle, Package } from 'lucide-react';
+import type { Donacion } from '../types';
 import { useDateFormatter } from '@/modules/shared/hooks/useDateFormatter';
 
 interface DonacionesTableProps {
   donaciones: Donacion[];
   onVerDetalle: (donacion: Donacion) => void;
   onEditar: (donacion: Donacion) => void;
-  onEliminar: (id: number) => void;
+  onCancelar: (donacion: Donacion) => void;
 }
 
 export function DonacionesTable({
   donaciones,
   onVerDetalle,
   onEditar,
-  onEliminar,
+  onCancelar,
 }: DonacionesTableProps) {
   const { formatDate } = useDateFormatter();
 
@@ -119,6 +119,7 @@ export function DonacionesTable({
                       onClick={() => onVerDetalle(donacion)}
                       className="text-blue-600 hover:text-blue-800"
                       title="Ver detalles"
+                      aria-label={`Ver detalles de ${donacion.tipo_producto}`}
                     >
                       <Eye className="w-5 h-5" />
                     </button>
@@ -128,15 +129,17 @@ export function DonacionesTable({
                           onClick={() => onEditar(donacion)}
                           className="text-green-600 hover:text-green-800"
                           title="Editar"
+                          aria-label={`Editar donación de ${donacion.tipo_producto}`}
                         >
                           <Edit className="w-5 h-5" />
                         </button>
                         <button
-                          onClick={() => onEliminar(donacion.id)}
+                          onClick={() => onCancelar(donacion)}
                           className="text-red-600 hover:text-red-800"
-                          title="Eliminar"
+                          title="Cancelar donación"
+                          aria-label={`Cancelar donación de ${donacion.tipo_producto}`}
                         >
-                          <Trash2 className="w-5 h-5" />
+                          <XCircle className="w-5 h-5" />
                         </button>
                       </>
                     )}

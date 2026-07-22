@@ -22,16 +22,9 @@ import {
 } from 'lucide-react';
 import type { DonacionCanceladaDetalle, EstadisticasCancelaciones } from '@/modules/admin/reportes/cancelaciones/types';
 import type { MotivoCancelacion } from '@/modules/admin/reportes/donaciones/types';
+import { MOTIVO_CANCELACION_LABELS } from '@/modules/shared/donaciones/constants';
 
-const motivosLabels: Record<MotivoCancelacion, string> = {
-  error_donante: 'Error del Donante',
-  no_disponible: 'Producto No Disponible',
-  calidad_inadecuada: 'Calidad Inadecuada',
-  logistica_imposible: 'Logística Imposible',
-  duplicado: 'Donación Duplicada',
-  solicitud_donante: 'Solicitud del Donante',
-  otro: 'Otro Motivo'
-};
+const motivosLabels: Record<MotivoCancelacion, string> = MOTIVO_CANCELACION_LABELS;
 
 const motivosColors: Record<MotivoCancelacion, string> = {
   error_donante: 'bg-orange-100 text-orange-800 border-orange-300',

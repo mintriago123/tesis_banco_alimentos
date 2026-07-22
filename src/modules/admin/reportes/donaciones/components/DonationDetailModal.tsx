@@ -315,6 +315,26 @@ const DonationDetailModal = ({ donation, isOpen, onClose }: DonationDetailModalP
             </div>
           </div>
 
+          {modalEstado === 'Cancelada' && (
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                <XCircle className="w-5 h-5 mr-2 text-red-600" />
+                Información de cancelación
+              </h3>
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-2 text-sm text-gray-700">
+                {donation.fecha_cancelacion && (
+                  <p><span className="font-medium">Fecha:</span> {formatShortDate(donation.fecha_cancelacion)}</p>
+                )}
+                {donation.motivo_cancelacion && (
+                  <p><span className="font-medium">Motivo:</span> {donation.motivo_cancelacion}</p>
+                )}
+                {donation.observaciones_cancelacion && (
+                  <p><span className="font-medium">Observaciones:</span> {donation.observaciones_cancelacion}</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Código de Verificación */}
           {donation.codigo_comprobante && (
             <div className="mb-6">

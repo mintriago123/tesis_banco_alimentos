@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Donacion } from '../types';
+import type { Donacion, MotivoCancelacion } from '../types';
 import {
+  parseEnumValue,
   parseIsoDateValue,
   parseOptionalTextValue,
   parsePositiveIntegerValue,
@@ -15,7 +16,17 @@ type DonacionWithUnidad = Donacion & {
   } | null;
 };
 
-const isDevelopment = process.env.NODE_ENV === 'development';
+const MOTIVOS_CANCELACION = [
+  'error_donante',
+  'no_disponible',
+  'calidad_inadecuada',
+  'logistica_imposible',
+  'duplicado',
+  'solicitud_donante',
+  'otro',
+] as const satisfies readonly MotivoCancelacion[];
+
+const MAX_OBSERVACIONES_CANCELACION = 500;
 
 export class DonacionesService {
   constructor(private supabase: SupabaseClient) {}
@@ -42,14 +53,14 @@ export class DonacionesService {
       throw new Error(`Error al cargar donaciones: ${error.message}`);
     }
 
-    return ((data || []) as DonacionWithUnidad[]).map((donacion) => ({
-      ...donacion,
-      unidad_nombre: donacion.unidades?.nombre || '',
-      unidad_simbolo: donacion.unidades?.simbolo || '',
-    }));
+    return ((data || []) as DonacionWithUnidad[]).map(mapDonacionWithUnidad);
   }
 
-  async eliminarDonacion(id: number): Promise<void> {
+  async cancelarDonacion(
+    id: number,
+    motivo: MotivoCancelacion,
+    observaciones?: string,
+  ): Promise<Donacion> {
     const donacionId = parsePositiveIntegerValue(id, {
       name: 'id',
       min: 1,
@@ -59,30 +70,64 @@ export class DonacionesService {
       throw new Error(donacionId.error);
     }
 
-    if (isDevelopment) {
-      console.log('🗑️ Intentando eliminar donación con ID:', id);
+    const motivoResult = parseEnumValue(motivo, MOTIVOS_CANCELACION, { name: 'motivo' });
+    if (!motivoResult.success) {
+      throw new Error(motivoResult.error);
     }
-    
+
+    const observacionesResult = parseOptionalTextValue(observaciones, {
+      name: 'observaciones',
+      maxLength: MAX_OBSERVACIONES_CANCELACION,
+    });
+    if (!observacionesResult.success) {
+      throw new Error(observacionesResult.error);
+    }
+
+    if (motivoResult.value === 'otro' && !observacionesResult.value) {
+      throw new Error('Las observaciones son obligatorias cuando el motivo es otro');
+    }
+
+    const {
+      data: { user },
+      error: authError,
+    } = await this.supabase.auth.getUser();
+    if (authError || !user) {
+      throw new Error('No se pudo validar el usuario autenticado');
+    }
+
     const { data, error } = await this.supabase
       .from('donaciones')
-      .delete()
+      .update({
+        estado: 'Cancelada',
+        motivo_cancelacion: motivoResult.value,
+        observaciones_cancelacion: observacionesResult.value,
+        usuario_cancelacion_id: user.id,
+        fecha_cancelacion: new Date().toISOString(),
+        actualizado_en: new Date().toISOString(),
+      })
       .eq('id', donacionId.value)
-      .select();
+      .eq('estado', 'Pendiente')
+      .select(`
+        *,
+        unidades:unidad_id (
+          nombre,
+          simbolo
+        )
+      `)
+      .maybeSingle();
 
     if (error) {
-      console.error('❌ Error al eliminar donación:', error);
-      throw new Error(`Error al eliminar donación: ${error.message}`);
+      console.error('Error al cancelar donación', { donacionId: donacionId.value, error });
+      throw new Error(`Error al cancelar donación: ${error.message}`);
     }
-    
-    // Verificar que realmente se eliminó algo
-    if (!data || data.length === 0) {
-      console.error('⚠️ No se eliminó ninguna fila. Posible problema de permisos RLS');
-      throw new Error('No se pudo eliminar la donación. Verifica los permisos o que la donación exista.');
+
+    if (!data) {
+      console.error('No se pudo cancelar la donación', { donacionId: donacionId.value, result: 'sin_fila' });
+      throw new Error('Solo se pueden cancelar donaciones pendientes propias');
     }
-    
-    if (isDevelopment) {
-      console.log('✅ Donación eliminada exitosamente:', data);
-    }
+
+    console.info('Donación cancelada', { donacionId: donacionId.value, result: 'ok' });
+    return mapDonacionWithUnidad(data as DonacionWithUnidad);
   }
 
   async actualizarDonacion(donacion: Donacion): Promise<void> {
@@ -127,10 +172,19 @@ export class DonacionesService {
         observaciones: observaciones.value,
         actualizado_en: new Date().toISOString(),
       })
-      .eq('id', donacionId.value);
+      .eq('id', donacionId.value)
+      .eq('estado', 'Pendiente');
 
     if (error) {
       throw new Error(`Error al actualizar donación: ${error.message}`);
     }
   }
+}
+
+function mapDonacionWithUnidad(donacion: DonacionWithUnidad): Donacion {
+  return {
+    ...donacion,
+    unidad_nombre: donacion.unidades?.nombre || donacion.unidad_nombre || '',
+    unidad_simbolo: donacion.unidades?.simbolo || donacion.unidad_simbolo || '',
+  };
 }

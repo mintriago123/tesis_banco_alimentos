@@ -5,8 +5,9 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, AlertTriangle, Package, FileText } from 'lucide-react';
+import { MOTIVOS_CANCELACION_OPTIONS } from '@/modules/shared/donaciones';
 import type { Donation, MotivoCancelacion } from '../types';
 
 interface CancelarDonacionModalProps {
@@ -16,16 +17,6 @@ interface CancelarDonacionModalProps {
   onConfirm: (motivo: MotivoCancelacion, observaciones?: string) => Promise<void>;
   isProcessing?: boolean;
 }
-
-const motivosOptions: { value: MotivoCancelacion; label: string; description: string }[] = [
-  { value: 'error_donante', label: 'Error del Donante', description: 'El donante cometió un error al registrar' },
-  { value: 'no_disponible', label: 'Producto No Disponible', description: 'El producto ya no está disponible para donar' },
-  { value: 'calidad_inadecuada', label: 'Calidad Inadecuada', description: 'El producto no cumple con estándares de calidad' },
-  { value: 'logistica_imposible', label: 'Logística Imposible', description: 'No se puede coordinar la logística de recolección' },
-  { value: 'duplicado', label: 'Donación Duplicada', description: 'Donación registrada por error o duplicada' },
-  { value: 'solicitud_donante', label: 'Solicitud del Donante', description: 'El donante solicita cancelar la donación' },
-  { value: 'otro', label: 'Otro Motivo', description: 'Especificar en observaciones' }
-];
 
 export default function CancelarDonacionModal({
   isOpen,
@@ -37,6 +28,7 @@ export default function CancelarDonacionModal({
   const [motivo, setMotivo] = useState<MotivoCancelacion>('solicitud_donante');
   const [observaciones, setObservaciones] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,12 +48,23 @@ export default function CancelarDonacionModal({
     }
   };
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setMotivo('solicitud_donante');
     setObservaciones('');
     setError(null);
     onClose();
-  };
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    closeButtonRef.current?.focus();
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isProcessing) handleClose();
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [handleClose, isOpen, isProcessing]);
 
   // No renderizar si no está abierto o no hay donación
   if (!isOpen || !donacion) {
@@ -70,15 +73,23 @@ export default function CancelarDonacionModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-cancelar-donacion-title"
+        className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+      >
         {/* Header */}
         <div className="sticky top-0 bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-4 rounded-t-lg flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <AlertTriangle className="w-6 h-6" />
-            <h2 className="text-xl font-bold">Cancelar Donación</h2>
+            <h2 id="admin-cancelar-donacion-title" className="text-xl font-bold">Cancelar Donación</h2>
           </div>
           <button
+            ref={closeButtonRef}
+            type="button"
             onClick={handleClose}
+            aria-label="Cerrar ventana de cancelación"
             className="hover:bg-red-700 rounded-full p-1 transition-colors"
             disabled={isProcessing}
           >
@@ -117,7 +128,7 @@ export default function CancelarDonacionModal({
               Motivo de Cancelación <span className="text-red-500">*</span>
             </label>
             <div className="space-y-2">
-              {motivosOptions.map((option) => (
+              {MOTIVOS_CANCELACION_OPTIONS.map((option) => (
                 <label
                   key={option.value}
                   className={`flex items-start space-x-3 p-3 border rounded-lg cursor-pointer transition-all ${
@@ -171,7 +182,7 @@ export default function CancelarDonacionModal({
 
           {/* Mensaje de error */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start space-x-2">
+            <div role="alert" className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start space-x-2">
               <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-red-700">{error}</p>
             </div>

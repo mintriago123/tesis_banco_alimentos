@@ -2,20 +2,15 @@
  * @fileoverview Tipos compartidos para el módulo de reportes de donaciones.
  */
 
+import type { MotivoCancelacion } from '@/modules/shared/donaciones/types';
+
 export type DonationEstado = 'Pendiente' | 'Aprobada' | 'Cancelada';
 
 export type DonationPersonType = 'Natural' | 'Juridica';
 
 export type LoadingState = 'idle' | 'loading' | 'success' | 'error';
 
-export type MotivoCancelacion = 
-  | 'error_donante'
-  | 'no_disponible'
-  | 'calidad_inadecuada'
-  | 'logistica_imposible'
-  | 'duplicado'
-  | 'solicitud_donante'
-  | 'otro';
+export type { MotivoCancelacion } from '@/modules/shared/donaciones/types';
 
 export interface DonationAlimento {
   nombre: string;
@@ -128,6 +123,10 @@ export interface SupabaseDonationRow {
   creado_en: string;
   actualizado_en: string;
   codigo_comprobante?: string | null;
+  motivo_cancelacion?: MotivoCancelacion | null;
+  observaciones_cancelacion?: string | null;
+  usuario_cancelacion_id?: string | null;
+  fecha_cancelacion?: string | null;
 }
 
 export interface SupabaseAlimentoRow {

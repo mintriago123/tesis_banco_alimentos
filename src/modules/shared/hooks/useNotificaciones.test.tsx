@@ -13,9 +13,12 @@ type RealtimeRegistration = {
   callback: (payload: RealtimePayload) => void;
 };
 
+type RealtimeStatusCallback = (status: string, error?: Error) => void;
+
 type MockChannel = {
   name: string;
   handlers: RealtimeRegistration[];
+  statusCallback?: RealtimeStatusCallback;
   on: ReturnType<typeof vi.fn>;
   subscribe: ReturnType<typeof vi.fn>;
 };
@@ -46,7 +49,10 @@ const createChannel = (name: string): MockChannel => {
     channel.handlers.push({ config, callback });
     return channel;
   });
-  channel.subscribe.mockReturnValue(channel);
+  channel.subscribe.mockImplementation((callback?: RealtimeStatusCallback) => {
+    channel.statusCallback = callback;
+    return channel;
+  });
 
   return channel;
 };
@@ -54,14 +60,21 @@ const createChannel = (name: string): MockChannel => {
 const createSupabaseMock = ({
   role = 'ADMINISTRADOR',
   notifications = [],
+  subscribeError,
 }: {
   role?: string;
   notifications?: ReturnType<typeof createNotification>[];
+  subscribeError?: Error;
 } = {}) => {
   const channels: MockChannel[] = [];
   const removeChannel = vi.fn();
   const channel = vi.fn((name: string) => {
     const mockChannel = createChannel(name);
+    if (subscribeError) {
+      mockChannel.subscribe.mockImplementation(() => {
+        throw subscribeError;
+      });
+    }
     channels.push(mockChannel);
     return mockChannel;
   });
@@ -137,11 +150,11 @@ const findHandlerByFilter = (channels: MockChannel[], filter: string) => {
 };
 
 describe('useNotificaciones', () => {
-  it('subscribes to direct, role and global realtime notifications', async () => {
+  it('subscribes to direct, role and global realtime filters', async () => {
     const { channels, removeChannel, supabase } = createSupabaseMock();
     const { unmount } = renderHook(() => useNotificaciones(supabase, user));
 
-    await waitFor(() => expect(channels).toHaveLength(3));
+    await waitFor(() => expect(channels).toHaveLength(1));
 
     const filters = channels.flatMap(channel =>
       channel.handlers.map(handler => handler.config.filter)
@@ -155,10 +168,8 @@ describe('useNotificaciones', () => {
 
     unmount();
 
-    expect(removeChannel).toHaveBeenCalledTimes(3);
-    channels.forEach(channel => {
-      expect(removeChannel).toHaveBeenCalledWith(channel);
-    });
+    expect(removeChannel).toHaveBeenCalledTimes(1);
+    expect(removeChannel).toHaveBeenCalledWith(channels[0]);
   });
 
   it('adds role notifications once and keeps unread count deduplicated', async () => {
@@ -166,7 +177,7 @@ describe('useNotificaciones', () => {
     const { result } = renderHook(() => useNotificaciones(supabase, user));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    await waitFor(() => expect(channels).toHaveLength(3));
+    await waitFor(() => expect(channels).toHaveLength(1));
 
     const handleRoleNotification = findHandlerByFilter(
       channels,
@@ -188,5 +199,38 @@ describe('useNotificaciones', () => {
 
     expect(result.current.notificaciones).toHaveLength(1);
     expect(result.current.conteoNoLeidas).toBe(1);
+  });
+
+  it('keeps rendering when Realtime cannot open a WebSocket', async () => {
+    const { channels, removeChannel, supabase } = createSupabaseMock({
+      subscribeError: new Error('WebSocket not available'),
+    });
+
+    const { result, unmount } = renderHook(() => useNotificaciones(supabase, user));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBeNull();
+    expect(channels).toHaveLength(1);
+
+    unmount();
+
+    expect(removeChannel).toHaveBeenCalledWith(channels[0]);
+  });
+
+  it('does not report a normal socket close after cleanup', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { channels, supabase } = createSupabaseMock();
+    const { unmount } = renderHook(() => useNotificaciones(supabase, user));
+
+    await waitFor(() => expect(channels).toHaveLength(1));
+    unmount();
+
+    channels[0].statusCallback?.(
+      'CHANNEL_ERROR',
+      new Error('socket closed: 1001', { cause: { code: 1001 } })
+    );
+
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
