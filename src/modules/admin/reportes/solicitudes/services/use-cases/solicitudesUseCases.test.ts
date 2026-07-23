@@ -143,7 +143,7 @@ describe('solicitudes use cases', () => {
   it('approves a solicitud with stock and records inventory movement', async () => {
     const { deps, supabase, movementService, notificationService } = createDeps();
 
-    const result = await approveSolicitud({ solicitud: baseSolicitud }, deps);
+    const result = await approveSolicitud({ solicitud: baseSolicitud, depositoId: DEPOSITO_ID }, deps);
 
     expect(result.success).toBe(true);
     expect(supabase.updates[0]).toMatchObject({
@@ -165,13 +165,13 @@ describe('solicitudes use cases', () => {
 
   it('does not update approval state when stock is insufficient', async () => {
     const { deps, supabase, inventoryService } = createDeps();
-    vi.mocked(inventoryService.validarStockDisponible).mockResolvedValue({
+    vi.mocked(inventoryService.validarStockDisponiblePorDeposito).mockResolvedValue({
       suficiente: false,
       disponible: 2,
       solicitado: 10,
     });
 
-    const result = await approveSolicitud({ solicitud: baseSolicitud }, deps);
+    const result = await approveSolicitud({ solicitud: baseSolicitud, depositoId: DEPOSITO_ID }, deps);
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('No hay suficiente inventario disponible');
@@ -186,13 +186,28 @@ describe('solicitudes use cases', () => {
       error: 'Movimiento fallido',
     });
 
-    const result = await approveSolicitud({ solicitud: baseSolicitud }, deps);
+    const result = await approveSolicitud({ solicitud: baseSolicitud, depositoId: DEPOSITO_ID }, deps);
 
     expect(result.success).toBe(false);
     expect(inventoryService.restaurarInventario).toHaveBeenCalledTimes(1);
     expect(supabase.updates).toHaveLength(2);
     expect(supabase.updates[0].data.estado).toBe('aprobada');
     expect(supabase.updates[1].data.estado).toBe('pendiente');
+  });
+
+  it('requires a warehouse before approving a solicitud', async () => {
+    const { deps, supabase, inventoryService } = createDeps();
+
+    const result = await approveSolicitud({
+      solicitud: baseSolicitud,
+      depositoId: '',
+    }, deps);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('depositoId');
+    expect(inventoryService.validarStockDisponiblePorDeposito).not.toHaveBeenCalled();
+    expect(inventoryService.descontarDelInventario).not.toHaveBeenCalled();
+    expect(supabase.updates).toHaveLength(0);
   });
 
   it('rejects a solicitud and notifies the requester', async () => {

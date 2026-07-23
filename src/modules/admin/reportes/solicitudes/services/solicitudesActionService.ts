@@ -91,6 +91,13 @@ export const createSolicitudesActionService = (supabaseClient: SupabaseClient) =
       }
 
       if (nuevoEstado === 'aprobada' && solicitud.estado === 'pendiente') {
+        if (!deposito.value) {
+          return {
+            success: false,
+            error: 'Debes seleccionar una bodega para aprobar la solicitud',
+          };
+        }
+
         return approveSolicitud({
           solicitud,
           comentarioAdmin: comentario.value ?? undefined,

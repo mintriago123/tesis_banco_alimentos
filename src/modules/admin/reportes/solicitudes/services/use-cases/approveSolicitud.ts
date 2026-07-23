@@ -17,7 +17,7 @@ export interface ApproveSolicitudParams {
   solicitud: Solicitud;
   comentarioAdmin?: string;
   operadorId?: string;
-  depositoId?: string;
+  depositoId: string;
   cantidadAprobada?: number;
 }
 
@@ -42,14 +42,11 @@ export const approveSolicitud = async (
     return { success: false, error: usuarioId.error };
   }
 
-  let depositoIdValidado: string | undefined;
-  if (depositoId) {
-    const parsedDepositoId = parseUuidValue(depositoId, { name: 'depositoId' });
-    if (!parsedDepositoId.success) {
-      return { success: false, error: parsedDepositoId.error };
-    }
-    depositoIdValidado = parsedDepositoId.value;
+  const parsedDepositoId = parseUuidValue(depositoId, { name: 'depositoId' });
+  if (!parsedDepositoId.success) {
+    return { success: false, error: parsedDepositoId.error };
   }
+  const depositoIdValidado = parsedDepositoId.value;
 
   let operadorIdValidado: string | undefined;
   if (operadorId) {
@@ -101,9 +98,11 @@ export const approveSolicitud = async (
     cantidad: cantidadObjetivo,
   };
 
-  const validacionStock = depositoIdValidado
-    ? await deps.inventoryService.validarStockDisponiblePorDeposito(solicitud, depositoIdValidado, cantidadObjetivo)
-    : await deps.inventoryService.validarStockDisponible(solicitudConCantidad);
+  const validacionStock = await deps.inventoryService.validarStockDisponiblePorDeposito(
+    solicitud,
+    depositoIdValidado,
+    cantidadObjetivo
+  );
 
   if (!validacionStock.suficiente) {
     deps.logger.warn(`Stock insuficiente para aprobar solicitud ${solicitud.id}`, validacionStock);
