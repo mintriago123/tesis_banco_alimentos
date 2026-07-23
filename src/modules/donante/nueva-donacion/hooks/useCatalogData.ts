@@ -22,6 +22,13 @@ interface Unidad {
   id: number;
   nombre: string;
   simbolo: string;
+  tipo_magnitud_id?: number;
+  es_base?: boolean;
+  activa?: boolean;
+  es_discreta?: boolean;
+  es_presentacion?: boolean;
+  permite_fraccion?: boolean;
+  es_convertible?: boolean;
 }
 
 interface UseCatalogDataReturn {
@@ -89,11 +96,32 @@ export function useCatalogData(supabase: SupabaseClient | null, authLoading: boo
       setCargandoUnidades(true);
       const { data, error } = await supabase
         .from('unidades')
-        .select('id, nombre, simbolo')
+        .select('id, nombre, simbolo, tipo_magnitud_id, es_base, activa, es_discreta, es_presentacion, permite_fraccion')
+        .eq('activa', true)
         .order('nombre');
 
       if (error) throw error;
-      setUnidades(data || []);
+
+      const { data: conversiones, error: conversionesError } = await supabase
+        .from('conversiones')
+        .select('unidad_origen_id, unidad_destino_id')
+        .eq('activo', true);
+
+      if (conversionesError) throw conversionesError;
+
+      const unidadesConvertibles = new Set(
+        (conversiones ?? []).flatMap(conversion => [
+          conversion.unidad_origen_id,
+          conversion.unidad_destino_id,
+        ])
+      );
+
+      setUnidades(
+        (data ?? []).map(unidad => ({
+          ...unidad,
+          es_convertible: unidadesConvertibles.has(unidad.id),
+        }))
+      );
     } catch (error) {
       console.error('Error al cargar unidades:', error);
     } finally {

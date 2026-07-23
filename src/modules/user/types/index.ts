@@ -87,6 +87,14 @@ export interface Unidad {
   nombre: string;
   simbolo: string;
   tipo?: string;
+  tipo_magnitud_id?: number;
+  tipo_magnitud_nombre?: string;
+  es_base?: boolean;
+  activa?: boolean;
+  es_discreta?: boolean;
+  es_presentacion?: boolean;
+  permite_fraccion?: boolean;
+  es_convertible?: boolean;
 }
 
 // ---------- Ubicación ----------

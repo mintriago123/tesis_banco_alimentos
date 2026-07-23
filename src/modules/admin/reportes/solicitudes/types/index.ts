@@ -102,6 +102,9 @@ export interface UnidadConMagnitud {
 export interface InventarioDescontado {
   producto: ProductoInventario;
   cantidadEntregada: number;
+  cantidadOriginal?: number;
+  unidadOriginalId?: number;
+  unidadConvertidaId?: number;
 }
 
 export interface ResultadoInventario {
@@ -203,6 +206,9 @@ export interface DescuentoProductoResult {
   cantidadRestante: number;
   productosActualizados: number;
   cantidadEntregada: number;
+  cantidadOriginal?: number;
+  unidadOriginalId?: number;
+  unidadConvertidaId?: number;
   error?: boolean;
   errorDetails?: unknown;
 }

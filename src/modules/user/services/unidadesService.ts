@@ -16,7 +16,8 @@ export class UnidadesService {
     try {
       const { data, error } = await this.supabase
         .from('unidades')
-        .select('*')
+        .select('id, nombre, simbolo, tipo_magnitud_id, es_base, activa, es_discreta, es_presentacion, permite_fraccion')
+        .eq('activa', true)
         .order('nombre', { ascending: true });
 
       if (error) {
@@ -48,8 +49,9 @@ export class UnidadesService {
 
       const { data, error } = await this.supabase
         .from('unidades')
-        .select('id, nombre, simbolo, tipo')
+        .select('id, nombre, simbolo, tipo_magnitud_id, es_base, activa, es_discreta, es_presentacion, permite_fraccion')
         .eq('id', parsedUnidadId.value)
+        .eq('activa', true)
         .single();
 
       return { data, error };

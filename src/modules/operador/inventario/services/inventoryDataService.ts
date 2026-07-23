@@ -467,6 +467,13 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
       }
 
       const nombreProducto = producto?.nombre_producto || 'Producto';
+      if (!producto?.unidad_id) {
+        return {
+          success: false,
+          error: 'El producto no tiene una unidad configurada'
+        };
+      }
+
       const tipoTransaccion = diferencia > 0 ? 'ingreso' : 'egreso';
       const cantidadMovimiento = Math.abs(diferencia);
 
@@ -502,7 +509,7 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
           tipo_transaccion: tipoTransaccion,
           rol_usuario: 'distribuidor',
           observacion_detalle: `Ajuste manual de inventario por operador - ${tipoTransaccion === 'ingreso' ? 'Incremento' : 'Reducción'} de ${cantidadMovimiento} unidades. Stock actualizado a ${cantidadNueva}`,
-          unidad_id: producto?.unidad_id || null
+          unidad_id: producto.unidad_id
         });
 
       if (detalleError) {

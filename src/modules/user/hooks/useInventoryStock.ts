@@ -16,7 +16,10 @@ type UnidadRelation = {
 } | null;
 
 type ConversionRow = {
+  unidad_origen_id: number;
+  unidad_destino_id: number;
   factor_conversion: number | string | null;
+  activo: boolean | null;
   unidad_origen: UnidadRelation | UnidadRelation[];
   unidad_destino: UnidadRelation | UnidadRelation[];
 };
@@ -57,23 +60,41 @@ export const useInventoryStock = (supabaseClient: SupabaseClient): UseInventoryS
         const { data } = await supabaseClient
           .from('conversiones')
           .select(`
-            factor_conversion,
-            unidad_origen:unidades!conversiones_unidad_origen_id_fkey(nombre, simbolo),
-            unidad_destino:unidades!conversiones_unidad_destino_id_fkey(nombre, simbolo)
-          `);
+          unidad_origen_id,
+          unidad_destino_id,
+          factor_conversion,
+          unidad_origen:unidades!conversiones_unidad_origen_id_fkey(nombre, simbolo),
+          unidad_destino:unidades!conversiones_unidad_destino_id_fkey(nombre, simbolo)
+          `)
+          .eq('activo', true);
 
         if (data) {
-          const conversionesData = (data as ConversionRow[]).map(row => {
+          const conversionesData = (data as ConversionRow[]).flatMap(row => {
             const unidadOrigen = singleRelation(row.unidad_origen);
             const unidadDestino = singleRelation(row.unidad_destino);
+            const factor = Number(row.factor_conversion);
 
-            return {
-            unidad_origen: unidadOrigen?.nombre || '',
-            simbolo_origen: unidadOrigen?.simbolo || '',
-            unidad_destino: unidadDestino?.nombre || '',
-            simbolo_destino: unidadDestino?.simbolo || '',
-            factor_conversion: Number(row.factor_conversion) || 0
-            };
+            if (
+              !Number.isInteger(row.unidad_origen_id) ||
+              !Number.isInteger(row.unidad_destino_id) ||
+              !Number.isFinite(factor) ||
+              factor <= 0 ||
+              !unidadOrigen?.simbolo ||
+              !unidadDestino?.simbolo
+            ) {
+              return [];
+            }
+
+            return [{
+              unidad_origen_id: row.unidad_origen_id,
+              unidad_destino_id: row.unidad_destino_id,
+              unidad_origen: unidadOrigen?.nombre || '',
+              simbolo_origen: unidadOrigen?.simbolo || '',
+              unidad_destino: unidadDestino?.nombre || '',
+              simbolo_destino: unidadDestino?.simbolo || '',
+              factor_conversion: factor,
+              activo: row.activo ?? false,
+            }];
           });
           setConversiones(conversionesData);
         }
@@ -118,7 +139,7 @@ export const useInventoryStock = (supabaseClient: SupabaseClient): UseInventoryS
     cantidadSolicitada: number, 
     simboloUnidad?: string
   ): boolean => {
-    if (!stockInfo || cantidadSolicitada <= 0) return false;
+    if (!stockInfo || !stockInfo.total_calculable || cantidadSolicitada <= 0) return false;
     
     const stockSymbol = stockInfo.unidad_simbolo || '';
     
@@ -134,13 +155,13 @@ export const useInventoryStock = (supabaseClient: SupabaseClient): UseInventoryS
       stockSymbol,
       conversiones
     );
-    
-    if (cantidadConvertida === null) {
+
+    if (!cantidadConvertida.success) {
       console.error(`[useInventoryStock] No se pudo convertir de ${simboloUnidad} a ${stockSymbol}`);
       return false;
     }
-    
-    return stockInfo.total_disponible >= cantidadConvertida;
+
+    return stockInfo.total_disponible >= cantidadConvertida.cantidad;
   }, [stockInfo, conversiones]);
 
   const getStockMessage = useCallback((cantidadSolicitada?: number, simboloUnidad?: string): string => {
@@ -148,6 +169,18 @@ export const useInventoryStock = (supabaseClient: SupabaseClient): UseInventoryS
 
     if (!stockInfo.producto_encontrado) {
       return 'Producto no disponible en inventario';
+    }
+
+    if (!stockInfo.total_calculable) {
+      const hayStockEnOtraUnidad = Boolean(
+        simboloUnidad &&
+        stockInfo.depositos.length > 0 &&
+        stockInfo.depositos.every(deposito => deposito.unidad_simbolo !== simboloUnidad)
+      );
+      if (hayStockEnOtraUnidad) {
+        return `Hay stock disponible en otra unidad, pero no existe conversión explícita a ${simboloUnidad}`;
+      }
+      return 'Hay stock disponible en unidades separadas que no tienen equivalencia registrada';
     }
 
     if (stockInfo.total_disponible === 0) {
@@ -181,15 +214,15 @@ export const useInventoryStock = (supabaseClient: SupabaseClient): UseInventoryS
         stockSymbol,
         conversiones
       );
-      
-      if (cantidadConvertida === null) {
+
+      if (!cantidadConvertida.success) {
         return `${baseMessage} (no se puede convertir de ${simboloUnidad} a ${stockSymbol})`;
       }
-      
-      if (stockInfo.total_disponible >= cantidadConvertida) {
+
+      if (stockInfo.total_disponible >= cantidadConvertida.cantidad) {
         return `✓ ${baseMessage} (suficiente para ${cantidadSolicitada} ${simboloUnidad})`;
       } else {
-        const faltanteEnBase = cantidadConvertida - stockInfo.total_disponible;
+        const faltanteEnBase = cantidadConvertida.cantidad - stockInfo.total_disponible;
         return `⚠️ ${baseMessage} (faltan ${faltanteEnBase.toFixed(2)} ${stockSymbol} para cubrir ${cantidadSolicitada} ${simboloUnidad})`;
       }
     }

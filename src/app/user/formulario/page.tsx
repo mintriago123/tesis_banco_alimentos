@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSupabase } from "@/app/components/SupabaseProvider";
 import DashboardLayout from "@/app/components/DashboardLayout";
 import { useInventoryStock } from "@/modules/user/hooks/useInventoryStock";
+import { validarCantidadParaUnidad } from "@/lib/unidadConversion";
 import { Send, AlertTriangle } from "lucide-react";
 import { Alert } from '@/app/components/ui/Alert';
 import { Button } from '@/app/components/ui/Button';
@@ -192,6 +193,13 @@ export default function FormularioSolicitante() {
     // Obtener el símbolo de la unidad seleccionada
     const unidadSeleccionada = getUnidadesDisponibles().find(u => u.id === parseInt(unidadId));
     const simboloUnidadSeleccionada = unidadSeleccionada?.simbolo || '';
+
+    const cantidadUnidad = validarCantidadParaUnidad(cantidadNum, unidadSeleccionada ?? {});
+    if (!cantidadUnidad.valid) {
+      setMensaje(cantidadUnidad.error);
+      setLoading(false);
+      return;
+    }
 
     // Verificar stock disponible si hay información de inventario
     if (stockInfo && stockInfo.producto_encontrado && !isStockSufficient(cantidadNum, simboloUnidadSeleccionada)) {

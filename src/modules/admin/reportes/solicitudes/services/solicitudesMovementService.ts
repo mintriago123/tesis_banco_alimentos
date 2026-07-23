@@ -91,7 +91,7 @@ export const createSolicitudesMovementService = (
 
       const { data: detalles, error: detallesError } = await supabaseClient
         .from('movimiento_inventario_detalle')
-        .select('id_movimiento, id_producto, cantidad, tipo_transaccion, unidad_id, observacion_detalle')
+        .select('id_movimiento, id_producto, cantidad, cantidad_original, tipo_transaccion, unidad_id, unidad_convertida_id, observacion_detalle')
         .in('id_movimiento', idsMovimiento)
         .eq('tipo_transaccion', 'egreso')
         .ilike('observacion_detalle', `%Entrega por solicitud aprobada%${terminoBusqueda}%`);
@@ -151,6 +151,9 @@ export const createSolicitudesMovementService = (
             unidad_id: producto.unidad_id ?? undefined,
           },
           cantidadEntregada: info.cantidad,
+          cantidadOriginal: info.detalle.cantidad_original ?? undefined,
+          unidadOriginalId: info.detalle.unidad_id ?? undefined,
+          unidadConvertidaId: info.detalle.unidad_convertida_id ?? producto.unidad_id ?? undefined,
         });
       }
 
@@ -233,10 +236,12 @@ export const createSolicitudesMovementService = (
             id_movimiento: cabecera.id_movimiento,
             id_producto: detalle.producto.id_producto,
             cantidad: cantidad.value,
+            cantidad_original: detalle.cantidadOriginal ?? cantidad.value,
             tipo_transaccion: 'egreso',
             rol_usuario: 'beneficiario',
             observacion_detalle: `Entrega por solicitud aprobada - ${solicitud.tipo_alimento}`,
-            unidad_id: detalle.producto.unidad_id ?? null,
+            unidad_id: detalle.unidadOriginalId ?? solicitud.unidad_id ?? detalle.producto.unidad_id ?? null,
+            unidad_convertida_id: detalle.unidadConvertidaId ?? detalle.producto.unidad_id ?? null,
           });
 
         if (detalleError) {
@@ -330,10 +335,12 @@ export const createSolicitudesMovementService = (
             id_movimiento: cabecera.id_movimiento,
             id_producto: movimiento.producto.id_producto,
             cantidad: cantidad.value,
+            cantidad_original: movimiento.cantidadOriginal ?? cantidad.value,
             tipo_transaccion: 'ingreso',
             rol_usuario: 'beneficiario',
             observacion_detalle: `Reversión de solicitud aprobada - ${solicitud.tipo_alimento}`,
-            unidad_id: movimiento.producto.unidad_id ?? null,
+            unidad_id: movimiento.unidadOriginalId ?? solicitud.unidad_id ?? movimiento.producto.unidad_id ?? null,
+            unidad_convertida_id: movimiento.unidadConvertidaId ?? movimiento.producto.unidad_id ?? null,
           });
 
         if (detalleError) {

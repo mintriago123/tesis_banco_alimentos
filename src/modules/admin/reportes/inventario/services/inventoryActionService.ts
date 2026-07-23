@@ -146,6 +146,13 @@ export const createInventoryActionService = (supabaseClient: SupabaseClient) => 
         };
       }
 
+      if (!item.producto.unidad_id) {
+        return {
+          success: false,
+          error: 'El producto no tiene una unidad configurada'
+        };
+      }
+
       const { data: cabecera, error: cabeceraError } = await supabaseClient
         .from('movimiento_inventario_cabecera')
         .insert({
@@ -178,7 +185,8 @@ export const createInventoryActionService = (supabaseClient: SupabaseClient) => 
           cantidad,
           tipo_transaccion: tipoTransaccion,
           rol_usuario: 'distribuidor',
-          observacion_detalle: `Ajuste manual de inventario - ${tipoTransaccion === 'ingreso' ? 'Incremento' : 'Reducción'} de ${cantidad} unidades`
+          observacion_detalle: `Ajuste manual de inventario - ${tipoTransaccion === 'ingreso' ? 'Incremento' : 'Reducción'} de ${cantidad} unidades`,
+          unidad_id: item.producto.unidad_id
         });
 
       if (detalleError) {

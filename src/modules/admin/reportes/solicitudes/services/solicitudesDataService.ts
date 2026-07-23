@@ -3,6 +3,8 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { ConversionResolution } from '@/lib/unidadConversion';
+import { resolverConversion } from '@/lib/unidadConversion';
 import type {
   InventarioDisponible,
   ServiceResult,
@@ -263,10 +265,14 @@ const mapInventarioDisponibleRowToDomainInternal = async (
   let fueConvertido = false;
 
   if (unidadSolicitudId && unidadProductoId && unidadSolicitudId !== unidadProductoId) {
-    const factor = await obtenerFactorConversion(supabaseClient, unidadProductoId, unidadSolicitudId);
+    const resolution = await obtenerConversion(
+      supabaseClient,
+      unidadProductoId,
+      unidadSolicitudId
+    );
 
-    if (factor !== null) {
-      cantidadDisponible = cantidadOriginal * factor;
+    if (resolution.convertible) {
+      cantidadDisponible = cantidadOriginal * resolution.factor;
       fueConvertido = true;
 
       const unidadSolicitud = await obtenerUnidadPorId(supabaseClient, unidadSolicitudId);
@@ -316,43 +322,17 @@ const obtenerUnidadPorId = async (
   return data;
 };
 
-const obtenerFactorConversion = async (
+const obtenerConversion = async (
   supabaseClient: SupabaseClient,
   unidadOrigenId: number,
   unidadDestinoId: number
-): Promise<number | null> => {
+): Promise<ConversionResolution> => {
   const origen = parsePositiveIntegerValue(unidadOrigenId, { name: 'unidadOrigenId', min: 1 });
   const destino = parsePositiveIntegerValue(unidadDestinoId, { name: 'unidadDestinoId', min: 1 });
 
   if (!origen.success || !destino.success) {
-    return null;
+    return { convertible: false, reason: 'no_conversion' };
   }
 
-  if (unidadOrigenId === unidadDestinoId) {
-    return 1;
-  }
-
-  const { data: conversionDirecta } = await supabaseClient
-    .from('conversiones')
-    .select('factor_conversion')
-    .eq('unidad_origen_id', origen.value)
-    .eq('unidad_destino_id', destino.value)
-    .maybeSingle();
-
-  if (conversionDirecta?.factor_conversion !== undefined && conversionDirecta?.factor_conversion !== null) {
-    return Number(conversionDirecta.factor_conversion);
-  }
-
-  const { data: conversionInversa } = await supabaseClient
-    .from('conversiones')
-    .select('factor_conversion')
-    .eq('unidad_origen_id', destino.value)
-    .eq('unidad_destino_id', origen.value)
-    .maybeSingle();
-
-  if (conversionInversa?.factor_conversion !== undefined && conversionInversa?.factor_conversion !== null) {
-    return 1 / Number(conversionInversa.factor_conversion);
-  }
-
-  return null;
+  return resolverConversion(supabaseClient, origen.value, destino.value);
 };

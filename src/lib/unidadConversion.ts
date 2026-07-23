@@ -1,14 +1,50 @@
 /**
- * @fileoverview Utilidad para convertir cantidades a unidades más legibles
+ * Contratos y utilidades para conversiones explícitas de unidades.
+ *
+ * La base de datos es la autoridad para operaciones de inventario. Las
+ * funciones síncronas de este módulo solo sirven para previsualización y
+ * presentación con un catálogo de conversiones ya cargado.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 export interface ConversionData {
+  unidad_origen_id?: number;
+  unidad_destino_id?: number;
   unidad_origen: string;
   simbolo_origen: string;
   unidad_destino: string;
   simbolo_destino: string;
   factor_conversion: number;
+  activo?: boolean;
 }
+
+export type ConversionResolution =
+  | {
+      convertible: true;
+      factor: number;
+      origenId: number;
+      destinoId: number;
+      source: 'same_unit' | 'database';
+    }
+  | {
+      convertible: false;
+      reason: 'no_conversion' | 'incompatible_magnitude' | 'inactive_unit';
+    };
+
+type ConversionFailureReason = 'no_conversion' | 'incompatible_magnitude' | 'inactive_unit';
+
+export type ConversionCalculation =
+  | {
+      success: true;
+      cantidad: number;
+      factor: number;
+      resolution: Extract<ConversionResolution, { convertible: true }>;
+    }
+  | {
+      success: false;
+      reason: ConversionFailureReason | 'invalid_quantity';
+    };
 
 export interface CantidadFormateada {
   cantidad: number;
@@ -19,273 +55,282 @@ export interface CantidadFormateada {
   fue_convertido: boolean;
 }
 
+const isFinitePositive = (value: number): boolean => Number.isFinite(value) && value > 0;
+
+const isFiniteNonNegative = (value: number): boolean => Number.isFinite(value) && value >= 0;
+
+export type UnitQuantityValidation =
+  | { valid: true }
+  | { valid: false; error: string };
+
+export const validarCantidadParaUnidad = (
+  cantidad: number,
+  unidad: { nombre?: string | null; es_discreta?: boolean | null; permite_fraccion?: boolean | null },
+): UnitQuantityValidation => {
+  if (!isFinitePositive(cantidad)) {
+    return { valid: false, error: 'La cantidad debe ser un número finito mayor que cero.' };
+  }
+
+  if (
+    unidad.es_discreta &&
+    unidad.permite_fraccion === false &&
+    !Number.isInteger(cantidad)
+  ) {
+    return {
+      valid: false,
+      error: `La unidad ${unidad.nombre ?? 'seleccionada'} no permite cantidades decimales.`,
+    };
+  }
+
+  return { valid: true };
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isPositiveInteger = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value > 0;
+
+const isResolution = (value: unknown): value is ConversionResolution => {
+  if (!isRecord(value) || typeof value.convertible !== 'boolean') {
+    return false;
+  }
+
+  if (value.convertible) {
+    return (
+      isFinitePositive(Number(value.factor)) &&
+      isPositiveInteger(value.origenId) &&
+      isPositiveInteger(value.destinoId) &&
+      (value.source === 'same_unit' || value.source === 'database')
+    );
+  }
+
+  return (
+    value.reason === 'no_conversion' ||
+    value.reason === 'incompatible_magnitude' ||
+    value.reason === 'inactive_unit'
+  );
+};
+
+const noConversion = (): ConversionResolution => ({
+  convertible: false,
+  reason: 'no_conversion',
+});
+
 /**
- * Redondea un número eliminando decimales innecesarios
+ * Resuelve una conversión desde un catálogo cargado previamente.
+ * Nunca infiere equivalencias por compartir tipo de magnitud.
  */
-export const redondear = (num: number, decimales: number = 2): number => {
-  if (Number.isInteger(num)) return num;
-  
-  const factor = Math.pow(10, decimales);
-  const redondeado = Math.round(num * factor) / factor;
-  
-  return Number.isInteger(redondeado) ? redondeado : redondeado;
+export const resolverConversionLocal = (
+  unidadOrigenId: number,
+  unidadDestinoId: number,
+  conversiones: ConversionData[],
+  simboloOrigen?: string,
+  simboloDestino?: string,
+): ConversionResolution => {
+  if (!isPositiveInteger(unidadOrigenId) || !isPositiveInteger(unidadDestinoId)) {
+    return noConversion();
+  }
+
+  if (unidadOrigenId === unidadDestinoId) {
+    return {
+      convertible: true,
+      factor: 1,
+      origenId: unidadOrigenId,
+      destinoId: unidadDestinoId,
+      source: 'same_unit',
+    };
+  }
+
+  const conversion = conversiones.find(item => {
+    const coincidePorId =
+      item.unidad_origen_id === unidadOrigenId && item.unidad_destino_id === unidadDestinoId;
+    const coincidePorSimbolo =
+      simboloOrigen !== undefined &&
+      simboloDestino !== undefined &&
+      item.simbolo_origen === simboloOrigen &&
+      item.simbolo_destino === simboloDestino;
+    return coincidePorId || coincidePorSimbolo;
+  });
+
+  if (conversion && conversion.activo !== false && isFinitePositive(conversion.factor_conversion)) {
+    return {
+      convertible: true,
+      factor: conversion.factor_conversion,
+      origenId: unidadOrigenId,
+      destinoId: unidadDestinoId,
+      source: 'database',
+    };
+  }
+
+  const inverse = conversiones.find(item => {
+    const coincidePorId =
+      item.unidad_origen_id === unidadDestinoId && item.unidad_destino_id === unidadOrigenId;
+    const coincidePorSimbolo =
+      simboloOrigen !== undefined &&
+      simboloDestino !== undefined &&
+      item.simbolo_origen === simboloDestino &&
+      item.simbolo_destino === simboloOrigen;
+    return coincidePorId || coincidePorSimbolo;
+  });
+
+  if (inverse && inverse.activo !== false && isFinitePositive(inverse.factor_conversion)) {
+    return {
+      convertible: true,
+      factor: 1 / inverse.factor_conversion,
+      origenId: unidadOrigenId,
+      destinoId: unidadDestinoId,
+      source: 'database',
+    };
+  }
+
+  return noConversion();
 };
 
 /**
- * Formatea un número para mostrar
+ * Resuelve definitivamente usando la RPC central de Supabase.
  */
-export const formatearNumero = (num: number, decimales: number = 2): string => {
+export const resolverConversion = async (
+  supabaseClient: SupabaseClient,
+  unidadOrigenId: number,
+  unidadDestinoId: number,
+): Promise<ConversionResolution> => {
+  if (!isPositiveInteger(unidadOrigenId) || !isPositiveInteger(unidadDestinoId)) {
+    return noConversion();
+  }
+
+  const { data, error } = await supabaseClient.rpc('resolver_conversion', {
+    unidad_origen_id: unidadOrigenId,
+    unidad_destino_id: unidadDestinoId,
+  });
+
+  if (error || !isResolution(data)) {
+    return noConversion();
+  }
+
+  return data;
+};
+
+/**
+ * Convierte una cantidad usando una resolución explícita.
+ */
+export const aplicarConversion = (
+  cantidad: number,
+  resolution: ConversionResolution,
+): ConversionCalculation => {
+  if (!isFiniteNonNegative(cantidad)) {
+    return { success: false, reason: 'invalid_quantity' };
+  }
+
+  if (!resolution.convertible) {
+    return { success: false, reason: resolution.reason };
+  }
+
+  const resultado = cantidad * resolution.factor;
+  if (!isFiniteNonNegative(resultado)) {
+    return { success: false, reason: 'invalid_quantity' };
+  }
+
+  return {
+    success: true,
+    cantidad: resultado,
+    factor: resolution.factor,
+    resolution,
+  };
+};
+
+/**
+ * Redondea exclusivamente para presentación.
+ */
+export const redondear = (num: number, decimales = 2): number => {
+  if (!Number.isFinite(num)) {
+    throw new RangeError('La cantidad debe ser un número finito');
+  }
+
+  if (!Number.isInteger(decimales) || decimales < 0 || decimales > 10) {
+    throw new RangeError('El número de decimales no es válido');
+  }
+
+  if (Number.isInteger(num)) return num;
+
+  const factor = 10 ** decimales;
+  const redondeado = Math.round(num * factor) / factor;
+  return Object.is(redondeado, -0) ? 0 : redondeado;
+};
+
+/**
+ * Formatea un número para mostrar sin modificar el valor usado en inventario.
+ */
+export const formatearNumero = (num: number, decimales = 2): string => {
   const redondeado = redondear(num, decimales);
-  
-  // Si es muy grande, usar notación con separadores de miles
+
   if (redondeado >= 10000) {
     return redondeado.toLocaleString('es-EC', {
-      maximumFractionDigits: decimales
+      maximumFractionDigits: decimales,
     });
   }
-  
+
   return redondeado.toString();
 };
 
 /**
- * Cuenta los decimales significativos de un número
- */
-const contarDecimalesSignificativos = (num: number): number => {
-  const str = num.toString();
-  const parts = str.split('.');
-  if (parts.length < 2) return 0;
-  
-  const decimales = parts[1];
-  // Contar solo los dígitos después del punto
-  return decimales.length;
-};
-
-/**
- * Verifica si un número tiene muchos decimales innecesarios
- */
-const tieneMuchosDecimales = (num: number): boolean => {
-  const decimales = contarDecimalesSignificativos(num);
-  // Más de 2 decimales se considera "mucho"
-  return decimales > 2 && num < 10;
-};
-
-/**
- * Determina la mejor unidad para mostrar una cantidad
- * Reglas inteligentes:
- * - Convertir si hay muchos decimales y cantidad pequeña (ej: 0.11379 kg → 113.79 g)
- * - Convertir si la cantidad es muy grande (ej: 50000 ml → 50 L)
- * - NO convertir si la cantidad está en un rango legible (ej: 24 L se queda en L)
- */
-const obtenerMejorConversion = (
-  cantidad: number,
-  simboloActual: string,
-  conversiones: ConversionData[]
-): ConversionData | null => {
-  // Buscar conversiones disponibles desde la unidad actual
-  const conversionesDisponibles = conversiones.filter(
-    c => c.simbolo_origen === simboloActual
-  );
-
-  if (conversionesDisponibles.length === 0) {
-    return null;
-  }
-
-  // Reglas de conversión más estrictas
-  const reglasConversion: Record<string, { 
-    minParaConvertir: number; 
-    maxParaConvertir: number; 
-    preferir: string[];
-    soloCuandoMuchosDecimales?: boolean;
-  }> = {
-    // Masa
-    'kg': { 
-      minParaConvertir: 0, 
-      maxParaConvertir: 0.5, 
-      preferir: ['g'],
-      soloCuandoMuchosDecimales: true // Solo convertir si tiene muchos decimales
-    },
-    'g': { 
-      minParaConvertir: 1500, 
-      maxParaConvertir: Infinity, 
-      preferir: ['kg'] 
-    },
-    'mg': { 
-      minParaConvertir: 1500, 
-      maxParaConvertir: Infinity, 
-      preferir: ['g'] 
-    },
-    't': { 
-      minParaConvertir: 0, 
-      maxParaConvertir: 0.5, 
-      preferir: ['kg'] 
-    },
-    
-    // Volumen
-    'L': { 
-      minParaConvertir: 0, 
-      maxParaConvertir: 0.5, 
-      preferir: ['ml'],
-      soloCuandoMuchosDecimales: true // Solo convertir si tiene muchos decimales
-    },
-    'ml': { 
-      minParaConvertir: 1500, 
-      maxParaConvertir: Infinity, 
-      preferir: ['L'] 
-    },
-    'gal': { 
-      minParaConvertir: 0, 
-      maxParaConvertir: 0.5, 
-      preferir: ['L'] 
-    },
-    'm³': { 
-      minParaConvertir: 0, 
-      maxParaConvertir: 0.5, 
-      preferir: ['L'] 
-    },
-    
-    // Unidades contables
-    'ud': { 
-      minParaConvertir: 24, 
-      maxParaConvertir: Infinity, 
-      preferir: ['doc'] 
-    },
-    'doc': { 
-      minParaConvertir: 0, 
-      maxParaConvertir: 0.5, 
-      preferir: ['ud'] 
-    },
-  };
-
-  const regla = reglasConversion[simboloActual];
-  
-  if (!regla) {
-    return null;
-  }
-
-  // Verificar si debe convertirse
-  let debeConvertir = false;
-
-  if (regla.soloCuandoMuchosDecimales) {
-    // Solo convertir si la cantidad es pequeña Y tiene muchos decimales
-    debeConvertir = cantidad >= regla.minParaConvertir && 
-                    cantidad <= regla.maxParaConvertir && 
-                    tieneMuchosDecimales(cantidad);
-  } else {
-    // Convertir si está fuera del rango
-    debeConvertir = cantidad >= regla.minParaConvertir && cantidad <= regla.maxParaConvertir;
-  }
-
-  if (!debeConvertir) {
-    return null;
-  }
-
-  // Buscar la conversión preferida
-  for (const simboloPreferido of regla.preferir) {
-    const conversion = conversionesDisponibles.find(
-      c => c.simbolo_destino === simboloPreferido
-    );
-    
-    if (conversion) {
-      const cantidadConvertida = cantidad * conversion.factor_conversion;
-      
-      // Verificar que la conversión mejora la legibilidad
-      // La cantidad convertida debe estar en un rango razonable (1 - 10000)
-      if (cantidadConvertida >= 1 && cantidadConvertida < 100000) {
-        return conversion;
-      }
-    }
-  }
-
-  return null;
-};
-
-/**
- * Convierte una cantidad a la unidad más apropiada para mostrar
+ * Mantiene el wrapper histórico para consumidores visuales. La presentación
+ * ya no cambia de unidad automáticamente: la unidad recibida es la unidad
+ * que se muestra.
  */
 export const convertirCantidad = (
   cantidad: number,
   simboloActual: string,
   nombreUnidadActual: string,
-  conversiones: ConversionData[]
+  _conversiones: ConversionData[] = [],
 ): CantidadFormateada => {
-  // Caso base: no hay cantidad o no hay conversiones
-  if (cantidad === 0 || !conversiones || conversiones.length === 0) {
-    return {
-      cantidad: redondear(cantidad),
-      simbolo: simboloActual,
-      unidad_nombre: nombreUnidadActual,
-      cantidad_original: cantidad,
-      simbolo_original: simboloActual,
-      fue_convertido: false
-    };
-  }
-
-  // Buscar la mejor conversión
-  const mejorConversion = obtenerMejorConversion(cantidad, simboloActual, conversiones);
-
-  if (!mejorConversion) {
-    // No hay mejor conversión, retornar la cantidad original
-    return {
-      cantidad: redondear(cantidad),
-      simbolo: simboloActual,
-      unidad_nombre: nombreUnidadActual,
-      cantidad_original: cantidad,
-      simbolo_original: simboloActual,
-      fue_convertido: false
-    };
-  }
-
-  // Aplicar la conversión
-  const cantidadConvertida = cantidad * mejorConversion.factor_conversion;
+  // El parámetro se conserva para compatibilidad con consumidores existentes.
+  // La presentación no debe aplicar conversiones implícitas.
+  void _conversiones;
 
   return {
-    cantidad: redondear(cantidadConvertida),
-    simbolo: mejorConversion.simbolo_destino,
-    unidad_nombre: mejorConversion.unidad_destino,
+    cantidad: redondear(cantidad),
+    simbolo: simboloActual,
+    unidad_nombre: nombreUnidadActual,
     cantidad_original: cantidad,
     simbolo_original: simboloActual,
-    fue_convertido: true
+    fue_convertido: false,
   };
 };
 
 /**
- * Convierte una cantidad de una unidad específica a otra unidad específica
- * Si no hay conversión directa, intenta encontrar una conversión inversa
- * @param cantidad - La cantidad a convertir
- * @param simboloOrigen - El símbolo de la unidad origen (ej: "lb", "kg")
- * @param simboloDestino - El símbolo de la unidad destino
- * @param conversiones - Array de conversiones disponibles
- * @returns La cantidad convertida, o null si no se puede convertir
+ * Wrapper compatible para previsualización basada en símbolos.
  */
 export const convertirEntreUnidades = (
   cantidad: number,
   simboloOrigen: string,
   simboloDestino: string,
-  conversiones: ConversionData[]
-): number | null => {
-  // Si las unidades son iguales, no hay conversión
+  conversiones: ConversionData[],
+): ConversionCalculation => {
   if (simboloOrigen === simboloDestino) {
-    return cantidad;
+    const unidadId =
+      conversiones.find(item => item.simbolo_origen === simboloOrigen)?.unidad_origen_id ??
+      conversiones.find(item => item.simbolo_destino === simboloDestino)?.unidad_destino_id ??
+      1;
+    return aplicarConversion(cantidad, {
+      convertible: true,
+      factor: 1,
+      origenId: unidadId,
+      destinoId: unidadId,
+      source: 'same_unit',
+    });
   }
 
-  // Buscar conversión directa
-  const conversionDirecta = conversiones.find(
-    c => c.simbolo_origen === simboloOrigen && c.simbolo_destino === simboloDestino
+  const origenId = conversiones.find(item => item.simbolo_origen === simboloOrigen)?.unidad_origen_id;
+  const destinoId = conversiones.find(item => item.simbolo_destino === simboloDestino)?.unidad_destino_id;
+
+  const resolution = resolverConversionLocal(
+    origenId ?? 1,
+    destinoId ?? 2,
+    conversiones,
+    simboloOrigen,
+    simboloDestino,
   );
 
-  if (conversionDirecta) {
-    return cantidad * conversionDirecta.factor_conversion;
-  }
-
-  // Buscar conversión inversa
-  const conversionInversa = conversiones.find(
-    c => c.simbolo_origen === simboloDestino && c.simbolo_destino === simboloOrigen
-  );
-
-  if (conversionInversa) {
-    return cantidad / conversionInversa.factor_conversion;
-  }
-
-  // No se encontró conversión
-  return null;
+  return aplicarConversion(cantidad, resolution);
 };
