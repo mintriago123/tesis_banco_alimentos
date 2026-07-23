@@ -17,18 +17,18 @@ const CatalogTable = ({ foods, onEdit, onDelete }: CatalogTableProps) => {
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm">
-      <div className="overflow-x-auto">
+    <div className="table-surface">
+      <div className="table-scroll">
         <div className="max-h-[70vh] overflow-y-auto">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="sticky top-0 z-10 bg-slate-50">
+          <table className="table-base">
+            <thead className="table-head sticky top-0 z-10">
               <tr>
                 <th className="px-3 sm:px-4 lg:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Nombre</th>
                 <th className="px-3 sm:px-4 lg:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 hidden sm:table-cell">Categoría</th>
                 <th className="px-3 sm:px-4 lg:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Acciones</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-slate-100">
+            <tbody className="table-body">
               {foods.map(food => (
                 <tr key={food.id} className="transition-colors duration-150 hover:bg-slate-50">
                   <td className="px-3 sm:px-4 lg:px-6 py-4">

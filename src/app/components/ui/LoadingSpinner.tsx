@@ -2,7 +2,7 @@
 
 interface LoadingSpinnerProps {
   readonly size?: 'sm' | 'md' | 'lg';
-  readonly color?: 'blue' | 'red' | 'green' | 'gray';
+  readonly color?: 'blue' | 'red' | 'green' | 'orange' | 'gray';
   readonly mensaje?: string;
 }
 
@@ -20,15 +20,16 @@ export function LoadingSpinner({
   const colorClasses = {
     blue: 'border-blue-600',
     red: 'border-red-600',
-    green: 'border-green-600',
+    green: 'border-emerald-700',
+    orange: 'border-orange-700',
     gray: 'border-gray-600'
   };
 
   return (
-    <div className="flex items-center justify-center py-12">
+    <div className="flex items-center justify-center gap-3 py-12" role="status" aria-live="polite">
       <div className={`animate-spin rounded-full border-b-2 ${sizeClasses[size]} ${colorClasses[color]}`}></div>
       {mensaje && (
-        <span className="ml-3 text-gray-600">{mensaje}</span>
+        <span className="text-sm text-slate-600">{mensaje}</span>
       )}
     </div>
   );

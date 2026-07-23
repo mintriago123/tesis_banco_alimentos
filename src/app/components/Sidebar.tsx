@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useState } from 'react';
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import NotificacionesDropdown from '@/app/components/NotificacionesDropdown';
 import { 
@@ -19,6 +20,7 @@ import {
   ChevronUpIcon,
   QrCodeIcon
 } from '@heroicons/react/24/outline';
+import { accentForRole, roleThemes } from '@/app/components/ui/theme';
 
 interface SidebarProps {
   readonly userRole?: string;
@@ -229,7 +231,6 @@ export default function Sidebar({
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [openSubMenus, setOpenSubMenus] = useState<string[]>([]);
-  const router = useRouter();
   const pathname = usePathname();
   const { supabase } = useSupabase();
 
@@ -237,26 +238,11 @@ export default function Sidebar({
   const isCollapsed = externalIsCollapsed ?? internalIsCollapsed;
   const setIsCollapsed = externalSetIsCollapsed || setInternalIsCollapsed;
 
-  // En dispositivos móviles, empezar contraído
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 768) {
-        // En móvil, siempre empezar cerrado
-        if (!externalSetIsCollapsed) {
-          setInternalIsCollapsed(true);
-        }
-      }
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [externalSetIsCollapsed]);
-
   const isAdmin = userRole === 'ADMINISTRADOR';
   const isOperador = userRole === 'OPERADOR';
   const isDonante = userRole === 'DONANTE';
   const isSolicitante = userRole === 'SOLICITANTE';
+  const roleTheme = roleThemes[accentForRole(userRole)];
 
   // Filtrar items según el rol
   const filteredMenuItems = menuItems.filter(item => {
@@ -327,35 +313,24 @@ export default function Sidebar({
   };
 
   const getActiveStyles = (isActive: boolean) => {
-    if (!isActive) return 'text-gray-700 hover:bg-gray-50 hover:text-gray-900';
-    
-    if (isAdmin) return 'bg-red-50 text-red-700 border border-red-200';
-    if (isOperador) return 'bg-orange-50 text-orange-700 border border-orange-200';
-    if (isDonante) return 'bg-green-50 text-green-700 border border-green-200';
-    return 'bg-blue-50 text-blue-700 border border-blue-200'; // Solicitante
+    return isActive
+      ? `${roleTheme.soft} shadow-sm`
+      : 'text-slate-700 hover:bg-slate-50 hover:text-slate-950';
   };
 
   const getIconStyles = (isActive: boolean) => {
-    if (!isActive) return 'text-gray-500 group-hover:text-gray-700';
-    
-    if (isAdmin) return 'text-red-600';
-    if (isOperador) return 'text-orange-600';
-    if (isDonante) return 'text-green-600';
-    return 'text-blue-600'; // Solicitante
+    return isActive ? roleTheme.text : 'text-slate-500 group-hover:text-slate-700';
   };
 
   const getRoleLabel = () => {
-    if (isAdmin) return 'Admin Panel';
-    if (isOperador) return 'Panel Operador';
-    if (isDonante) return 'Panel Donante';
-    return 'Banco Alimentos'; // Solicitante
+    if (isAdmin) return 'Panel administrador';
+    if (isOperador) return 'Panel operador';
+    if (isDonante) return 'Panel donante';
+    return 'Panel solicitante';
   };
 
   const getAvatarColor = () => {
-    if (isAdmin) return 'bg-red-500 text-white';
-    if (isOperador) return 'bg-orange-500 text-white';
-    if (isDonante) return 'bg-green-500 text-white';
-    return 'bg-blue-500 text-white'; // Solicitante
+    return roleTheme.primary;
   };
 
   const displayUserName = typeof userName === 'string' && userName.trim()
@@ -377,66 +352,74 @@ export default function Sidebar({
       .join('');
   };
 
+  const profileHref = isAdmin ? '/admin/perfil' : isOperador ? '/operador/perfil' : isDonante ? '/donante/perfil' : '/user/perfil';
+  const settingsHref = isAdmin ? '/admin/configuracion' : isOperador ? '/operador/configuracion' : isDonante ? '/donante/configuracion' : '/user/configuracion';
+  const closeOnMobile = () => {
+    if (window.innerWidth < 768) setIsCollapsed(true);
+  };
+
   return (
     <>
       {/* Overlay transparente para cerrar el sidebar al hacer clic fuera en móvil */}
       {!isCollapsed && (
-        <div 
+        <button
+          type="button"
           className="fixed inset-0 z-30 md:hidden"
           onClick={() => setIsCollapsed(true)}
           aria-label="Cerrar sidebar"
         />
       )}
       
-      <div className={`fixed left-0 top-0 h-full bg-gradient-to-b from-white to-gray-50 shadow-2xl border-r border-gray-200 transition-all duration-300 flex flex-col z-40 ${
+      <div className={`fixed left-0 top-0 z-40 flex h-full flex-col border-r border-slate-200 bg-white shadow-lg transition-all duration-300 ${
         isCollapsed ? '-translate-x-full md:translate-x-0 md:w-16' : 'translate-x-0 w-64'
       }`}>
       {/* Header del Sidebar con Avatar */}
-      <div className="p-3 sm:p-4 border-b border-gray-100 bg-white">
+      <div className="border-b border-slate-100 bg-white p-3 sm:p-4">
         {!isCollapsed ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
                 {/* Avatar con iniciales */}
-                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold shadow-md flex-shrink-0 ${getAvatarColor()}`}>
+                <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold shadow-sm sm:h-10 sm:w-10 sm:text-sm ${getAvatarColor()}`}>
                   {getUserInitials(displayUserName)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-xs sm:text-sm font-semibold text-gray-900 truncate">
+                  <h2 className="truncate text-xs font-semibold text-slate-900 sm:text-sm">
                     {displayUserName}
                   </h2>
-                  <p className={`text-xs font-medium ${
-                    isAdmin ? 'text-red-600' : isDonante ? 'text-green-600' : isOperador ? 'text-orange-600' : 'text-blue-600'
-                  }`}>
+                  <p className={`text-xs font-semibold ${roleTheme.text}`}>
                     {getRoleLabel()}
                   </p>
                 </div>
               </div>
               
               <button
+                type="button"
                 onClick={() => setIsCollapsed(!isCollapsed)}
-                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
+                className="flex-shrink-0 rounded-lg p-1.5 text-slate-600 hover:bg-slate-100"
                 aria-label="Contraer sidebar"
               >
-                <ChevronLeftIcon className="w-4 h-4 text-gray-600" />
+                <ChevronLeftIcon className="h-4 w-4 text-slate-600" />
               </button>
             </div>
           </div>
         ) : (
           <div className="flex flex-col items-center space-y-2">
             <button
+              type="button"
               onClick={() => setIsCollapsed(false)}
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-md ${getAvatarColor()}`}
+              className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold shadow-sm ${getAvatarColor()}`}
               title={`Expandir sidebar - ${displayUserName}`}
             >
               {getUserInitials(displayUserName)}
             </button>
             <button
+              type="button"
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              className="rounded-lg p-1 text-slate-600 hover:bg-slate-100"
               aria-label="Expandir sidebar"
             >
-              <ChevronRightIcon className="w-4 h-4 text-gray-600" />
+              <ChevronRightIcon className="h-4 w-4 text-slate-600" />
             </button>
           </div>
         )}
@@ -445,55 +428,29 @@ export default function Sidebar({
         {!isCollapsed && (
           <div className="mt-3">
             <button
+              type="button"
               onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-              className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors border border-gray-100"
+              className="flex w-full items-center justify-between rounded-lg border border-slate-200 p-2 text-left hover:bg-slate-50"
+              aria-expanded={isProfileMenuOpen}
             >
-              <span className="text-xs text-gray-600 font-medium">Opciones de cuenta</span>
+              <span className="text-xs font-semibold text-slate-600">Opciones de cuenta</span>
               {isProfileMenuOpen ? (
-                <ChevronUpIcon className="w-3 h-3 text-gray-500" />
+                <ChevronUpIcon className="h-3 w-3 text-slate-500" />
               ) : (
-                <ChevronDownIcon className="w-3 h-3 text-gray-500" />
+                <ChevronDownIcon className="h-3 w-3 text-slate-500" />
               )}
             </button>
             
             {isProfileMenuOpen && (
-              <div className="mt-2 space-y-1 bg-gray-50 rounded-lg p-2">
-                <button
-                  onClick={() => {
-                    setIsCollapsed(true);
-                    if (isAdmin) {
-                      router.push('/admin/perfil');
-                    } else if (isOperador) {
-                      router.push('/operador/perfil');
-                    } else if (isDonante) {
-                      router.push('/donante/perfil');
-                    } else {
-                      router.push('/user/perfil');
-                    }
-                  }}
-                  className="w-full flex items-center px-3 py-2 text-left rounded-md hover:bg-white hover:shadow-sm transition-all duration-200"
-                >
-                  <UserIcon className="w-4 h-4 mr-2 text-gray-500" />
-                  <span className="text-xs text-gray-700 font-medium">Mi Perfil</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setIsCollapsed(true);
-                    if (isAdmin) {
-                      router.push('/admin/configuracion');
-                    } else if (isOperador) {
-                      router.push('/operador/configuracion');
-                    } else if (isDonante) {
-                      router.push('/donante/configuracion');
-                    } else {
-                      router.push('/user/configuracion');
-                    }
-                  }}
-                  className="w-full flex items-center px-3 py-2 text-left rounded-md hover:bg-white hover:shadow-sm transition-all duration-200"
-                >
-                  <Cog6ToothIcon className="w-4 h-4 mr-2 text-gray-500" />
-                  <span className="text-xs text-gray-700 font-medium">Configuración</span>
-                </button>
+              <div className="mt-2 space-y-1 rounded-lg bg-slate-50 p-2">
+                <Link href={profileHref} onClick={closeOnMobile} className="flex w-full items-center rounded-lg px-3 py-2 text-left hover:bg-white hover:shadow-sm">
+                  <UserIcon className="mr-2 h-4 w-4 text-slate-500" />
+                  <span className="text-xs font-semibold text-slate-700">Mi Perfil</span>
+                </Link>
+                <Link href={settingsHref} onClick={closeOnMobile} className="flex w-full items-center rounded-lg px-3 py-2 text-left hover:bg-white hover:shadow-sm">
+                  <Cog6ToothIcon className="mr-2 h-4 w-4 text-slate-500" />
+                  <span className="text-xs font-semibold text-slate-700">Configuración</span>
+                </Link>
               </div>
             )}
           </div>
@@ -501,14 +458,14 @@ export default function Sidebar({
       </div>
 
       {/* Sección de Notificaciones */}
-      <div className="px-4 py-2 border-b border-gray-100 bg-white">
-  <NotificacionesDropdown isCollapsed={isCollapsed} roleColor={
-    isAdmin ? 'red' : isOperador ? 'orange' : isDonante ? 'green' : 'blue'
-  } />
+      <div className="border-b border-slate-100 bg-white px-4 py-2">
+        <NotificacionesDropdown isCollapsed={isCollapsed} roleColor={
+          isAdmin ? 'red' : isOperador ? 'orange' : isDonante ? 'green' : 'blue'
+        } />
       </div>
 
       {/* Navegación */}
-      <nav className="flex-1 p-2 overflow-y-auto">
+      <nav className="flex-1 overflow-y-auto p-2" aria-label="Navegación principal">
         <ul className="space-y-1">
           {filteredMenuItems.map((item) => {
             const Icon = item.icon;
@@ -517,85 +474,66 @@ export default function Sidebar({
             const isSubMenuOpenState = isSubMenuOpen(item.name);
             const hasActiveSubItemState = hasActiveSubItem(item.subItems);
             const isItemActive = isActive || hasActiveSubItemState;
+            const itemClassName = `group flex w-full items-center rounded-xl px-2 py-2 text-left sm:px-3 sm:py-2.5 ${getActiveStyles(isItemActive)}`;
+            const itemContent = (
+              <>
+                <Icon className={`h-5 w-5 flex-shrink-0 ${isCollapsed ? 'mx-auto' : 'mr-2 sm:mr-3'} ${getIconStyles(isItemActive)}`} />
+                {!isCollapsed && (
+                  <>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-xs font-semibold sm:text-sm">{item.name}</span>
+                      {item.description && <p className="mt-0.5 hidden truncate text-xs text-slate-500 sm:block">{item.description}</p>}
+                    </div>
+                    {hasSubItems && (isSubMenuOpenState ? <ChevronUpIcon className="ml-2 h-4 w-4 text-slate-500" /> : <ChevronDownIcon className="ml-2 h-4 w-4 text-slate-500" />)}
+                  </>
+                )}
+              </>
+            );
             
             return (
               <li key={item.name}>
                 {/* Item principal */}
                 <div className="relative">
-                  <button
-                    onClick={() => {
-                      if (hasSubItems && !isCollapsed) {
-                        toggleSubMenu(item.name);
-                      } else {
-                        // En móvil, cerrar el sidebar después de navegar
-                        if (window.innerWidth < 768) {
-                          setIsCollapsed(true);
-                        }
-                        router.push(item.href);
-                      }
-                    }}
-                    className={`w-full flex items-center px-2 sm:px-3 py-2 sm:py-2.5 text-left rounded-lg transition-all duration-200 group ${
-                      getActiveStyles(isItemActive)
-                    }`}
-                    title={isCollapsed ? item.name : undefined}
-                  >
-                    <Icon className={`w-5 h-5 ${isCollapsed ? 'mx-auto' : 'mr-2 sm:mr-3'} flex-shrink-0 ${
-                      getIconStyles(isItemActive)
-                    }`} />
-                    {!isCollapsed && (
-                      <>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-xs sm:text-sm font-medium">{item.name}</span>
-                          {item.description && (
-                            <p className="text-xs text-gray-500 mt-0.5 truncate hidden sm:block">
-                              {item.description}
-                            </p>
-                          )}
-                        </div>
-                        {hasSubItems && (
-                          <div className="ml-2 transition-transform duration-200 flex-shrink-0">
-                            {isSubMenuOpenState ? (
-                              <ChevronUpIcon className="w-4 h-4 text-gray-500" />
-                            ) : (
-                              <ChevronDownIcon className="w-4 h-4 text-gray-500" />
-                            )}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </button>
+                  {hasSubItems && !isCollapsed ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleSubMenu(item.name)}
+                      className={itemClassName}
+                      aria-expanded={isSubMenuOpenState}
+                    >
+                      {itemContent}
+                    </button>
+                  ) : (
+                    <Link
+                      href={item.href}
+                      onClick={closeOnMobile}
+                      className={itemClassName}
+                      title={isCollapsed ? item.name : undefined}
+                      aria-current={isItemActive ? 'page' : undefined}
+                    >
+                      {itemContent}
+                    </Link>
+                  )}
 
                   {/* Submenú */}
                   {hasSubItems && !isCollapsed && isSubMenuOpenState && (
-                    <div className="mt-1 ml-4 sm:ml-8 space-y-1 border-l-2 border-gray-100 pl-2 sm:pl-3">
+                    <div className="ml-4 mt-1 space-y-1 border-l-2 border-slate-200 pl-2 sm:ml-8 sm:pl-3">
                       {item.subItems!.map((subItem) => {
                         const isSubActive = isActiveRoute(subItem.href);
                         
                         return (
-                          <button
+                          <Link
                             key={subItem.name}
-                            onClick={() => {
-                              // En móvil, cerrar el sidebar después de navegar
-                              if (window.innerWidth < 768) {
-                                setIsCollapsed(true);
-                              }
-                              router.push(subItem.href);
-                            }}
-                            className={`w-full flex items-start px-2 sm:px-3 py-2 text-left rounded-md transition-all duration-200 group ${
-                              isSubActive 
-                                ? 'bg-gray-100 text-gray-900 border border-gray-200' 
-                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                            }`}
+                            href={subItem.href}
+                            onClick={closeOnMobile}
+                            className={`group flex w-full items-start rounded-lg px-2 py-2 text-left ${isSubActive ? `${roleTheme.soft} shadow-sm` : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'}`}
+                            aria-current={isSubActive ? 'page' : undefined}
                           >
-                            <div className="flex-1 min-w-0">
-                              <span className="text-xs sm:text-sm font-medium">{subItem.name}</span>
-                              {subItem.description && (
-                                <p className="text-xs text-gray-500 mt-0.5 hidden sm:block">
-                                  {subItem.description}
-                                </p>
-                              )}
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-semibold sm:text-sm">{subItem.name}</span>
+                              {subItem.description && <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">{subItem.description}</p>}
                             </div>
-                          </button>
+                          </Link>
                         );
                       })}
                     </div>
@@ -608,16 +546,17 @@ export default function Sidebar({
       </nav>
 
       {/* Footer con logout moderno */}
-      <div className="p-3 border-t border-gray-100 bg-gray-50">
+      <div className="border-t border-slate-100 bg-slate-50 p-3">
         <button
+          type="button"
           onClick={handleLogout}
           disabled={isLoggingOut}
-          className={`w-full flex items-center px-3 py-2.5 text-left rounded-lg transition-all duration-200 text-gray-600 hover:text-red-600 hover:bg-white border border-transparent hover:border-red-200 hover:shadow-sm disabled:opacity-50 group ${
+          className={`flex w-full items-center rounded-xl border border-transparent px-3 py-2.5 text-left text-slate-600 hover:border-rose-200 hover:bg-white hover:text-rose-700 hover:shadow-sm disabled:opacity-50 ${
             isCollapsed ? 'justify-center' : ''
           }`}
           title={isCollapsed ? 'Cerrar sesión' : undefined}
         >
-          <PowerIcon className={`w-4 h-4 ${isCollapsed ? '' : 'mr-3'} transition-colors`} />
+          <PowerIcon aria-hidden="true" className={`h-4 w-4 ${isCollapsed ? '' : 'mr-3'}`} />
           {!isCollapsed && (
             <span className="text-sm font-medium">
               {isLoggingOut ? 'Cerrando...' : 'Cerrar Sesión'}

@@ -8,7 +8,7 @@ export default function UserConfiguracionPage() {
       title="Configuración de Usuario"
       description="Gestiona tus preferencias y seguridad"
     >
-      <UserSettingsContent variant="solicitante" />
+      <UserSettingsContent variant="solicitante" showHeader={false} />
     </DashboardLayout>
   );
 }

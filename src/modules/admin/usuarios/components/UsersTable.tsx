@@ -30,11 +30,11 @@ const UsersTable = ({ users, processingId, onChangeRole, onChangeStatus }: Users
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm">
-      <div className="overflow-x-auto">
+    <div className="table-surface">
+      <div className="table-scroll">
         <div className="max-h-[70vh] overflow-y-auto">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="sticky top-0 z-10 bg-slate-50">
+          <table className="table-base">
+            <thead className="table-head sticky top-0 z-10">
               <tr>
                 <th className="px-3 sm:px-4 lg:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Usuario</th>
                 <th className="px-3 sm:px-4 lg:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 hidden md:table-cell">Contacto</th>
@@ -44,7 +44,7 @@ const UsersTable = ({ users, processingId, onChangeRole, onChangeStatus }: Users
                 <th className="px-3 sm:px-4 lg:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Acciones</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-slate-100">
+            <tbody className="table-body">
               {users.map(user => {
                 const isProcessing = processingId === user.id;
                 const badgeClass = STATUS_BADGE[user.estado ?? 'activo'] ?? STATUS_BADGE.activo;

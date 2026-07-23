@@ -4,6 +4,8 @@ import { useMemo } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import { RefreshCw } from 'lucide-react';
+import { Alert } from '@/app/components/ui/Alert';
+import { Button } from '@/app/components/ui/Button';
 
 import { useDashboardData } from '@/modules/shared/dashboard';
 import DashboardActivity from '@/modules/admin/dashboard/components/DashboardActivity';
@@ -23,27 +25,22 @@ export default function AdminDashboardPage() {
       title="Panel administrativo"
       description="Métricas operativas del Banco de Alimentos"
     >
-      <div className="p-6 space-y-6">
+      <div className="space-y-6">
         <div className="flex justify-end">
-          <button
+          <Button
             type="button"
             onClick={refresh}
             disabled={loading}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-              loading
-                ? 'cursor-not-allowed bg-slate-200 text-slate-400'
-                : 'bg-slate-900 text-white shadow-sm hover:bg-slate-700 focus:ring-slate-500'
-            }`}
+            loading={loading}
+            accent="admin"
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw aria-hidden="true" className="h-4 w-4" />
             Actualizar datos
-          </button>
+          </Button>
         </div>
 
         {error && (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-600">
-            {error}
-          </div>
+          <Alert tipo="error" mensaje={error} />
         )}
 
         {loading && !hasData && (

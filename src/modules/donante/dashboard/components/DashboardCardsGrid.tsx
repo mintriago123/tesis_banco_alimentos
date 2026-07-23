@@ -7,11 +7,11 @@ interface DashboardCardsGridProps {
 export function DashboardCardsGrid({ nombre }: DashboardCardsGridProps) {
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-2xl shadow">
-        <h2 className="text-xl font-semibold text-gray-800">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">
           ¡Bienvenido, {nombre || 'Usuario'}!
         </h2>
-        <p className="text-gray-600 mt-2">
+        <p className="mt-2 text-slate-600">
           Este es tu panel donde puedes gestionar tu perfil, reservas y más.
         </p>
       </div>
@@ -21,18 +21,18 @@ export function DashboardCardsGrid({ nombre }: DashboardCardsGridProps) {
           href="/donante/perfil"
           title="Ver Perfil"
           description="Consulta tu información personal."
-          bgColor="bg-blue-50"
-          hoverColor="hover:bg-blue-100"
-          textColor="text-blue-700"
+          bgColor="bg-emerald-50"
+          hoverColor="hover:bg-emerald-100"
+          textColor="text-emerald-800"
         />
 
         <DashboardCard
           href="/donante/donaciones"
           title="Ver mis donaciones"
           description="Consulta el estado de tus donaciones."
-          bgColor="bg-green-50"
-          hoverColor="hover:bg-green-100"
-          textColor="text-green-700"
+          bgColor="bg-emerald-50"
+          hoverColor="hover:bg-emerald-100"
+          textColor="text-emerald-800"
         />
       </div>
     </div>

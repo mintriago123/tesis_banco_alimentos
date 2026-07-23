@@ -7,6 +7,7 @@ import React from 'react';
 import { Unidad } from '../types';
 import { type StockSummary } from '../services/inventoryStockService';
 import { FORM_CONFIG } from '../constants';
+import { FormField, SelectInput, TextInput } from '@/app/components/ui/FormField';
 
 interface CantidadUnidadInputsProps {
   cantidad: string;
@@ -41,14 +42,8 @@ export function CantidadUnidadInputs({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* Cantidad */}
-      <div>
-        <label
-          htmlFor="cantidad"
-          className="block text-sm font-medium text-gray-700 mb-2"
-        >
-          Cantidad Solicitada *
-        </label>
-        <input
+      <FormField id="cantidad" label="Cantidad solicitada" required hint="Ingresa la cantidad necesaria">
+        <TextInput
           type="number"
           id="cantidad"
           value={cantidad}
@@ -56,25 +51,24 @@ export function CantidadUnidadInputs({
           required
           min={FORM_CONFIG.CANTIDAD_MIN}
           step={FORM_CONFIG.CANTIDAD_STEP}
-          className={`w-full border-2 rounded-lg px-4 py-3 focus:outline-none transition-colors ${
+          className={`min-h-11 px-4 ${
             cantidadNum > 0 &&
             stockInfo &&
             stockInfo.producto_encontrado
               ? hasSufficientStock
-                ? 'border-green-500 focus:border-green-600'
-                : 'border-red-500 focus:border-red-600'
-              : 'border-gray-300 focus:border-blue-500'
+                ? 'border-emerald-500 focus:border-emerald-600'
+                : 'border-rose-500 focus:border-rose-600'
+              : 'border-slate-300 focus:border-blue-600'
           }`}
           placeholder="0"
         />
         <div className="mt-1 space-y-1">
-          <p className="text-xs text-gray-500">Ingresa la cantidad necesaria</p>
           {cantidadNum > 0 &&
             stockInfo &&
             stockInfo.producto_encontrado && (
               <p
                 className={`text-xs font-medium ${
-                  hasSufficientStock ? 'text-green-600' : 'text-red-600'
+                  hasSufficientStock ? 'text-emerald-700' : 'text-rose-700'
                 }`}
               >
                 {hasSufficientStock
@@ -87,22 +81,16 @@ export function CantidadUnidadInputs({
               </p>
             )}
         </div>
-      </div>
+      </FormField>
 
       {/* Unidad */}
-      <div>
-        <label
-          htmlFor="unidad"
-          className="block text-sm font-medium text-gray-700 mb-2"
-        >
-          Unidad de Medida *
-        </label>
-        <select
+      <FormField id="unidad" label="Unidad de medida" required hint="Selecciona la unidad de medida">
+        <SelectInput
           id="unidad"
           value={unidadId}
           onChange={onUnidadChange}
           required
-          className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition-colors"
+          className="min-h-11 px-4"
         >
           <option value="">Selecciona una unidad</option>
           {loadingUnidades ? (
@@ -114,11 +102,8 @@ export function CantidadUnidadInputs({
               </option>
             ))
           )}
-        </select>
-        <p className="text-xs text-gray-500 mt-1">
-          Selecciona la unidad de medida
-        </p>
-      </div>
+        </SelectInput>
+      </FormField>
     </div>
   );
 }

@@ -255,23 +255,25 @@ export default function ComprobantePage() {
               <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                 Detalles del {esSolicitud ? 'Pedido' : 'Producto Donado'}
               </h3>
-              <div className="border border-gray-200 rounded-xl overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
+              <div className="table-surface">
+                <div className="table-scroll">
+                  <table className="table-base">
+                    <thead className="table-head">
                     <tr>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Producto</th>
                       <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Cantidad</th>
                       <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Unidad</th>
                     </tr>
-                  </thead>
-                  <tbody>
+                    </thead>
+                    <tbody className="table-body">
                     <tr className="border-t border-gray-100">
                       <td className="px-4 py-4 font-semibold text-gray-900">{comprobante.pedido.tipoAlimento}</td>
                       <td className="px-4 py-4 text-center font-bold text-xl text-black-600">{comprobante.pedido.cantidad}</td>
                       <td className="px-4 py-4 text-center text-gray-600">{comprobante.pedido.unidad}</td>
                     </tr>
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
 

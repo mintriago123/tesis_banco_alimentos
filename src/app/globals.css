@@ -1,361 +1,89 @@
 @import "tailwindcss";
 
-/* =================================================================== */
-/* VARIABLES CSS GLOBALES - PALETA VERDE */
-/* =================================================================== */
+/* Sistema visual: superficies claras, slate como base y el color de rol como acento. */
 :root {
-  /* Paleta de colores principal - Verde */
-  --color-primary-50: #f0fdf4;
-  --color-primary-100: #dcfce7;
-  --color-primary-200: #bbf7d0;
-  --color-primary-300: #86efac;
-  --color-primary-400: #4ade80;
-  --color-primary-500: #22c55e;
-  --color-primary-600: #16a34a;
-  --color-primary-700: #15803d;
-  --color-primary-800: #166534;
-  --color-primary-900: #14532d;
+  --color-slate-950: #020617;
+  --color-slate-900: #0f172a;
+  --color-slate-800: #1e293b;
+  --color-slate-700: #334155;
+  --color-slate-600: #475569;
+  --color-slate-500: #64748b;
+  --color-slate-400: #94a3b8;
+  --color-slate-300: #cbd5e1;
+  --color-slate-200: #e2e8f0;
+  --color-slate-100: #f1f5f9;
+  --color-slate-50: #f8fafc;
 
-  /* Colores secundarios - Azul verdoso */
-  --color-secondary-50: #ecfdf5;
-  --color-secondary-100: #d1fae5;
-  --color-secondary-200: #a7f3d0;
-  --color-secondary-300: #6ee7b7;
-  --color-secondary-400: #34d399;
-  --color-secondary-500: #10b981;
-  --color-secondary-600: #059669;
-  --color-secondary-700: #047857;
-  --color-secondary-800: #065f46;
-  --color-secondary-900: #064e3b;
+  --role-admin-bg: #fff1f2;
+  --role-admin-border: #fecdd3;
+  --role-admin-text: #be123c;
+  --role-operador-bg: #fff7ed;
+  --role-operador-border: #fed7aa;
+  --role-operador-text: #c2410c;
+  --role-donante-bg: #ecfdf5;
+  --role-donante-border: #a7f3d0;
+  --role-donante-text: #047857;
+  --role-solicitante-bg: #eff6ff;
+  --role-solicitante-border: #bfdbfe;
+  --role-solicitante-text: #1d4ed8;
 
-  /* Colores de alerta */
-  --color-danger-50: #fef2f2;
-  --color-danger-100: #fee2e2;
-  --color-danger-200: #fecaca;
-  --color-danger-300: #fca5a5;
-  --color-danger-400: #f87171;
-  --color-danger-500: #ef4444;
-  --color-danger-600: #dc2626;
-  --color-danger-700: #b91c1c;
-  --color-danger-800: #991b1b;
-  --color-danger-900: #7f1d1d;
+  --status-success-bg: #ecfdf5;
+  --status-success-border: #a7f3d0;
+  --status-success-text: #065f46;
+  --status-warning-bg: #fffbeb;
+  --status-warning-border: #fde68a;
+  --status-warning-text: #92400e;
+  --status-error-bg: #fff1f2;
+  --status-error-border: #fecdd3;
+  --status-error-text: #9f1239;
+  --status-info-bg: #eff6ff;
+  --status-info-border: #bfdbfe;
+  --status-info-text: #1e40af;
 
-  /* Colores de advertencia */
-  --color-warning-50: #fffbeb;
-  --color-warning-100: #fef3c7;
-  --color-warning-200: #fde68a;
-  --color-warning-300: #fcd34d;
-  --color-warning-400: #fbbf24;
-  --color-warning-500: #f59e0b;
-  --color-warning-600: #d97706;
-  --color-warning-700: #b45309;
-  --color-warning-800: #92400e;
-  --color-warning-900: #78350f;
-
-  /* Escalas de grises */
-  --color-gray-50: #f9fafb;
-  --color-gray-100: #f3f4f6;
-  --color-gray-200: #e5e7eb;
-  --color-gray-300: #d1d5db;
-  --color-gray-400: #9ca3af;
-  --color-gray-500: #6b7280;
-  --color-gray-600: #4b5563;
-  --color-gray-700: #374151;
-  --color-gray-800: #1f2937;
-  --color-gray-900: #111827;
-
-  /* Tipografía */
   --font-sans: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
-  --font-mono: var(--font-geist-mono, ui-monospace, 'SFMono-Regular', 'Consolas', monospace);
-
-  /* Espaciado */
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-  --spacing-2xl: 3rem;
-
-  /* Bordes y radio */
-  --border-radius-sm: 0.375rem;
-  --border-radius-md: 0.5rem;
-  --border-radius-lg: 0.75rem;
-  --border-radius-xl: 1rem;
-  --border-radius-2xl: 1.5rem;
-  --border-radius-3xl: 1.75rem;
-
-  /* Sombras */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
-
-  /* Transiciones */
-  --transition-fast: 150ms ease-in-out;
-  --transition-normal: 200ms ease-in-out;
-  --transition-slow: 300ms ease-in-out;
+  --font-mono: var(--font-geist-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+  --radius-control: 0.75rem;
+  --radius-surface: 1rem;
+  --shadow-surface: 0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.06);
+  --shadow-popover: 0 20px 40px -12px rgb(15 23 42 / 0.2);
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
 }
 
-/* =================================================================== */
-/* FONDOS Y GRADIENTES ACTUALIZADOS */
-/* =================================================================== */
-.bg-gradient-primary {
-  background: linear-gradient(135deg, var(--color-primary-100) 0%, var(--color-primary-300) 50%, var(--color-primary-500) 100%);
+@theme inline {
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
-.bg-gradient-auth {
-  background: linear-gradient(135deg, var(--color-primary-50) 0%, var(--color-primary-100) 50%, var(--color-primary-200) 100%);
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
-.bg-gradient-dashboard {
-  background: linear-gradient(135deg, var(--color-primary-50) 0%, var(--color-primary-100) 50%, var(--color-secondary-200) 100%);
-}
-
-.bg-gradient-hero {
-  background: linear-gradient(135deg, var(--color-primary-50) 0%, var(--color-primary-100) 50%, var(--color-primary-200) 100%);
-}
-
-/* =================================================================== */
-/* COMPONENTES DE BOTONES ACTUALIZADOS */
-/* =================================================================== */
-.btn-primary {
-  background-color: var(--color-primary-600);
-  color: white;
-  box-shadow: var(--shadow-md);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background-color: var(--color-primary-700);
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-1px);
-}
-
-.btn-outline {
-  background-color: transparent;
-  color: var(--color-primary-600);
-  border: 2px solid var(--color-primary-600);
-}
-
-.btn-outline:hover:not(:disabled) {
-  background-color: var(--color-primary-600);
-  color: white;
-  transform: translateY(-1px);
-}
-
-/* =================================================================== */
-/* EFECTOS GLASSMORPHISM ACTUALIZADOS */
-/* =================================================================== */
-.glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(220, 252, 231, 0.2); /* primary-100 con transparencia */
-}
-
-.glass-card {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(32px);
-  -webkit-backdrop-filter: blur(32px);
-  border-radius: var(--border-radius-3xl);
-  box-shadow: var(--shadow-2xl);
-  border: 1px solid rgba(34, 197, 94, 0.1); /* primary-500 con transparencia */
-}
-
-/* =================================================================== */
-/* FORMULARIOS ACTUALIZADOS */
-/* =================================================================== */
-.form-input:focus {
-  outline: none;
-  border-color: var(--color-primary-500);
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1); /* primary-500 con transparencia */
-}
-
-/* =================================================================== */
-/* NAVEGACIÓN ACTUALIZADA */
-/* =================================================================== */
-.nav-link:hover {
-  background-color: var(--color-primary-50);
-  color: var(--color-gray-900);
-}
-
-/* =================================================================== */
-/* RESTANTE DEL CÓDIGO PERMANECE IGUAL */
-/* =================================================================== */
-/* ... (el resto de tu código CSS existente se mantiene igual) ... */
-
-/* =================================================================== */
-/* ESTILOS PARA MAPBOX */
-/* =================================================================== */
-.mapboxgl-map {
-  border-radius: 0.5rem;
-  overflow: hidden;
-}
-
-.mapboxgl-ctrl-group {
-  border-radius: 0.375rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-
-.mapboxgl-ctrl-group button {
-  border-radius: 0.375rem;
-  transition: all 0.2s ease-in-out;
-}
-
-.mapboxgl-ctrl-group button:hover {
-  background-color: var(--color-primary-50);
-}
-
-.mapboxgl-marker {
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-}
-
-/* Asegurar que el contenedor del mapa tenga el tamaño correcto */
-.mapboxgl-canvas-container {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-.mapboxgl-canvas {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-
-
-/* Estilos adicionales para mejorar la estética */
-.bg-blue-25 {
-  background-color: rgba(59, 130, 246, 0.05);
-}
-
-.smooth-scroll {
-  scroll-behavior: smooth;
-  scrollbar-width: thin;
-  scrollbar-color: #e5e7eb #f9fafb;
-}
-
-.smooth-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-
-.smooth-scroll::-webkit-scrollbar-track {
-  background: #f9fafb;
-}
-
-.smooth-scroll::-webkit-scrollbar-thumb {
-  background-color: #e5e7eb;
-  border-radius: 3px;
-}
-
-/* Transiciones suaves */
-.transition-all-150 {
-  transition: all 150ms ease-in-out;
-}
-
-/* Sombras mejoradas */
-.shadow-xl {
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-}
-
-/* Bordes redondeados */
-.rounded-xl {
-  border-radius: 0.75rem;
-}
-
-
-/* Colores de fondo suaves para notificaciones no leídas */
-.bg-red-25 {
-  background-color: rgba(254, 242, 242, 0.5); /* red-50 más suave */
-}
-
-.bg-green-25 {
-  background-color: rgba(240, 253, 244, 0.5); /* green-50 más suave */
-}
-
-.bg-blue-25 {
-  background-color: rgba(239, 246, 255, 0.5); /* blue-50 más suave */
-}
-
-/* Scroll suave personalizado */
-.smooth-scroll {
+html {
+  min-width: 320px;
   scroll-behavior: smooth;
 }
 
-/* Scrollbar personalizada */
-.scrollbar-thin {
-  scrollbar-width: thin;
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--color-slate-50);
+  color: var(--color-slate-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.scrollbar-thumb-gray-300::-webkit-scrollbar-thumb {
-  background-color: #d1d5db;
-  border-radius: 4px;
+button,
+a,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
-.scrollbar-track-gray-100::-webkit-scrollbar-track {
-  background-color: #f3f4f6;
-}
-
-.scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: #d1d5db;
-  border-radius: 4px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-track {
-  background-color: #f3f4f6;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background-color: #9ca3af;
-}
-
-/* Animaciones para Toast/Notificaciones */
-@keyframes slide-in-right {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-.animate-slide-in-right {
-  animation: slide-in-right 0.3s ease-out;
-}
-
-/* =================================================================== */
-/* ESTILOS DE ACCESIBILIDAD */
-/* =================================================================== */
-
-/* Animación para el panel de accesibilidad */
-@keyframes slide-in-from-bottom {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.animate-in {
-  animation: slide-in-from-bottom 0.3s ease-out;
-}
-
-/* Mejoras de accesibilidad para navegación por teclado */
-.keyboard-navigation *:focus-visible {
-  outline: 3px solid #2563eb !important;
-  outline-offset: 2px !important;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3) !important;
-}
-
-/* Asegurar que los elementos interactivos sean accesibles */
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
@@ -365,179 +93,298 @@ textarea:focus-visible {
   outline-offset: 2px;
 }
 
-/* Mejorar visibilidad de elementos deshabilitados */
 button:disabled,
 input:disabled,
-select:disabled {
-  opacity: 0.5;
+select:disabled,
+textarea:disabled {
   cursor: not-allowed;
 }
 
-/* Asegurar contraste suficiente en textos */
-body {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* Utilidades heredadas que siguen siendo parte de la aplicación. */
+.bg-gradient-primary {
+  background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 50%, #2563eb 100%);
 }
 
-/* Transiciones suaves para cambios de tamaño de texto */
-* {
-  transition: font-size 0.2s ease-in-out;
+.bg-gradient-auth,
+.bg-gradient-dashboard,
+.bg-gradient-hero {
+  background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 52%, #dbeafe 100%);
 }
 
-/* =================================================================== */
-/* UTILIDADES RESPONSIVE */
-/* =================================================================== */
-
-/* Prevenir scroll horizontal en móviles */
-html, body {
-  overflow-x: hidden;
-  width: 100%;
+.btn-primary {
+  background-color: #1d4ed8;
+  color: white;
+  box-shadow: var(--shadow-surface);
 }
 
-/* Asegurar que las tablas sean responsive */
+.btn-primary:hover:not(:disabled) {
+  background-color: #1e40af;
+}
+
+.btn-outline {
+  border: 1px solid #1d4ed8;
+  background: transparent;
+  color: #1d4ed8;
+}
+
+.btn-outline:hover:not(:disabled) {
+  background-color: #eff6ff;
+}
+
+.glass {
+  border: 1px solid rgb(226 232 240 / 0.8);
+  background: rgb(255 255 255 / 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.glass-card {
+  border: 1px solid rgb(191 219 254 / 0.7);
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 0.85);
+  box-shadow: var(--shadow-popover);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.form-input:focus {
+  border-color: #2563eb;
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15);
+}
+
+.nav-link:hover {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+/* Mapbox */
+.mapboxgl-map {
+  overflow: hidden;
+  border-radius: 0.75rem;
+}
+
+.mapboxgl-ctrl-group {
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow-surface);
+}
+
+.mapboxgl-ctrl-group button {
+  border-radius: 0.5rem;
+  transition: background-color var(--transition-fast);
+}
+
+.mapboxgl-ctrl-group button:hover {
+  background-color: #eff6ff;
+}
+
+.mapboxgl-marker {
+  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.2));
+}
+
+.mapboxgl-canvas-container,
+.mapboxgl-canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.bg-blue-25 {
+  background-color: rgb(239 246 255 / 0.55);
+}
+
+.bg-red-25 {
+  background-color: rgb(255 241 242 / 0.55);
+}
+
+.bg-green-25 {
+  background-color: rgb(236 253 245 / 0.55);
+}
+
+.smooth-scroll {
+  scroll-behavior: smooth;
+  scrollbar-color: #cbd5e1 #f8fafc;
+  scrollbar-width: thin;
+}
+
+.smooth-scroll::-webkit-scrollbar,
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.smooth-scroll::-webkit-scrollbar-track,
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+.smooth-scroll::-webkit-scrollbar-thumb,
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background-color: #cbd5e1;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.transition-all-150 {
+  transition: all 150ms ease;
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+@keyframes slide-in-from-bottom {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-in {
+  animation: slide-in-from-bottom 0.3s ease-out;
+}
+
+.keyboard-navigation *:focus-visible {
+  outline: 3px solid #1d4ed8 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 3px rgb(29 78 216 / 0.25) !important;
+}
+
 .table-responsive {
+  width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Espaciado responsive */
-@media (max-width: 640px) {
-  .container {
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
+/* Patrón compartido para tablas: la superficie exterior recorta el contenido
+   y evita que los encabezados o el scroll vuelvan cuadradas las esquinas. */
+.table-surface {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--color-slate-200);
+  border-radius: 1rem;
+  background: white;
+  box-shadow: var(--shadow-surface);
 }
 
-/* Mejoras para touch en dispositivos móviles */
-@media (hover: none) and (pointer: coarse) {
-  button, a {
-    min-height: 44px;
-    min-width: 44px;
-  }
+.table-scroll {
+  overflow-x: auto;
+  border-radius: 1rem;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* Ocultar scrollbar en algunos elementos en móvil */
+.table-base {
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table-head {
+  background: var(--color-slate-50);
+}
+
+.table-head > tr > th {
+  border-bottom: 1px solid var(--color-slate-200);
+  color: var(--color-slate-500);
+}
+
+.table-head > tr > th:first-child {
+  border-top-left-radius: 1rem;
+}
+
+.table-head > tr > th:last-child {
+  border-top-right-radius: 1rem;
+}
+
+.table-body {
+  background: white;
+}
+
+.table-body > tr:not(:last-child) > td {
+  border-bottom: 1px solid var(--color-slate-200);
+}
+
+.table-body > tr:hover {
+  background: var(--color-slate-50);
+}
+
+.table-surface .table-head > tr > th:first-child {
+  border-top-left-radius: 1rem;
+}
+
+.table-surface .table-head > tr > th:last-child {
+  border-top-right-radius: 1rem;
+}
+
 .hide-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
-.hide-scrollbar::-webkit-scrollbar {
-  display: none;
-}
+.hide-scrollbar::-webkit-scrollbar { display: none; }
 
-/* Asegurar que las imágenes sean responsive */
-img {
-  max-width: 100%;
-  height: auto;
-}
+img { max-width: 100%; height: auto; }
 
-/* Texto truncado responsive */
-.truncate-2-lines {
+.truncate-2-lines,
+.truncate-3-lines {
   display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
   overflow: hidden;
+  -webkit-box-orient: vertical;
 }
-/* =================================================================== */
-/* ESTILOS PARA SLIDER DE PORCENTAJE */
-/* =================================================================== */
 
-/* Estilo base del slider */
+.truncate-2-lines { -webkit-line-clamp: 2; }
+.truncate-3-lines { -webkit-line-clamp: 3; }
+
 input[type="range"].slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
   height: 14px;
+  appearance: none;
   border-radius: 7px;
   outline: none;
-  transition: background 0.3s;
 }
 
-/* Thumb (bolita deslizante) - WebKit/Blink */
-input[type="range"].slider-thumb::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: white;
-  border: 3px solid #16a34a;
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  transition: all 0.2s ease;
-}
-
-input[type="range"].slider-thumb::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
-}
-
-input[type="range"].slider-thumb::-webkit-slider-thumb:active {
-  transform: scale(1.05);
-  border-width: 4px;
-}
-
-/* Thumb - Firefox */
+input[type="range"].slider-thumb::-webkit-slider-thumb,
 input[type="range"].slider-thumb::-moz-range-thumb {
   width: 24px;
   height: 24px;
+  appearance: none;
+  border: 3px solid #2563eb;
   border-radius: 50%;
   background: white;
-  border: 3px solid #16a34a;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.2);
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  transition: all 0.2s ease;
 }
 
-input[type="range"].slider-thumb::-moz-range-thumb:hover {
-  transform: scale(1.15);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
-}
-
-input[type="range"].slider-thumb::-moz-range-thumb:active {
-  transform: scale(1.05);
-  border-width: 4px;
-}
-
-/* Track - Firefox */
-input[type="range"].slider-thumb::-moz-range-track {
-  height: 14px;
-  border-radius: 7px;
-}
-
-/* Estado deshabilitado */
-input[type="range"].slider-thumb:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-input[type="range"].slider-thumb:disabled::-webkit-slider-thumb {
-  cursor: not-allowed;
-  background: #d1d5db;
-  border-color: #9ca3af;
-}
-
-input[type="range"].slider-thumb:disabled::-moz-range-thumb {
-  cursor: not-allowed;
-  background: #d1d5db;
-  border-color: #9ca3af;
-}
-
-/* Efecto focus para accesibilidad */
-input[type="range"].slider-thumb:focus {
-  outline: none;
-}
-
-input[type="range"].slider-thumb:focus::-webkit-slider-thumb {
-  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2);
-}
-
+input[type="range"].slider-thumb:focus::-webkit-slider-thumb,
 input[type="range"].slider-thumb:focus::-moz-range-thumb {
-  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2);
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.2);
 }
-.truncate-3-lines {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+
+@media (max-width: 640px) {
+  .container {
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  button,
+  a {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -17,12 +17,12 @@ export function DashboardCard({
   hoverColor,
   textColor,
 }: DashboardCardProps) {
+  const descriptionColor = textColor.includes('blue') ? 'text-blue-700' : 'text-emerald-700';
+
   return (
-    <Link href={href}>
-      <div className={`${bgColor} ${hoverColor} transition rounded-xl p-4 shadow cursor-pointer`}>
-        <h3 className={`text-lg font-semibold ${textColor}`}>{title}</h3>
-        <p className={`text-sm ${textColor.replace('700', '600')}`}>{description}</p>
-      </div>
+    <Link href={href} className={`${bgColor} ${hoverColor} block rounded-xl border p-4 shadow-sm transition hover:shadow`}>
+      <h3 className={`text-lg font-semibold ${textColor}`}>{title}</h3>
+      <p className={`text-sm ${descriptionColor}`}>{description}</p>
     </Link>
   );
 }

@@ -5,7 +5,7 @@ export default function UserPerfilPage() {
     <UserProfilePageContent
       requiredRole="SOLICITANTE"
       title="Mi Perfil"
-      tone="red"
+      tone="blue"
     />
   );
 }

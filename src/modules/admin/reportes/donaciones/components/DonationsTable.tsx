@@ -87,11 +87,11 @@ const DonationsTable = ({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm">
-      <div className="overflow-x-auto">
+    <div className="table-surface">
+      <div className="table-scroll">
         <div className="max-h-[70vh] overflow-y-auto">
-          <table className="min-w-full">
-            <thead className="sticky top-0 z-10 bg-gray-50">
+          <table className="table-base">
+            <thead className="table-head sticky top-0 z-10">
               <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Donante
@@ -116,7 +116,7 @@ const DonationsTable = ({
               </th>
             </tr>
           </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="table-body">
             {donations.map(donation => {
               const isProcessing = processingId === donation.id;
               const canChangeState = donation.estado === 'Pendiente';

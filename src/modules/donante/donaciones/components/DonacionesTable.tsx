@@ -45,37 +45,37 @@ export function DonacionesTable({
   };
 
   return (
-    <div className="bg-white shadow rounded-lg overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="min-w-full">
-          <thead className="bg-gray-50">
+    <div className="table-surface">
+      <div className="table-scroll">
+        <table className="table-base">
+          <thead className="table-head">
             <tr>
-              <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+              <th className="rounded-tl-2xl border-b border-slate-200 px-6 py-3 text-left text-xs uppercase tracking-wider text-slate-500">
                 Producto
               </th>
-              <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+              <th className="border-b border-slate-200 px-6 py-3 text-left text-xs uppercase tracking-wider text-slate-500">
                 Categoría
               </th>
-              <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+              <th className="border-b border-slate-200 px-6 py-3 text-left text-xs uppercase tracking-wider text-slate-500">
                 Cantidad
               </th>
-              <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+              <th className="border-b border-slate-200 px-6 py-3 text-left text-xs uppercase tracking-wider text-slate-500">
                 Estado
               </th>
-              <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+              <th className="border-b border-slate-200 px-6 py-3 text-left text-xs uppercase tracking-wider text-slate-500">
                 Fecha Disponible
               </th>
-              <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+              <th className="border-b border-slate-200 px-6 py-3 text-left text-xs uppercase tracking-wider text-slate-500">
                 Impacto
               </th>
-              <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+              <th className="rounded-tr-2xl border-b border-slate-200 px-6 py-3 text-left text-xs uppercase tracking-wider text-slate-500">
                 Acciones
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 bg-white">
+          <tbody className="table-body">
             {donaciones.map((donacion) => (
-              <tr key={donacion.id} className="hover:bg-gray-50">
+              <tr key={donacion.id} className="hover:bg-slate-50">
                 <td className="px-6 py-4">
                   <div className="flex items-center">
                     <Package className="w-8 h-8 text-gray-400 mr-3" />

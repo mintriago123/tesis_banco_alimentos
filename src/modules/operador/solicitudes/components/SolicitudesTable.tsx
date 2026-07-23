@@ -185,11 +185,11 @@ const SolicitudesTable = ({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm">
-      <div className="overflow-x-auto">
+    <div className="table-surface">
+      <div className="table-scroll">
         <div className="max-h-[70vh] overflow-y-auto">
-          <table className="min-w-full">
-            <thead className="sticky top-0 z-10 bg-gray-50">
+          <table className="table-base">
+            <thead className="table-head sticky top-0 z-10">
               <tr>
                 <th className="px-3 sm:px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Solicitante
@@ -208,7 +208,7 @@ const SolicitudesTable = ({
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="table-body">
               {solicitudes.map(solicitud => (
                 <tr key={solicitud.id} className="transition-colors duration-150 hover:bg-slate-50">
                   <td className="px-3 sm:px-4 lg:px-6 py-4">

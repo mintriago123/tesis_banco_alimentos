@@ -1,23 +1,21 @@
-/**
- * Componente de input de contraseña con toggle para mostrar/ocultar
- */
+/** Campo de contraseña con control accesible para mostrar u ocultar el valor. */
 
-import React, { useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
+import { FormField, TextInput } from '@/app/components/ui/FormField';
 
 interface PasswordInputProps {
-  id: string;
-  name: string;
-  label: string;
-  placeholder?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  required?: boolean;
-  autoComplete?: string;
-  minLength?: number;
-  disabled?: boolean;
+  readonly id: string;
+  readonly name: string;
+  readonly label: string;
+  readonly placeholder?: string;
+  readonly value: string;
+  readonly onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  readonly required?: boolean;
+  readonly autoComplete?: string;
+  readonly minLength?: number;
+  readonly disabled?: boolean;
 }
-
-export const PasswordInput: React.FC<PasswordInputProps> = ({
+export function PasswordInput({
   id,
   name,
   label,
@@ -28,19 +26,13 @@ export const PasswordInput: React.FC<PasswordInputProps> = ({
   autoComplete,
   minLength,
   disabled = false,
-}) => {
+}: PasswordInputProps) {
   const [verPassword, setVerPassword] = useState(false);
 
   return (
-    <div>
-      <label
-        htmlFor={id}
-        className="block mb-2 text-sm font-bold text-gray-700"
-      >
-        {label}
-      </label>
+    <FormField id={id} label={label} required={required}>
       <div className="relative">
-        <input
+        <TextInput
           id={id}
           name={name}
           type={verPassword ? 'text' : 'password'}
@@ -48,38 +40,24 @@ export const PasswordInput: React.FC<PasswordInputProps> = ({
           required={required}
           minLength={minLength}
           disabled={disabled}
-          className="block w-full px-4 py-3 pr-12 text-gray-900 placeholder-gray-500 bg-white/70 border border-gray-300/50 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent sm:text-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="min-h-11 px-4 pr-12"
           placeholder={placeholder}
           value={value}
           onChange={onChange}
-          style={{ MozAppearance: 'textfield' }}
         />
         <button
           type="button"
-          tabIndex={-1}
-          className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-none border-none p-0 m-0 appearance-none overflow-visible focus:outline-none"
-          onClick={() => setVerPassword((v) => !v)}
+          className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg p-0 text-slate-500 hover:bg-slate-100 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+          onClick={() => setVerPassword(value => !value)}
           aria-label={verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-          style={{ lineHeight: 0 }}
+          aria-pressed={verPassword}
         >
-          <svg
-            className={`w-5 h-5 block pointer-events-none ${
-              verPassword ? 'text-blue-600' : 'text-gray-400'
-            }`}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M1.5 12s4-7 10.5-7 10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"
-            />
+          <svg className={`block h-5 w-5 ${verPassword ? 'text-blue-700' : 'text-slate-400'}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M1.5 12s4-7 10.5-7 10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z" />
             <circle cx="12" cy="12" r="3" />
           </svg>
         </button>
       </div>
-    </div>
+    </FormField>
   );
-};
+}

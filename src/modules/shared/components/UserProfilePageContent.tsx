@@ -3,13 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ExclamationCircleIcon } from '@heroicons/react/24/outline';
-import { Loader2 } from 'lucide-react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import UserProfileCard from './UserProfileCard';
+import { Button } from '@/app/components/ui/Button';
+import { LoadingState } from '@/app/components/ui/LoadingState';
+import { accentForRole } from '@/app/components/ui/theme';
 
 type RequiredRole = 'ADMINISTRADOR' | 'OPERADOR' | 'DONANTE' | 'SOLICITANTE' | 'ANY';
-type Tone = 'red' | 'green';
+type Tone = 'red' | 'orange' | 'green' | 'blue';
 
 interface UserProfile {
   id: string;
@@ -50,6 +52,16 @@ const toneClasses: Record<Tone, {
     errorIcon: 'text-green-500',
     retryButton: 'bg-green-600 hover:bg-green-700',
   },
+  orange: {
+    loading: 'text-orange-700',
+    errorIcon: 'text-orange-600',
+    retryButton: 'bg-orange-700 hover:bg-orange-800',
+  },
+  blue: {
+    loading: 'text-blue-700',
+    errorIcon: 'text-blue-600',
+    retryButton: 'bg-blue-700 hover:bg-blue-800',
+  },
 };
 
 export default function UserProfilePageContent({
@@ -64,6 +76,7 @@ export default function UserProfilePageContent({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const colors = toneClasses[tone];
+  const accent = accentForRole(requiredRole === 'ANY' ? null : requiredRole);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -106,12 +119,7 @@ export default function UserProfilePageContent({
   if (isLoading) {
     return (
       <DashboardLayout requiredRole={requiredRole}>
-        <div className="flex items-center justify-center min-h-96">
-          <div className="text-center">
-            <Loader2 className={`w-12 h-12 ${colors.loading} animate-spin mx-auto`} />
-            <p className="mt-4 text-gray-600">Cargando perfil...</p>
-          </div>
-        </div>
+        <LoadingState message="Cargando perfil…" />
       </DashboardLayout>
     );
   }
@@ -128,12 +136,13 @@ export default function UserProfilePageContent({
             <p className="text-gray-600 mb-6">
               {error || 'No se pudieron cargar los datos del perfil.'}
             </p>
-            <button
+            <Button
+              type="button"
               onClick={() => window.location.reload()}
-              className={`${colors.retryButton} text-white px-6 py-3 rounded-lg transition-colors`}
+              accent={accent}
             >
               Intentar de nuevo
-            </button>
+            </Button>
           </div>
         </div>
       </DashboardLayout>

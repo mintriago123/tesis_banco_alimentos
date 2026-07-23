@@ -10,7 +10,7 @@ interface DashboardCard {
   title: string;
   description: string;
   href: string;
-  colorClass: string;
+  colorClass: 'blue' | 'emerald';
 }
 
 const DASHBOARD_CARDS: DashboardCard[] = [
@@ -24,7 +24,7 @@ const DASHBOARD_CARDS: DashboardCard[] = [
     title: 'Ver solicitudes',
     description: 'Consulta el estado de tus solicitudes.',
     href: '/user/solicitudes',
-    colorClass: 'purple',
+    colorClass: 'emerald',
   },
 ];
 
@@ -36,11 +36,11 @@ export function DashboardUserCards({ nombre }: DashboardUserCardsProps) {
   return (
     <div className="space-y-6">
       {/* Bienvenida */}
-      <div className="bg-white p-6 rounded-2xl shadow">
-        <h2 className="text-xl font-semibold text-gray-800">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">
           ¡Bienvenido, {nombre || 'Usuario'}!
         </h2>
-        <p className="text-gray-600 mt-2">
+        <p className="mt-2 text-slate-600">
           Este es tu panel donde puedes gestionar tu perfil, reservas y más.
         </p>
       </div>
@@ -49,13 +49,11 @@ export function DashboardUserCards({ nombre }: DashboardUserCardsProps) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {DASHBOARD_CARDS.map((card) => (
           <Link key={card.href} href={card.href}>
-            <div
-              className={`bg-${card.colorClass}-50 hover:bg-${card.colorClass}-100 transition rounded-xl p-4 shadow cursor-pointer`}
-            >
-              <h3 className={`text-lg font-semibold text-${card.colorClass}-700`}>
+            <div className={`rounded-xl border p-4 shadow-sm transition hover:shadow ${card.colorClass === 'blue' ? 'border-blue-200 bg-blue-50 hover:bg-blue-100' : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'}`}>
+              <h3 className={`text-lg font-semibold ${card.colorClass === 'blue' ? 'text-blue-800' : 'text-emerald-800'}`}>
                 {card.title}
               </h3>
-              <p className={`text-sm text-${card.colorClass}-600`}>
+              <p className={`text-sm ${card.colorClass === 'blue' ? 'text-blue-700' : 'text-emerald-700'}`}>
                 {card.description}
               </p>
             </div>

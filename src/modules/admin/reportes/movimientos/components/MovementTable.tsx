@@ -168,11 +168,11 @@ export const MovementTable: React.FC<MovementTableProps> = ({
 
   // Tabla con datos
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm">
-      <div className="overflow-x-auto">
+    <div className="table-surface">
+      <div className="table-scroll">
         <div className="max-h-[70vh] overflow-y-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="sticky top-0 z-10 bg-gray-50">
+          <table className="table-base">
+            <thead className="table-head sticky top-0 z-10">
             <tr>
               <th 
                 scope="col" 
@@ -224,7 +224,7 @@ export const MovementTable: React.FC<MovementTableProps> = ({
               </th>
             </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-slate-200">
+            <tbody className="table-body">
             {data.map((movement) => (
               <MovementRow
                 key={movement.id}

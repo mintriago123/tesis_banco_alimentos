@@ -288,10 +288,10 @@ export default function HistorialBajasPage() {
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+          <div className="table-surface">
+            <div className="table-scroll">
+              <table className="table-base">
+                <thead className="table-head">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Producto
@@ -313,7 +313,7 @@ export default function HistorialBajasPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="table-body">
                   {bajasFiltradas.map((baja) => (
                     <tr key={baja.id_baja} className="hover:bg-gray-50">
                       <td className="px-6 py-4">

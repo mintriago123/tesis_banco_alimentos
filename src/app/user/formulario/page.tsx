@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useSupabase } from "@/app/components/SupabaseProvider";
 import DashboardLayout from "@/app/components/DashboardLayout";
 import { useInventoryStock } from "@/modules/user/hooks/useInventoryStock";
-import { ShoppingBasket, Send, AlertTriangle } from "lucide-react";
+import { Send, AlertTriangle } from "lucide-react";
+import { Alert } from '@/app/components/ui/Alert';
+import { Button } from '@/app/components/ui/Button';
 import {
   useDatosBasicosUsuario,
   useAlimentos,
@@ -240,17 +242,8 @@ export default function FormularioSolicitante() {
       title="Solicitar Alimentos"
       description="Rellena el formulario para enviar tu solicitud al Banco de Alimentos."
     >
-      <div className="flex flex-col min-h-screen bg-gray-50">
-        <main className="flex-grow flex items-center justify-center p-4">
-          <div className="bg-white shadow-xl rounded-2xl p-8 max-w-2xl w-full">
-            <header className="bg-white shadow-sm p-4 sticky top-0 z-10">
-              <div className="max-w-4xl mx-auto flex justify-between items-center">
-                <h1 className="text-3xl font-extrabold text-blue-700 flex items-center">
-                  <ShoppingBasket className="w-8 h-8 mr-3 text-blue-600" />
-                  Solicitar Alimentos
-                </h1>
-              </div>
-            </header>
+      <div className="space-y-6">
+          <div className="mx-auto w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
 
             {/* Información del usuario */}
             {userData && <UserInfoCard userData={userData} />}
@@ -265,30 +258,12 @@ export default function FormularioSolicitante() {
 
             {/* Alerta de ubicación requerida */}
             {!ubicacion && (
-              <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-6">
-                <div className="flex items-start">
-                  <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-semibold text-yellow-800 mb-1">
-                      Ubicación requerida
-                    </h4>
-                    <p className="text-sm text-yellow-700">
-                      Para enviar tu solicitud, debes compartir tu ubicación. Por favor, permite el acceso a tu ubicación en el navegador para continuar.
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <Alert tipo="warning" mensaje="Ubicación requerida: permite el acceso a tu ubicación en el navegador para continuar." />
             )}
 
             {/* Mensajes */}
             {mensaje && (
-              <div
-                className={`p-4 mb-6 rounded-lg text-white ${
-                  mensaje.includes("éxito") ? "bg-green-500" : "bg-red-500"
-                }`}
-              >
-                {mensaje}
-              </div>
+              <Alert tipo={mensaje.includes("éxito") ? 'success' : 'error'} mensaje={mensaje} />
             )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -353,7 +328,7 @@ export default function FormularioSolicitante() {
                 />
               </div>
 
-              <button
+              <Button
                 type="submit"
                 disabled={
                   loading ||
@@ -367,20 +342,8 @@ export default function FormularioSolicitante() {
                       getUnidadesDisponibles().find(u => u.id === parseInt(unidadId))?.simbolo
                     ))
                 }
-                className={`w-full flex items-center justify-center px-6 py-3 rounded-lg shadow-md transition-colors font-semibold ${
-                  loading ||
-                  !ubicacion ||
-                  (!!cantidad &&
-                    parseFloat(cantidad) > 0 &&
-                    !!stockInfo &&
-                    stockInfo.producto_encontrado &&
-                    !isStockSufficient(
-                      parseFloat(cantidad),
-                      getUnidadesDisponibles().find(u => u.id === parseInt(unidadId))?.simbolo
-                    ))
-                    ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                    : "bg-blue-600 text-white hover:bg-blue-700"
-                }`}
+                loading={loading}
+                accent="solicitante"
               >
                 {loading ? (
                   "Enviando Solicitud..."
@@ -407,17 +370,9 @@ export default function FormularioSolicitante() {
                     Enviar Solicitud
                   </>
                 )}
-              </button>
+              </Button>
             </form>
           </div>
-        </main>
-
-        <footer className="bg-white shadow-sm p-4 mt-8">
-          <div className="max-w-4xl mx-auto text-center text-gray-500 text-sm">
-            &copy; {new Date().getFullYear()} Banco de Alimentos. Todos los
-            derechos reservados.
-          </div>
-        </footer>
       </div>
     </DashboardLayout>
   );

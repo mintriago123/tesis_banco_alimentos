@@ -12,7 +12,7 @@ export function DonacionesFilters({
   donacionesFiltradas,
 }: DonacionesFiltersProps) {
   return (
-    <div className="bg-white p-4 rounded-lg shadow">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap gap-4 items-center">
         <label className="text-sm font-medium text-gray-700">Filtrar por estado:</label>
         <select

@@ -330,23 +330,25 @@ export default function ComprobantePage({ params }: { params: Promise<{ codigo: 
                   <Package className="h-4 w-4" />
                   Detalle del Producto
                 </h3>
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full">
-                    <thead className="bg-gray-100">
+                <div className="table-surface">
+                  <div className="table-scroll">
+                    <table className="table-base">
+                      <thead className="table-head">
                       <tr>
                         <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Descripción</th>
                         <th className="px-4 py-2 text-center text-sm font-semibold text-gray-700">Cantidad</th>
                         <th className="px-4 py-2 text-center text-sm font-semibold text-gray-700">Unidad</th>
                       </tr>
-                    </thead>
-                    <tbody>
+                      </thead>
+                      <tbody className="table-body">
                       <tr className="border-t border-gray-200">
                         <td className="px-4 py-3 font-medium text-gray-900">{data.producto}</td>
                         <td className="px-4 py-3 text-center text-xl font-bold text-red-600">{data.cantidad}</td>
                         <td className="px-4 py-3 text-center text-gray-600">{data.unidad}</td>
                       </tr>
-                    </tbody>
-                  </table>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
 

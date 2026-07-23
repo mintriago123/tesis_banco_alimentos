@@ -7,6 +7,7 @@ import { createCatalogoSolicitudesService, type SolicitudAltaAlimento } from '@/
 import { sendNotification } from '@/modules/shared/services/notificationClient';
 import type { Unidad } from '@/modules/admin/catalogo/types';
 import { CheckCircle2, ClipboardList, Send } from 'lucide-react';
+import { Button } from '@/app/components/ui/Button';
 
 const estadoStyles: Record<SolicitudAltaAlimento['estado'], string> = {
   pendiente: 'border-amber-200 bg-amber-50 text-amber-700',
@@ -296,14 +297,15 @@ export default function SolicitarAlimentoPage() {
           </div>
 
           <div className="flex justify-end">
-            <button
+            <Button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              loading={submitting}
+              accent="donante"
             >
-              <Send className="h-4 w-4" />
+              {!submitting && <Send aria-hidden="true" className="h-4 w-4" />}
               {submitting ? 'Enviando...' : 'Enviar solicitud'}
-            </button>
+            </Button>
           </div>
         </form>
 

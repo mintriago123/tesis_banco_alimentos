@@ -1,25 +1,23 @@
-/**
- * Componente de input estándar para formularios de autenticación
- */
+/** Campo de texto estándar para formularios de autenticación. */
 
-import React from 'react';
+import type { ChangeEvent } from 'react';
+import { FormField, TextInput } from '@/app/components/ui/FormField';
 
 interface AuthInputProps {
-  id: string;
-  name: string;
-  type?: 'text' | 'email' | 'password';
-  label: string;
-  placeholder?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  required?: boolean;
-  autoComplete?: string;
-  minLength?: number;
-  maxLength?: number;
-  disabled?: boolean;
+  readonly id: string;
+  readonly name: string;
+  readonly type?: 'text' | 'email' | 'password';
+  readonly label: string;
+  readonly placeholder?: string;
+  readonly value: string;
+  readonly onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  readonly required?: boolean;
+  readonly autoComplete?: string;
+  readonly minLength?: number;
+  readonly maxLength?: number;
+  readonly disabled?: boolean;
 }
-
-export const AuthInput: React.FC<AuthInputProps> = ({
+export function AuthInput({
   id,
   name,
   type = 'text',
@@ -32,16 +30,10 @@ export const AuthInput: React.FC<AuthInputProps> = ({
   minLength,
   maxLength,
   disabled = false,
-}) => {
+}: AuthInputProps) {
   return (
-    <div>
-      <label
-        htmlFor={id}
-        className="block mb-2 text-sm font-bold text-gray-700"
-      >
-        {label}
-      </label>
-      <input
+    <FormField id={id} label={label} required={required}>
+      <TextInput
         id={id}
         name={name}
         type={type}
@@ -50,11 +42,11 @@ export const AuthInput: React.FC<AuthInputProps> = ({
         minLength={minLength}
         maxLength={maxLength}
         disabled={disabled}
-        className="block w-full px-4 py-3 text-gray-900 placeholder-gray-500 bg-white/70 border border-gray-300/50 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent sm:text-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="min-h-11 px-4"
         placeholder={placeholder}
         value={value}
         onChange={onChange}
       />
-    </div>
+    </FormField>
   );
-};
+}

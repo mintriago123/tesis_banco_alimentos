@@ -3,6 +3,8 @@
 import React from 'react';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import { Alert } from '@/app/components';
+import { Button } from '@/app/components/ui/Button';
+import { FormField, TextInput } from '@/app/components/ui/FormField';
 import {
   UserIcon,
   BellIcon,
@@ -33,6 +35,11 @@ export function UserSettingsContent({
 
   const { preferences, updatePreference, savePreferences, isSaving: savingPreferences } = useUserPreferences();
   const { message, showSuccess, showError } = useMessage();
+  const accent = variant === 'donante' ? 'donante' : variant === 'solicitante' ? 'solicitante' : 'institucional';
+  const accentClasses = {
+    icon: variant === 'donante' ? 'text-emerald-700' : variant === 'solicitante' ? 'text-blue-700' : 'text-emerald-700',
+    activeToggle: variant === 'donante' ? 'bg-emerald-700' : 'bg-blue-700',
+  };
 
   const {
     currentPassword,
@@ -86,7 +93,7 @@ export function UserSettingsContent({
       {showHeader && (
         <>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center mb-2">
-            <UserIcon className="w-7 h-7 mr-2 text-red-600" />
+            <UserIcon className={`mr-2 h-7 w-7 ${accentClasses.icon}`} />
             {title}
           </h1>
           <p className="text-gray-600 mb-6">{description}</p>
@@ -103,9 +110,9 @@ export function UserSettingsContent({
       )}
 
       {showPreferences && (
-        <div className="bg-white rounded-xl shadow-sm border p-6 space-y-6 mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-            <BellIcon className="w-5 h-5 mr-2 text-red-600" />
+        <div className="mb-8 space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="flex items-center text-xl font-semibold text-slate-900">
+            <BellIcon className={`mr-2 h-5 w-5 ${accentClasses.icon}`} />
             Preferencias
           </h2>
 
@@ -117,7 +124,7 @@ export function UserSettingsContent({
             <button
               onClick={() => updatePreference('recibir_notificaciones', !preferences.recibir_notificaciones)}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                preferences.recibir_notificaciones ? 'bg-red-600' : 'bg-gray-200'
+                preferences.recibir_notificaciones ? accentClasses.activeToggle : 'bg-slate-200'
               }`}
             >
               <span
@@ -129,21 +136,23 @@ export function UserSettingsContent({
           </div>
 
           <div className="flex justify-end">
-            <button
+            <Button
+              type="button"
               onClick={handleSavePreferences}
               disabled={savingPreferences}
-              className="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 disabled:opacity-50 font-medium"
+              loading={savingPreferences}
+              accent={accent}
             >
-              {savingPreferences ? 'Guardando...' : 'Guardar Preferencias'}
-            </button>
+              Guardar preferencias
+            </Button>
           </div>
         </div>
       )}
 
       {showPasswordChange && (
-        <div className="bg-white rounded-xl shadow-sm border p-6 space-y-4">
-          <h2 className="text-xl font-semibold text-gray-900 flex items-center mb-2">
-            <KeyIcon className="w-5 h-5 mr-2 text-red-600" />
+        <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-2 flex items-center text-xl font-semibold text-slate-900">
+            <KeyIcon className={`mr-2 h-5 w-5 ${accentClasses.icon}`} />
             Cambiar Contraseña
           </h2>
 
@@ -154,14 +163,14 @@ export function UserSettingsContent({
               ['confirm', 'Confirmar Contraseña', confirmPassword, setConfirmPassword],
             ] as [keyof typeof showPasswords, string, string, React.Dispatch<React.SetStateAction<string>>][]).map(
               ([field, label, value, setter]) => (
-                <div key={field}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                <FormField key={field} id={`password-${field}`} label={label} required>
                   <div className="relative">
-                    <input
+                    <TextInput
+                      id={`password-${field}`}
                       type={showPasswords[field] ? 'text' : 'password'}
                       value={value}
                       onChange={(e) => setter(e.target.value)}
-                      className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg"
+                      className="min-h-11 px-4 pr-12"
                       required
                     />
                     <button
@@ -176,17 +185,17 @@ export function UserSettingsContent({
                       )}
                     </button>
                   </div>
-                </div>
+                </FormField>
               )
             )}
 
             <div className="flex justify-end">
-              <button
+              <Button
                 type="submit"
-                className="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 font-medium"
+                accent={accent}
               >
-                Cambiar Contraseña
-              </button>
+                Cambiar contraseña
+              </Button>
             </div>
           </form>
         </div>

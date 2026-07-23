@@ -7,6 +7,7 @@ import React from 'react';
 import { ShoppingBasket, X, AlertCircle } from 'lucide-react';
 import { Alimento } from '../types';
 import { MESSAGES } from '../constants';
+import { FormField, SelectInput, TextInput } from '@/app/components/ui/FormField';
 
 interface AlimentoSelectorProps {
   alimentos: Alimento[];
@@ -41,13 +42,7 @@ export function AlimentoSelector({
   return (
     <div className="space-y-4">
       {/* Filtro de Categoría */}
-      <div>
-        <label
-          htmlFor="filtroCategoria"
-          className="block text-sm font-medium text-gray-700 mb-2"
-        >
-          Categoría de Alimentos
-        </label>
+      <FormField id="filtroCategoria" label="Categoría de alimentos" hint="Filtra por categoría para encontrar alimentos más fácilmente">
         {categorias.length === 0 ? (
           <div className="w-full border-2 border-amber-300 bg-amber-50 rounded-lg px-4 py-3 flex items-center gap-2">
             <AlertCircle className="h-5 w-5 text-amber-600" />
@@ -57,9 +52,9 @@ export function AlimentoSelector({
           </div>
         ) : (
           <>
-            <select
+            <SelectInput
               id="filtroCategoria"
-              className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition-colors"
+              className="min-h-11 px-4"
               value={filtroCategoria}
               onChange={onCategoriaChange}
             >
@@ -69,28 +64,19 @@ export function AlimentoSelector({
                   {categoria}
                 </option>
               ))}
-            </select>
-            <p className="text-sm text-gray-500 mt-1">
-              Filtra por categoría para encontrar alimentos más fácilmente
-            </p>
+            </SelectInput>
           </>
         )}
-      </div>
+      </FormField>
 
       {/* Buscador de Productos */}
-      <div>
-        <label
-          htmlFor="tipoAlimento"
-          className="block text-sm font-medium text-gray-700 mb-2"
-        >
-          Productos *
-        </label>
+      <FormField id="tipoAlimento" label="Producto" required>
         <div className="relative" onBlur={onBlur}>
-          <input
+          <TextInput
             type="text"
             id="tipoAlimento"
             placeholder="Buscar o seleccionar producto..."
-            className="w-full border-2 border-gray-300 rounded-lg pl-11 pr-12 py-3 focus:border-blue-500 focus:outline-none transition-colors"
+            className="min-h-11 px-4 pl-11 pr-12"
             value={busqueda}
             onChange={onBusquedaChange}
             onFocus={onFocus}
@@ -114,18 +100,19 @@ export function AlimentoSelector({
             <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
               {alimentosFiltrados.length > 0 ? (
                 alimentosFiltrados.map((alimento) => (
-                  <div
-                    key={alimento.id}
-                    className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                    onClick={() => onAlimentoSelect(alimento)}
-                  >
-                    <div className="font-medium text-gray-900">
+                    <button
+                      type="button"
+                      key={alimento.id}
+                      className="block w-full border-b border-slate-100 p-3 text-left hover:bg-slate-50 last:border-b-0"
+                      onClick={() => onAlimentoSelect(alimento)}
+                    >
+                    <div className="font-semibold text-slate-900">
                       {alimento.nombre}
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-slate-500">
                       {alimento.categoria}
                     </div>
-                  </div>
+                  </button>
                 ))
               ) : busqueda || filtroCategoria ? (
                 <div className="p-3 text-gray-500 text-center">
@@ -163,7 +150,7 @@ export function AlimentoSelector({
             </p>
           )}
         </div>
-      </div>
+      </FormField>
     </div>
   );
 }

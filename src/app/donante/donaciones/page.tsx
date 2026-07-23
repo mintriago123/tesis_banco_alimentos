@@ -3,6 +3,8 @@
 import { useEffect } from 'react';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import DashboardLayout from '@/app/components/DashboardLayout';
+import { Alert } from '@/app/components/ui/Alert';
+import { LoadingState } from '@/app/components/ui/LoadingState';
 import { 
   useModal, 
   useDonationStats, 
@@ -109,14 +111,12 @@ export default function MisDonacionesPage() {
   };
 
   return (
-    <DashboardLayout>
-      <div className="p-6 space-y-6">
+    <DashboardLayout requiredRole="DONANTE" title="Mis donaciones" description="Consulta el estado y el historial de tus aportes al Banco de Alimentos.">
+      <div className="space-y-6">
         <DonacionesHeader totalDonaciones={estadisticas.total} />
 
         {mensaje && (
-          <div className="text-sm text-blue-600 bg-blue-100 p-3 rounded-md border border-blue-200">
-            {mensaje}
-          </div>
+          <Alert tipo="info" mensaje={mensaje} />
         )}
 
         <DonacionesStats stats={estadisticas} />
@@ -155,10 +155,7 @@ export default function MisDonacionesPage() {
         />
 
         {cargando ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
-            <p className="mt-4 text-gray-600">Cargando donaciones...</p>
-          </div>
+          <LoadingState message="Cargando donaciones…" />
         ) : donacionesFiltradas.length === 0 ? (
           <DonacionesEmptyState filtroEstado={filtroEstado} />
         ) : (

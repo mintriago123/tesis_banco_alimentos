@@ -8,7 +8,7 @@ export default function DonanteConfiguracionPage() {
       title="Configuración de Usuario"
       description="Gestiona tus preferencias y seguridad"
     >
-      <UserSettingsContent variant="donante" />
+      <UserSettingsContent variant="donante" showHeader={false} />
     </DashboardLayout>
   );
 }

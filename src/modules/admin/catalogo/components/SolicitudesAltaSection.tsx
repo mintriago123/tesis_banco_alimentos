@@ -350,10 +350,10 @@ const SolicitudesAltaSection = ({
         <p className="text-xs text-slate-500">Las solicitudes pendientes aparecen primero.</p>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50">
+      <div className="table-surface">
+        <div className="table-scroll">
+          <table className="table-base">
+            <thead className="table-head">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Alimento</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Donante</th>
@@ -361,7 +361,7 @@ const SolicitudesAltaSection = ({
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="table-body">
               {solicitudes.map(solicitud => (
                 <tr key={solicitud.id} className="hover:bg-slate-50">
                   <td className="px-4 py-4">

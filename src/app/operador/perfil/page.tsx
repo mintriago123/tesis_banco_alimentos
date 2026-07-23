@@ -5,7 +5,7 @@ export default function OperadorPerfilPage() {
     <UserProfilePageContent
       requiredRole="OPERADOR"
       title="Mi Perfil"
-      tone="red"
+      tone="orange"
     />
   );
 }

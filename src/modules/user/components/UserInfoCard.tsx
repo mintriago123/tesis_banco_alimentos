@@ -13,12 +13,12 @@ interface UserInfoCardProps {
 
 export function UserInfoCard({ userData }: UserInfoCardProps) {
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-      <h3 className="font-medium text-blue-800 mb-3 flex items-center">
+    <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+      <h3 className="mb-3 flex items-center font-semibold text-blue-900">
         <User className="w-5 h-5 mr-2" />
         Información del Solicitante
       </h3>
-      <div className="space-y-2 text-sm text-blue-700">
+      <div className="space-y-2 text-sm text-blue-800">
         <div className="flex items-center gap-2">
           <User className="w-4 h-4" />
           <p>

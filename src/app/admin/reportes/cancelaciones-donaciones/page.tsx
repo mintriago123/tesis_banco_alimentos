@@ -329,7 +329,7 @@ export default function HistorialCancelacionesPage() {
         )}
 
         {/* Tabla de cancelaciones */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="table-surface">
           <div className="px-6 py-4 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900">
               Historial de Cancelaciones
@@ -357,9 +357,9 @@ export default function HistorialCancelacionesPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+            <div className="table-scroll">
+              <table className="table-base">
+                <thead className="table-head">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Donación
@@ -381,7 +381,7 @@ export default function HistorialCancelacionesPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="table-body">
                   {cancelacionesFiltradas.map((cancelacion) => (
                     <tr key={cancelacion.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">

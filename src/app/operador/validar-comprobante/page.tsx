@@ -386,16 +386,17 @@ export default function ValidarComprobantePage() {
                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
                   Detalles del {result.tipo === 'solicitud' ? 'Pedido' : 'Producto'}
                 </h3>
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full">
-                    <thead className="bg-gray-50">
+                <div className="table-surface">
+                  <div className="table-scroll">
+                    <table className="table-base">
+                      <thead className="table-head">
                       <tr>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Producto</th>
                         <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Cantidad</th>
                         <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Unidad</th>
                       </tr>
-                    </thead>
-                    <tbody>
+                      </thead>
+                      <tbody className="table-body">
                       <tr>
                         <td className="px-4 py-4 font-medium text-gray-900">
                           {result.tipo === 'solicitud' ? result.tipo_alimento : result.tipo_producto}
@@ -409,8 +410,9 @@ export default function ValidarComprobantePage() {
                             : result.unidad_simbolo}
                         </td>
                       </tr>
-                    </tbody>
-                  </table>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
 

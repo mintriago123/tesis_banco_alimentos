@@ -258,12 +258,12 @@ export default function CompletarPerfil() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-100 via-blue-200 to-blue-400">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50 px-4 py-8">
       <form
-        className="w-full max-w-lg mx-auto bg-white rounded-2xl shadow-xl border border-blue-100 p-8 space-y-6"
+        className="w-full max-w-lg space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-lg sm:p-8"
         onSubmit={manejarEnvio}
       >
-        <h2 className="text-3xl font-extrabold text-center text-blue-800 mb-4">
+        <h2 className="mb-4 text-center text-3xl font-extrabold text-slate-950">
           Completa tu Perfil
         </h2>
 
@@ -278,8 +278,8 @@ export default function CompletarPerfil() {
               className={`flex flex-col items-center justify-center px-0 py-4 rounded-xl border-2 transition-all font-medium
                 ${
                   form.tipo_persona === "Natural"
-                    ? "bg-blue-600 text-white border-blue-700 shadow-lg"
-                    : "bg-white text-blue-900 border-blue-200 hover:bg-blue-50"
+                    ? "border-blue-700 bg-blue-700 text-white shadow-sm"
+                    : "border-blue-200 bg-white text-blue-900 hover:bg-blue-50"
                 }
               `}
               onClick={() => limpiarFormulario("Natural")}
@@ -292,8 +292,8 @@ export default function CompletarPerfil() {
               className={`flex flex-col items-center justify-center px-0 py-4 rounded-xl border-2 transition-all font-medium
                 ${
                   form.tipo_persona === "Juridica"
-                    ? "bg-blue-600 text-white border-blue-700 shadow-lg"
-                    : "bg-white text-blue-900 border-blue-200 hover:bg-blue-50"
+                    ? "border-blue-700 bg-blue-700 text-white shadow-sm"
+                    : "border-blue-200 bg-white text-blue-900 hover:bg-blue-50"
                 }
               `}
               onClick={() => limpiarFormulario("Juridica")}
@@ -326,7 +326,7 @@ export default function CompletarPerfil() {
             />
             <button
               type="button"
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold shadow hover:bg-blue-700 transition-all"
+              className="inline-flex items-center rounded-xl bg-blue-700 px-4 py-2 font-semibold text-white shadow-sm hover:bg-blue-800"
               disabled={consultando}
               onClick={consultarIdentificacion}
             >
@@ -546,7 +546,7 @@ export default function CompletarPerfil() {
 
         <button
           type="submit"
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow transition-all"
+          className="w-full rounded-xl bg-blue-700 py-3 font-semibold text-white shadow-sm hover:bg-blue-800"
         >
           Guardar
         </button>
