@@ -4,7 +4,12 @@ import Link from 'next/link';
 
 const AuthLayout = ({ children }: { children: React.ReactNode }) => {
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50 px-4 py-8 sm:px-6 sm:py-12">
+    <div className="relative isolate flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-blue-100 via-slate-100 to-slate-200 px-4 py-8 sm:px-6 sm:py-12">
+      <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+        <div className="absolute -left-28 -top-32 h-96 w-96 rounded-full bg-blue-300/40 blur-3xl" />
+        <div className="absolute -bottom-40 -right-28 h-96 w-96 rounded-full bg-blue-200/50 blur-3xl" />
+      </div>
+
       {/* Botón de inicio */}
       <div className="absolute top-4 sm:top-6 right-4 sm:right-24 z-10">
         <Link
@@ -19,7 +24,7 @@ const AuthLayout = ({ children }: { children: React.ReactNode }) => {
         </Link>
       </div>
 
-      <div className="w-full max-w-md mx-auto">
+      <div className="relative z-10 mx-auto w-full max-w-md">
         <div className="flex flex-col items-center mb-6 sm:mb-8">
           <div className="mb-2 rounded-full border border-blue-100 bg-white p-2 shadow-sm sm:mb-3 sm:p-3">
             <Image
@@ -40,7 +45,7 @@ const AuthLayout = ({ children }: { children: React.ReactNode }) => {
         </div>
 
         {/* Glassmorphism Card */}
-        <div className="rounded-2xl border border-slate-200 bg-white px-6 py-8 shadow-lg sm:px-8 sm:py-10 md:p-10">
+        <div className="rounded-2xl border border-slate-200 bg-white px-6 py-8 shadow-xl shadow-slate-900/5 sm:px-8 sm:py-10 md:p-10">
           {children}
         </div>
       </div>
