@@ -580,7 +580,7 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
         if (error.code === '42703' || error.message?.includes('column')) {
           return {
             success: false,
-            error: 'La base de datos no está actualizada. Por favor, ejecuta el script: database/agregar-campos-cancelacion-donaciones.sql',
+            error: 'La base de datos no está actualizada. Ejecuta las migraciones de supabase/migrations/ en orden ascendente.',
             errorDetails: error
           };
         }

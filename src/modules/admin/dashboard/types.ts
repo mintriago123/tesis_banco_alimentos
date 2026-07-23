@@ -11,24 +11,11 @@ export interface DashboardCounts {
   respuestasDentro24Horas: number;
 }
 
-export interface RoleDistributionItem {
-  role: 'ADMINISTRADOR' | 'DONANTE' | 'SOLICITANTE';
-  count: number;
-  percentage: number;
-}
-
 export interface RequestStatusItem {
   label: string;
   count: number;
   percentage: number;
   accent: 'yellow' | 'green' | 'red' | 'blue';
-}
-
-export interface UserTypeItem {
-  label: string;
-  count: number;
-  percentage: number;
-  accent: 'blue' | 'purple' | 'slate';
 }
 
 export interface InventoryRisk {
@@ -61,7 +48,5 @@ export interface DashboardData {
     donacionesUltimos30Dias: ActivityPoint[];
   };
   topCategories: TopCategories;
-  roleDistribution: RoleDistributionItem[];
   requestStatus: RequestStatusItem[];
-  userTypes: UserTypeItem[];
 }

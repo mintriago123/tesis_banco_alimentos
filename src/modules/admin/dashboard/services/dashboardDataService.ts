@@ -4,17 +4,10 @@ import type {
   DashboardData,
   DashboardCounts,
   InventoryRisk,
-  RoleDistributionItem,
   RequestStatusItem,
   TopCategoryItem,
-  TopCategories,
-  UserTypeItem
+  TopCategories
 } from '../types';
-
-interface UsuariosRow {
-  rol: 'ADMINISTRADOR' | 'DONANTE' | 'SOLICITANTE';
-  tipo_persona: string | null;
-}
 
 interface SolicitudesRow {
   estado: 'pendiente' | 'aprobada' | 'rechazada' | 'entregada';
@@ -50,12 +43,6 @@ const REQUEST_STATUS_DEFAULTS: Record<SolicitudesRow['estado'], number> = {
   entregada: 0
 };
 
-const ROLE_DEFAULTS: Record<UsuariosRow['rol'], number> = {
-  ADMINISTRADOR: 0,
-  DONANTE: 0,
-  SOLICITANTE: 0
-};
-
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const LOW_STOCK_THRESHOLD = 10;
 const TOP_CATEGORIES_LIMIT = 5;
@@ -71,7 +58,6 @@ export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
 
     const [
       usuariosCountResult,
-      usuariosResult,
       solicitudesCountResult,
       solicitudesResult,
       solicitudesMesResult,
@@ -84,10 +70,6 @@ export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
       supabaseClient
         .from('usuarios')
         .select('*', { count: 'exact', head: true })
-        .throwOnError(),
-      supabaseClient
-        .from('usuarios')
-        .select('rol, tipo_persona')
         .throwOnError(),
       supabaseClient
         .from('solicitudes')
@@ -136,36 +118,14 @@ export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
         .throwOnError()
     ]);
 
-    const usuarios = (usuariosResult.data ?? []) as UsuariosRow[];
     const solicitudes = (solicitudesResult.data ?? []) as SolicitudesRow[];
     const donaciones = (donacionesResult.data ?? []) as DonacionesRow[];
     const inventoryRows = (inventoryRiskResult.data ?? []) as InventoryRiskRow[];
 
-    const totalUsuarios = usuariosCountResult.count ?? usuarios.length;
+    const totalUsuarios = usuariosCountResult.count ?? 0;
     const totalSolicitudes = solicitudesCountResult.count ?? solicitudes.length;
     const totalDonaciones = donacionesCountResult.count ?? donaciones.length;
     const donacionesPendientes = donaciones.filter(donacion => donacion.estado === 'Pendiente').length;
-
-    const roleCounts = usuarios.reduce(
-      (acc, usuario) => {
-        acc[usuario.rol] = (acc[usuario.rol] ?? 0) + 1;
-        return acc;
-      },
-      { ...ROLE_DEFAULTS }
-    );
-
-    const userTypeCounts = usuarios.reduce(
-      (acc, usuario) => {
-        const tipo = usuario.tipo_persona?.toUpperCase();
-        if (tipo === 'NATURAL' || tipo === 'JURIDICA') {
-          acc[tipo] = (acc[tipo] ?? 0) + 1;
-        } else {
-          acc.UNKNOWN += 1;
-        }
-        return acc;
-      },
-      { NATURAL: 0, JURIDICA: 0, UNKNOWN: 0 } as Record<'NATURAL' | 'JURIDICA' | 'UNKNOWN', number>
-    );
 
     const requestCounts = solicitudes.reduce(
       (acc, solicitud) => {
@@ -241,14 +201,6 @@ export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
       } satisfies InventoryRisk
     );
 
-    const roleDistribution: RoleDistributionItem[] = (
-      Object.entries(roleCounts) as Array<[UsuariosRow['rol'], number]>
-    ).map(([role, count]) => ({
-      role,
-      count,
-      percentage: totalUsuarios > 0 ? Math.round((count / totalUsuarios) * 100) : 0
-    }));
-
     const requestStatus: RequestStatusItem[] = [
       {
         label: 'Pendientes',
@@ -273,21 +225,6 @@ export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
         count: requestCounts.entregada,
         percentage: totalSolicitudes > 0 ? Math.round((requestCounts.entregada / totalSolicitudes) * 100) : 0,
         accent: 'blue'
-      }
-    ];
-
-    const userTypes: UserTypeItem[] = [
-      {
-        label: 'Personas Naturales',
-        count: userTypeCounts.NATURAL,
-        percentage: totalUsuarios > 0 ? Math.round((userTypeCounts.NATURAL / totalUsuarios) * 100) : 0,
-        accent: 'blue'
-      },
-      {
-        label: 'Personas Jurídicas',
-        count: userTypeCounts.JURIDICA,
-        percentage: totalUsuarios > 0 ? Math.round((userTypeCounts.JURIDICA / totalUsuarios) * 100) : 0,
-        accent: 'purple'
       }
     ];
 
@@ -316,9 +253,7 @@ export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
       inventoryRisk,
       activity,
       topCategories,
-      roleDistribution,
-      requestStatus,
-      userTypes
+      requestStatus
     };
   };
 

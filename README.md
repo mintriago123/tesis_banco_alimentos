@@ -176,8 +176,7 @@ banco-alimentos/
 │   └── COMPONENTS.md              # Componentes frontend
 │
 ├── 📁 supabase/
-│   └── 📁 migrations/             # Migraciones SQL oficiales para una BD nueva
-├── 📁 database/                   # SQL legacy / referencia histórica
+│   └── 📁 migrations/             # Migraciones SQL oficiales
 │
 └── 📁 public/                     # Archivos estáticos
 ```

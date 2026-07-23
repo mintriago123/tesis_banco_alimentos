@@ -30,5 +30,5 @@ La secuencia actual permite levantar una base nueva desde cero:
   el trigger `public.handle_new_user()`.
 - Para usuarios `ADMINISTRADOR` u `OPERADOR`, usa el endpoint admin del proyecto
   o un flujo server-side con `service_role`.
-- El directorio `database/` queda como referencia historica; no debe usarse como
-  fuente principal para nuevas instalaciones.
+- `supabase/migrations/` es la única fuente SQL versionada para nuevas
+  instalaciones y actualizaciones de la base de datos.

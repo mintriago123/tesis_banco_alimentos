@@ -49,7 +49,8 @@ Los archivos se ejecutan en orden ascendente por nombre e incluyen:
 - Seed de catálogo base: tipos de magnitud, unidades, conversiones, alimentos, relaciones alimento-unidad y depósitos iniciales.
 - Flujo de solicitudes de alta de alimentos y hardening final detectado con Supabase MCP Advisor.
 
-La carpeta `database/` queda como referencia histórica. Para instalaciones nuevas no debe reemplazar a `supabase/migrations/`.
+`supabase/migrations/` es la única fuente SQL versionada para instalaciones
+nuevas y actualizaciones de la base de datos.
 
 ---
 

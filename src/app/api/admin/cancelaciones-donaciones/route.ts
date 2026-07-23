@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
       if (cancelacionesError.message?.includes('column') || cancelacionesError.code === '42703') {
         return NextResponse.json(
           { 
-            error: 'Los campos de cancelación no existen en la base de datos. Por favor, ejecuta el script SQL: database/agregar-campos-cancelacion-donaciones.sql',
+            error: 'La base de datos no está actualizada. Ejecuta las migraciones de supabase/migrations/ en orden ascendente.',
             details: cancelacionesError.message
           },
           { status: 500 }

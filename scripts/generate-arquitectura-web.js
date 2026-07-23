@@ -11,7 +11,7 @@ const outputPng = path.join(docsDir, 'Diagrama_Arquitectura_Web.png');
 const rows = [
   ['Frontend', 'Next.js, React, componentes, layouts, hooks', 'Interfaz de usuario, navegación y formularios', 'src/app/*; src/app/components/*'],
   ['Backend', 'Supabase Auth, API Routes, servicios, middleware', 'Autenticación, autorización y lógica de negocio', 'src/proxy.ts; src/lib/*; src/modules/*/services/*'],
-  ['Base de datos', 'PostgreSQL, RLS, triggers, funciones', 'Persistencia, seguridad y trazabilidad', 'database/*.sql; docs/DATABASE.md'],
+  ['Base de datos', 'PostgreSQL, RLS, triggers, funciones', 'Persistencia, seguridad y trazabilidad', 'supabase/migrations/*.sql; docs/DATABASE.md'],
   ['APIs externas', 'Mapbox, validación RUC/Cédula, correo', 'Geolocalización, validación de identidad y notificaciones', 'README.md; src/modules/shared/hooks/useIdentityValidation.ts'],
 ];
 

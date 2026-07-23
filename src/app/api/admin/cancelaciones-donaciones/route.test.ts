@@ -219,7 +219,7 @@ describe('/api/admin/cancelaciones-donaciones', () => {
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toMatchObject({
-      error: expect.stringContaining('Los campos de cancelación no existen'),
+      error: expect.stringContaining('Ejecuta las migraciones de supabase/migrations/'),
       details: 'column motivo_cancelacion does not exist',
     });
   });

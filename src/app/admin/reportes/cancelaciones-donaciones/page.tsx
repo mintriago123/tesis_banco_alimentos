@@ -157,9 +157,9 @@ export default function HistorialCancelacionesPage() {
                   </summary>
                   <div className="mt-2 p-3 bg-white border border-blue-200 rounded text-xs space-y-2">
                     <p className="font-medium">1. Abre Supabase Dashboard → SQL Editor</p>
-                    <p className="font-medium">2. Ejecuta este script:</p>
+                    <p className="font-medium">2. Ejecuta las migraciones en orden ascendente:</p>
                     <code className="block bg-gray-900 text-green-400 p-2 rounded font-mono">
-                      database/agregar-campos-cancelacion-donaciones.sql
+                      supabase/migrations/*.sql (en orden ascendente)
                     </code>
                     <p className="font-medium">3. Recarga esta página</p>
                   </div>
@@ -309,17 +309,17 @@ export default function HistorialCancelacionesPage() {
               <div className="flex-1">
                 <p className="text-sm font-medium text-red-800">Error al cargar datos</p>
                 <p className="text-sm text-red-700 mt-1">{error}</p>
-                {error.includes('script SQL') && (
+                {error.includes('migraciones') && (
                   <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
                     <p className="text-sm font-medium text-yellow-800 mb-2">📋 Acción requerida:</p>
                     <p className="text-xs text-yellow-700 mb-2">
-                      Los campos de cancelación no existen en la base de datos. Debes ejecutar el script SQL:
+                      La base de datos no está actualizada. Debes ejecutar las migraciones SQL:
                     </p>
                     <code className="block text-xs bg-gray-900 text-green-400 p-2 rounded font-mono">
-                      database/agregar-campos-cancelacion-donaciones.sql
+                      supabase/migrations/*.sql (en orden ascendente)
                     </code>
                     <p className="text-xs text-yellow-700 mt-2">
-                      Copia el contenido del archivo y ejecútalo en el SQL Editor de Supabase.
+                      Ejecuta los archivos en orden ascendente desde el SQL Editor de Supabase.
                     </p>
                   </div>
                 )}
