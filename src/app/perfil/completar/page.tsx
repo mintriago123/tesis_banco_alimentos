@@ -49,6 +49,7 @@ export default function CompletarPerfil() {
     setError,
     checkDuplicateIdentification,
     saveProfile,
+    ensureDonorWarehouse,
   } = useProfileUpdate(supabase);
 
   const [, setIdentificacionValidada] = useState(false);
@@ -230,6 +231,17 @@ export default function CompletarPerfil() {
     }
     const userId = userData.user.id;
 
+    const { data: userRole, error: userRoleError } = await supabase
+      .from('usuarios')
+      .select('rol')
+      .eq('id', userId)
+      .single();
+
+    if (userRoleError) {
+      setError('No se pudo validar el tipo de usuario.');
+      return;
+    }
+
     // Validar que la cédula o RUC no se repita en otro usuario
     if (form.tipo_persona === "Natural") {
       const isDuplicate = await checkDuplicateIdentification('Natural', form.cedula, userId);
@@ -253,6 +265,11 @@ export default function CompletarPerfil() {
     });
 
     if (success) {
+      if (userRole?.rol === 'DONANTE') {
+        const warehouseCreated = await ensureDonorWarehouse();
+        if (!warehouseCreated) return;
+      }
+
       router.push("/auth/iniciar-sesion"); // Redirigir a iniciar sesión
     }
   };

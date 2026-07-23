@@ -55,6 +55,21 @@ export const createSolicitudesInventoryService = (
     return resolverConversion(supabaseClient, origen.value, destino.value);
   };
 
+  const obtenerStockDeProducto = async (productoId: string, depositoId?: string) => {
+    let query = supabaseClient
+      .from('entradas_inventario')
+      .select('id_entrada, id_deposito, cantidad_disponible, unidad_id')
+      .eq('id_producto', productoId)
+      .eq('estado', 'disponible')
+      .gt('cantidad_disponible', 0);
+
+    if (depositoId) {
+      query = query.eq('id_deposito', depositoId);
+    }
+
+    return query;
+  };
+
   const validarStockDisponible = async (
     solicitud: Solicitud
   ): Promise<{ suficiente: boolean; disponible: number; solicitado: number }> => {
@@ -94,15 +109,11 @@ export const createSolicitudesInventoryService = (
       let totalDisponible = 0;
 
       for (const producto of productosCoincidentes) {
-        const { data, error } = await supabaseClient
-          .from('inventario')
-          .select('cantidad_disponible')
-          .eq('id_producto', producto.id_producto)
-          .gt('cantidad_disponible', 0);
+        const { data, error } = await obtenerStockDeProducto(producto.id_producto);
 
         if (error || !data) continue;
 
-        const stockProducto = data.reduce((sum, item) => sum + (item.cantidad_disponible ?? 0), 0);
+        const stockProducto = data.reduce((sum, item) => sum + Number(item.cantidad_disponible ?? 0), 0);
 
         if (!producto.unidad_id || !solicitud.unidad_id) {
           logger.warn('Stock omitido porque falta una unidad explícita', { producto, solicitudId: solicitud.id });
@@ -183,16 +194,11 @@ export const createSolicitudesInventoryService = (
       let totalDisponible = 0;
 
       for (const producto of productosCoincidentes) {
-        const { data, error } = await supabaseClient
-          .from('inventario')
-          .select('cantidad_disponible')
-          .eq('id_producto', producto.id_producto)
-          .eq('id_deposito', parsedDepositoId.value)
-          .gt('cantidad_disponible', 0);
+        const { data, error } = await obtenerStockDeProducto(producto.id_producto, parsedDepositoId.value);
 
         if (error || !data) continue;
 
-        const stockProducto = data.reduce((sum, item) => sum + (item.cantidad_disponible ?? 0), 0);
+        const stockProducto = data.reduce((sum, item) => sum + Number(item.cantidad_disponible ?? 0), 0);
 
         if (!producto.unidad_id || !solicitud.unidad_id) {
           logger.warn('Stock omitido porque falta una unidad explícita', { producto, solicitudId: solicitud.id });
@@ -230,6 +236,16 @@ export const createSolicitudesInventoryService = (
 
   const descontarDelInventario = async (solicitud: Solicitud, depositoId?: string): Promise<ResultadoInventario> => {
     try {
+      if (!depositoId) {
+        return {
+          cantidadRestante: solicitud.cantidad,
+          productosActualizados: 0,
+          error: true,
+          errorDetails: 'Debes seleccionar una bodega para descontar inventario.',
+          detalleEntregado: [],
+        };
+      }
+
       const cantidad = parseFiniteNumberValue(solicitud.cantidad, {
         name: 'solicitud.cantidad',
         min: 0,
@@ -245,17 +261,15 @@ export const createSolicitudesInventoryService = (
         };
       }
 
-      if (depositoId) {
-        const parsedDepositoId = parseUuidValue(depositoId, { name: 'depositoId' });
-        if (!parsedDepositoId.success) {
-          return {
-            cantidadRestante: solicitud.cantidad,
-            productosActualizados: 0,
-            error: true,
-            errorDetails: parsedDepositoId.error,
-            detalleEntregado: [],
-          };
-        }
+      const parsedDepositoId = parseUuidValue(depositoId, { name: 'depositoId' });
+      if (!parsedDepositoId.success) {
+        return {
+          cantidadRestante: solicitud.cantidad,
+          productosActualizados: 0,
+          error: true,
+          errorDetails: parsedDepositoId.error,
+          detalleEntregado: [],
+        };
       }
 
       const productosCoincidentes = await buscarProductosCoincidentes(solicitud.tipo_alimento);
@@ -270,7 +284,7 @@ export const createSolicitudesInventoryService = (
         };
       }
 
-      return procesarDescuentoInventario(productosCoincidentes, solicitud, depositoId);
+      return procesarDescuentoInventario(productosCoincidentes, solicitud, parsedDepositoId.value);
     } catch (error) {
       logger.error('Error descontando inventario', error);
       return {
@@ -304,6 +318,21 @@ export const createSolicitudesInventoryService = (
           continue;
         }
 
+        if (movimiento.idEntrada && isUuid(movimiento.idEntrada)) {
+          const { error: restoreError } = await supabaseClient.rpc('restaurar_entrada_inventario', {
+            p_id_entrada: movimiento.idEntrada,
+            p_cantidad: cantidadEntregada.value,
+          });
+
+          if (restoreError) {
+            logger.error(`Error restaurando la entrada ${movimiento.idEntrada}`, restoreError);
+            continue;
+          }
+
+          productosActualizados++;
+          continue;
+        }
+
         const { data: inventarioItems, error: inventarioError } = await supabaseClient
           .from('inventario')
           .select('id_inventario, cantidad_disponible, id_deposito, id_producto')
@@ -315,8 +344,12 @@ export const createSolicitudesInventoryService = (
           continue;
         }
 
-        if (inventarioItems && inventarioItems.length > 0) {
-          const item = inventarioItems[0];
+        const inventarioEnDeposito = movimiento.idDeposito
+          ? inventarioItems?.filter(item => item.id_deposito === movimiento.idDeposito)
+          : inventarioItems;
+
+        if (inventarioEnDeposito && inventarioEnDeposito.length > 0) {
+          const item = inventarioEnDeposito[0];
           const nuevaCantidad = (item.cantidad_disponible ?? 0) + cantidadEntregada.value;
 
           const { error: updateError } = await supabaseClient
@@ -335,14 +368,8 @@ export const createSolicitudesInventoryService = (
           productosActualizados++;
           logger.info(`Restauradas ${movimiento.cantidadEntregada} unidades de ${movimiento.producto.nombre_producto} (nuevo stock: ${nuevaCantidad})`);
         } else {
-          const { data: depositos, error: depositosError } = await supabaseClient
-            .from('depositos')
-            .select('id_deposito')
-            .limit(1)
-            .single();
-
-          if (depositosError || !depositos) {
-            logger.error(`No se pudo obtener un depósito para crear inventario de ${movimiento.producto.nombre_producto}`, depositosError);
+          if (!movimiento.idDeposito || !isUuid(movimiento.idDeposito)) {
+            logger.error(`No se pudo identificar el depósito para restaurar ${movimiento.producto.nombre_producto}`);
             continue;
           }
 
@@ -350,7 +377,7 @@ export const createSolicitudesInventoryService = (
             .from('inventario')
             .insert({
               id_producto: movimiento.producto.id_producto,
-              id_deposito: depositos.id_deposito,
+              id_deposito: movimiento.idDeposito,
               cantidad_disponible: cantidadEntregada.value,
               fecha_actualizacion: new Date().toISOString(),
             });
@@ -396,13 +423,18 @@ export const createSolicitudesInventoryService = (
       productosActualizados += resultadoProducto.productosActualizados;
 
       if (resultadoProducto.cantidadEntregada > 0) {
-        detalleEntregado.push({
-          producto,
-          cantidadEntregada: resultadoProducto.cantidadEntregada,
-          cantidadOriginal: resultadoProducto.cantidadOriginal,
-          unidadOriginalId: resultadoProducto.unidadOriginalId,
-          unidadConvertidaId: resultadoProducto.unidadConvertidaId,
-        });
+        if (resultadoProducto.detallesEntregados?.length) {
+          detalleEntregado.push(...resultadoProducto.detallesEntregados);
+        } else {
+          detalleEntregado.push({
+            producto,
+            cantidadEntregada: resultadoProducto.cantidadEntregada,
+            cantidadOriginal: resultadoProducto.cantidadOriginal,
+            unidadOriginalId: resultadoProducto.unidadOriginalId,
+            unidadConvertidaId: resultadoProducto.unidadConvertidaId,
+            idDeposito: depositoId,
+          });
+        }
       }
 
       if (resultadoProducto.error) {
@@ -464,103 +496,111 @@ export const createSolicitudesInventoryService = (
       };
     }
 
-    const factorSolicitudAInventario = conversion.factor;
-    const cantidadNecesariaEnUnidadInventario = cantidadNecesaria * factorSolicitudAInventario;
-
-    let query = supabaseClient
-      .from('inventario')
-      .select('id_inventario, cantidad_disponible, id_deposito')
-      .eq('id_producto', producto.id_producto)
-      .gt('cantidad_disponible', 0);
-
-    if (depositoId) {
-      const parsedDepositoId = parseUuidValue(depositoId, { name: 'depositoId' });
-      if (!parsedDepositoId.success) {
-        return {
-          cantidadRestante: cantidadNecesaria,
-          productosActualizados: 0,
-          cantidadEntregada: 0,
-          error: true,
-          errorDetails: parsedDepositoId.error,
-        };
-      }
-      query = query.eq('id_deposito', parsedDepositoId.value);
-    }
-
-    const { data, error } = await query.order('fecha_actualizacion', { ascending: true });
-
-    if (error || !data || data.length === 0) {
-      logger.info(`Sin stock disponible para ${producto.nombre_producto}`);
+    if (!depositoId) {
       return {
         cantidadRestante: cantidadNecesaria,
         productosActualizados: 0,
         cantidadEntregada: 0,
+        error: true,
+        errorDetails: 'Debes seleccionar una bodega para descontar inventario.',
       };
     }
 
-    let cantidadRestante = cantidadNecesariaEnUnidadInventario;
-    let productosActualizados = 0;
-    let cantidadEntregada = 0;
-
-    for (const item of data) {
-      if (cantidadRestante <= 0) break;
-
-      const cantidadADescontar = Math.min(cantidadRestante, item.cantidad_disponible);
-      const nuevaCantidad = item.cantidad_disponible - cantidadADescontar;
-
-      const { data: updatedItem, error: updateError } = await supabaseClient
-        .from('inventario')
-        .update({
-          cantidad_disponible: nuevaCantidad,
-          fecha_actualizacion: new Date().toISOString(),
-        })
-        .eq('id_inventario', item.id_inventario)
-        .gte('cantidad_disponible', cantidadADescontar)
-        .select('id_inventario')
-        .maybeSingle();
-
-      if (!updateError && !updatedItem) {
-        return {
-          cantidadRestante: cantidadRestante / factorSolicitudAInventario,
-          productosActualizados,
-          cantidadEntregada,
-          cantidadOriginal: cantidadEntregada / factorSolicitudAInventario,
-          unidadOriginalId: solicitud.unidad_id,
-          unidadConvertidaId: producto.unidad_id,
-          error: true,
-          errorDetails: 'El stock cambió mientras se procesaba la entrega. Intenta nuevamente.',
-        };
-      }
-
-      if (updateError) {
-        logger.error('Error descontando inventario', updateError);
-
-        return {
-          cantidadRestante: cantidadRestante / factorSolicitudAInventario,
-          productosActualizados,
-          cantidadEntregada,
-          cantidadOriginal: cantidadEntregada / factorSolicitudAInventario,
-          unidadOriginalId: solicitud.unidad_id,
-          unidadConvertidaId: producto.unidad_id,
-          error: true,
-          errorDetails: updateError,
-        };
-      }
-
-      cantidadRestante -= cantidadADescontar;
-      cantidadEntregada += cantidadADescontar;
-      productosActualizados += 1;
-
-      logger.info(`Descontadas ${cantidadADescontar} unidades de ${producto.nombre_producto} (restante en stock: ${nuevaCantidad})`);
+    const parsedDepositoId = parseUuidValue(depositoId, { name: 'depositoId' });
+    if (!parsedDepositoId.success) {
+      return {
+        cantidadRestante: cantidadNecesaria,
+        productosActualizados: 0,
+        cantidadEntregada: 0,
+        error: true,
+        errorDetails: parsedDepositoId.error,
+      };
     }
 
+    const { data, error } = await supabaseClient.rpc('descontar_stock_por_lote', {
+      p_id_deposito: parsedDepositoId.value,
+      p_id_producto: producto.id_producto,
+      p_cantidad: cantidadNecesaria,
+      p_unidad_id: solicitud.unidad_id,
+    });
+
+    if (error || !data || typeof data !== 'object') {
+      logger.error('Error descontando stock por lote', error ?? data);
+      return {
+        cantidadRestante: cantidadNecesaria,
+        productosActualizados: 0,
+        cantidadEntregada: 0,
+        error: true,
+        errorDetails: error ?? 'La respuesta del descuento por lote no es válida.',
+      };
+    }
+
+    const payload = data as {
+      cantidadRestante?: unknown;
+      detalles?: unknown;
+    };
+    if (!Array.isArray(payload.detalles)) {
+      return {
+        cantidadRestante: cantidadNecesaria,
+        productosActualizados: 0,
+        cantidadEntregada: 0,
+        error: true,
+        errorDetails: 'La respuesta del descuento por lote no contiene detalles.',
+      };
+    }
+
+    const detallesEntregados: InventarioDescontado[] = [];
+    let cantidadEntregada = 0;
+    let cantidadOriginal = 0;
+
+    for (const detalle of payload.detalles) {
+      if (typeof detalle !== 'object' || detalle === null) continue;
+      const item = detalle as Record<string, unknown>;
+      const idEntrada = item.idEntrada;
+      const idDeposito = item.idDeposito;
+      const cantidad = Number(item.cantidad);
+      const cantidadOriginalDetalle = Number(item.cantidadOriginal);
+
+      if (!isUuid(idEntrada) || !isUuid(idDeposito) || !Number.isFinite(cantidad) || cantidad <= 0) {
+        continue;
+      }
+
+      const original = Number.isFinite(cantidadOriginalDetalle) && cantidadOriginalDetalle > 0
+        ? cantidadOriginalDetalle
+        : cantidad / conversion.factor;
+
+      detallesEntregados.push({
+        producto,
+        cantidadEntregada: cantidad,
+        cantidadOriginal: original,
+        unidadOriginalId: solicitud.unidad_id,
+        unidadConvertidaId: producto.unidad_id,
+        idEntrada,
+        idDeposito,
+      });
+      cantidadEntregada += cantidad;
+      cantidadOriginal += original;
+    }
+
+    if (detallesEntregados.length === 0) {
+      return {
+        cantidadRestante: cantidadNecesaria,
+        productosActualizados: 0,
+        cantidadEntregada: 0,
+        error: true,
+        errorDetails: 'El descuento no produjo entradas de inventario.',
+      };
+    }
+
+    const cantidadRestante = Number(payload.cantidadRestante ?? 0);
     return {
-      cantidadRestante: cantidadRestante / factorSolicitudAInventario,
-      productosActualizados,
+      cantidadRestante: Number.isFinite(cantidadRestante) ? cantidadRestante : 0,
+      productosActualizados: detallesEntregados.length,
       cantidadEntregada,
-      cantidadOriginal: cantidadEntregada / factorSolicitudAInventario,
+      cantidadOriginal,
       unidadOriginalId: solicitud.unidad_id,
       unidadConvertidaId: producto.unidad_id,
+      detallesEntregados,
     };
   };
 

@@ -105,6 +105,8 @@ export interface InventarioDescontado {
   cantidadOriginal?: number;
   unidadOriginalId?: number;
   unidadConvertidaId?: number;
+  idEntrada?: string;
+  idDeposito?: string;
 }
 
 export interface ResultadoInventario {
@@ -209,6 +211,7 @@ export interface DescuentoProductoResult {
   cantidadOriginal?: number;
   unidadOriginalId?: number;
   unidadConvertidaId?: number;
+  detallesEntregados?: InventarioDescontado[];
   error?: boolean;
   errorDetails?: unknown;
 }

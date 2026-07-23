@@ -126,6 +126,27 @@ export function useProfileUpdate(supabase: SupabaseClient) {
     }
   }, [supabase]);
 
+  const ensureDonorWarehouse = useCallback(async (): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { error: warehouseError } = await supabase.rpc('crear_bodega_principal_donante');
+
+      if (warehouseError) {
+        setError('No se pudo crear la bodega principal. ' + warehouseError.message);
+        return false;
+      }
+
+      return true;
+    } catch {
+      setError('Error al crear la bodega principal.');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase]);
+
   return {
     loading,
     error,
@@ -137,5 +158,6 @@ export function useProfileUpdate(supabase: SupabaseClient) {
     loadUserProfile,
     updateProfile,
     saveProfile,
+    ensureDonorWarehouse,
   };
 }

@@ -91,7 +91,7 @@ export const createSolicitudesMovementService = (
 
       const { data: detalles, error: detallesError } = await supabaseClient
         .from('movimiento_inventario_detalle')
-        .select('id_movimiento, id_producto, cantidad, cantidad_original, tipo_transaccion, unidad_id, unidad_convertida_id, observacion_detalle')
+        .select('id_movimiento, id_producto, cantidad, cantidad_original, tipo_transaccion, unidad_id, unidad_convertida_id, id_entrada, id_deposito, observacion_detalle')
         .in('id_movimiento', idsMovimiento)
         .eq('tipo_transaccion', 'egreso')
         .ilike('observacion_detalle', `%Entrega por solicitud aprobada%${terminoBusqueda}%`);
@@ -101,7 +101,8 @@ export const createSolicitudesMovementService = (
         return [];
       }
 
-      const productosAgrupados = new Map<string, { cantidad: number; detalle: typeof detalles[0] }>();
+      const detallesValidos: typeof detalles = [];
+      const idsProducto = new Set<string>();
 
       for (const detalle of detalles) {
         const productoId = detalle.id_producto;
@@ -117,22 +118,19 @@ export const createSolicitudesMovementService = (
           continue;
         }
 
-        if (productosAgrupados.has(productoId)) {
-          productosAgrupados.get(productoId)!.cantidad += cantidadResult.value;
-        } else {
-          productosAgrupados.set(productoId, { cantidad: cantidadResult.value, detalle });
-        }
+        detallesValidos.push(detalle);
+        idsProducto.add(productoId);
       }
 
-      const idsProducto = [...productosAgrupados.keys()];
-      if (idsProducto.length === 0) {
+      const idsProductoArray = [...idsProducto];
+      if (idsProductoArray.length === 0) {
         return [];
       }
 
       const { data: productos, error: productosError } = await supabaseClient
         .from('productos_donados')
         .select('id_producto, nombre_producto, unidad_id')
-        .in('id_producto', idsProducto);
+        .in('id_producto', idsProductoArray);
 
       if (productosError || !productos) {
         logger.error('Error obteniendo productos para los movimientos', productosError);
@@ -140,20 +138,23 @@ export const createSolicitudesMovementService = (
       }
 
       const movimientos: InventarioDescontado[] = [];
-      for (const [productoId, info] of productosAgrupados.entries()) {
-        const producto = productos.find(p => p.id_producto === productoId);
+      for (const detalle of detallesValidos) {
+        const producto = productos.find(p => p.id_producto === detalle.id_producto);
         if (!producto) continue;
 
+        const cantidad = Number(detalle.cantidad);
         movimientos.push({
           producto: {
             id_producto: producto.id_producto,
             nombre_producto: producto.nombre_producto,
             unidad_id: producto.unidad_id ?? undefined,
           },
-          cantidadEntregada: info.cantidad,
-          cantidadOriginal: info.detalle.cantidad_original ?? undefined,
-          unidadOriginalId: info.detalle.unidad_id ?? undefined,
-          unidadConvertidaId: info.detalle.unidad_convertida_id ?? producto.unidad_id ?? undefined,
+          cantidadEntregada: cantidad,
+          cantidadOriginal: detalle.cantidad_original ?? undefined,
+          unidadOriginalId: detalle.unidad_id ?? undefined,
+          unidadConvertidaId: detalle.unidad_convertida_id ?? producto.unidad_id ?? undefined,
+          idEntrada: detalle.id_entrada ?? undefined,
+          idDeposito: detalle.id_deposito ?? undefined,
         });
       }
 
@@ -242,6 +243,8 @@ export const createSolicitudesMovementService = (
             observacion_detalle: `Entrega por solicitud aprobada - ${solicitud.tipo_alimento}`,
             unidad_id: detalle.unidadOriginalId ?? solicitud.unidad_id ?? detalle.producto.unidad_id ?? null,
             unidad_convertida_id: detalle.unidadConvertidaId ?? detalle.producto.unidad_id ?? null,
+            id_entrada: detalle.idEntrada ?? null,
+            id_deposito: detalle.idDeposito ?? null,
           });
 
         if (detalleError) {
@@ -341,6 +344,8 @@ export const createSolicitudesMovementService = (
             observacion_detalle: `Reversión de solicitud aprobada - ${solicitud.tipo_alimento}`,
             unidad_id: movimiento.unidadOriginalId ?? solicitud.unidad_id ?? movimiento.producto.unidad_id ?? null,
             unidad_convertida_id: movimiento.unidadConvertidaId ?? movimiento.producto.unidad_id ?? null,
+            id_entrada: movimiento.idEntrada ?? null,
+            id_deposito: movimiento.idDeposito ?? null,
           });
 
         if (detalleError) {

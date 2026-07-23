@@ -125,8 +125,6 @@ export const resolverConversionLocal = (
   unidadOrigenId: number,
   unidadDestinoId: number,
   conversiones: ConversionData[],
-  simboloOrigen?: string,
-  simboloDestino?: string,
 ): ConversionResolution => {
   if (!isPositiveInteger(unidadOrigenId) || !isPositiveInteger(unidadDestinoId)) {
     return noConversion();
@@ -145,12 +143,7 @@ export const resolverConversionLocal = (
   const conversion = conversiones.find(item => {
     const coincidePorId =
       item.unidad_origen_id === unidadOrigenId && item.unidad_destino_id === unidadDestinoId;
-    const coincidePorSimbolo =
-      simboloOrigen !== undefined &&
-      simboloDestino !== undefined &&
-      item.simbolo_origen === simboloOrigen &&
-      item.simbolo_destino === simboloDestino;
-    return coincidePorId || coincidePorSimbolo;
+    return coincidePorId;
   });
 
   if (conversion && conversion.activo !== false && isFinitePositive(conversion.factor_conversion)) {
@@ -166,12 +159,7 @@ export const resolverConversionLocal = (
   const inverse = conversiones.find(item => {
     const coincidePorId =
       item.unidad_origen_id === unidadDestinoId && item.unidad_destino_id === unidadOrigenId;
-    const coincidePorSimbolo =
-      simboloOrigen !== undefined &&
-      simboloDestino !== undefined &&
-      item.simbolo_origen === simboloDestino &&
-      item.simbolo_destino === simboloOrigen;
-    return coincidePorId || coincidePorSimbolo;
+    return coincidePorId;
   });
 
   if (inverse && inverse.activo !== false && isFinitePositive(inverse.factor_conversion)) {
@@ -307,29 +295,24 @@ export const convertirEntreUnidades = (
   simboloDestino: string,
   conversiones: ConversionData[],
 ): ConversionCalculation => {
-  if (simboloOrigen === simboloDestino) {
-    const unidadId =
-      conversiones.find(item => item.simbolo_origen === simboloOrigen)?.unidad_origen_id ??
-      conversiones.find(item => item.simbolo_destino === simboloDestino)?.unidad_destino_id ??
-      1;
-    return aplicarConversion(cantidad, {
-      convertible: true,
-      factor: 1,
-      origenId: unidadId,
-      destinoId: unidadId,
-      source: 'same_unit',
-    });
+  const unidadIdPorSimbolo = (simbolo: string): number | undefined => {
+    const conversion = conversiones.find(item => item.simbolo_origen === simbolo);
+    if (conversion) return conversion.unidad_origen_id;
+
+    return conversiones.find(item => item.simbolo_destino === simbolo)?.unidad_destino_id;
+  };
+
+  const origenId = unidadIdPorSimbolo(simboloOrigen);
+  const destinoId = unidadIdPorSimbolo(simboloDestino);
+
+  if (!origenId || !destinoId) {
+    return aplicarConversion(cantidad, { convertible: false, reason: 'no_conversion' });
   }
 
-  const origenId = conversiones.find(item => item.simbolo_origen === simboloOrigen)?.unidad_origen_id;
-  const destinoId = conversiones.find(item => item.simbolo_destino === simboloDestino)?.unidad_destino_id;
-
   const resolution = resolverConversionLocal(
-    origenId ?? 1,
-    destinoId ?? 2,
+    origenId,
+    destinoId,
     conversiones,
-    simboloOrigen,
-    simboloDestino,
   );
 
   return aplicarConversion(cantidad, resolution);

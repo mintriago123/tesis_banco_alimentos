@@ -68,10 +68,10 @@ type ConversionRow = {
 };
 
 type StockInventarioRow = {
-  id_inventario: string;
+  id_entrada: string;
   id_deposito: string;
   cantidad_disponible: number | null;
-  fecha_actualizacion: string | null;
+  fecha_ingreso: string | null;
   productos_donados: {
     id_producto?: string | null;
     nombre_producto?: string | null;
@@ -133,8 +133,6 @@ export const calcularTotalPorUnidades = (
         saldo.unidad_id,
         unidadObjetivo.unidad_id as number,
         conversiones,
-        saldo.unidad_simbolo,
-        unidadObjetivo.unidad_simbolo,
       );
       if (!resolution.convertible) {
         return { calculable: false, cantidad: 0 };
@@ -214,12 +212,12 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
     try {
       const conversiones = await obtenerConversiones();
       const { data, error } = await supabaseClient
-        .from('inventario')
+        .from('entradas_inventario')
         .select(`
-          id_inventario,
+          id_entrada,
           id_deposito,
           cantidad_disponible,
-          fecha_actualizacion,
+          fecha_ingreso,
           productos_donados!inner(
             id_producto,
             nombre_producto,
@@ -262,20 +260,20 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
             conversiones,
           );
           if (
-            row.fecha_actualizacion &&
-            (!existente.fecha_actualizacion || row.fecha_actualizacion > existente.fecha_actualizacion)
+            row.fecha_ingreso &&
+            (!existente.fecha_actualizacion || row.fecha_ingreso > existente.fecha_actualizacion)
           ) {
-            existente.fecha_actualizacion = row.fecha_actualizacion;
+            existente.fecha_actualizacion = row.fecha_ingreso;
           }
           continue;
         }
 
         stockPorDepositoYUnidad.set(key, {
-          id_inventario: row.id_inventario,
+          id_inventario: row.id_entrada,
           id_deposito: row.id_deposito,
           cantidad_disponible: cantidad,
           deposito: deposito?.nombre ?? 'Sin depósito',
-          fecha_actualizacion: row.fecha_actualizacion,
+          fecha_actualizacion: row.fecha_ingreso,
           unidad_id: producto.unidad_id,
           unidad_nombre: unidad?.nombre ?? undefined,
           unidad_simbolo: unidad?.simbolo ?? undefined,

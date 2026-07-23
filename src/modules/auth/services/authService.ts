@@ -98,6 +98,19 @@ export class AuthService {
         };
       }
 
+      if (perfil.rol === 'DONANTE') {
+        const { error: warehouseError } = await this.supabase.rpc('crear_bodega_principal_donante');
+        if (warehouseError) {
+          if (isDevelopment) {
+            console.error('❌ No se pudo asegurar la bodega principal:', warehouseError);
+          }
+          return {
+            success: true,
+            redirect: AUTH_CONSTANTS.RUTAS.COMPLETAR_PERFIL,
+          };
+        }
+      }
+
       // Redirigir según el rol
       const redirect = this.obtenerRutaPorRol(perfil.rol);
       if (isDevelopment) {

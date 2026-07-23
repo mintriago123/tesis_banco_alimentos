@@ -83,4 +83,11 @@ describe('resolverConversionLocal', () => {
       cantidad: 2000,
     });
   });
+
+  it('no usa IDs implícitos cuando los símbolos no están en el catálogo', () => {
+    expect(convertirEntreUnidades(3, 'caja', 'lata', conversiones)).toEqual({
+      success: false,
+      reason: 'no_conversion',
+    });
+  });
 });

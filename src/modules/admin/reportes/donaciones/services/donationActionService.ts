@@ -401,47 +401,9 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
         };
       }
 
-      const newDeposito = await supabaseClient
-        .from('depositos')
-        .insert({
-          nombre: `Depósito Donante ${parsedDonorId.value.slice(0, 8)}`,
-          descripcion: `Depósito asignado automáticamente al donante ${parsedDonorId.value}`
-        })
-        .select('id_deposito')
-        .single();
-
-      if (newDeposito.error || !newDeposito.data) {
-        logger.error('Error creando depósito para donante', newDeposito.error);
-        return {
-          success: false,
-          error: 'No fue posible crear la bodega del donante',
-          errorDetails: newDeposito.error
-        };
-      }
-
-      const donorMapping = await supabaseClient
-        .from('donante_depositos')
-        .insert({
-          donante_id: parsedDonorId.value,
-          id_deposito: newDeposito.data.id_deposito,
-          es_principal: true,
-          activo: true
-        })
-        .select('id_deposito')
-        .single();
-
-      if (donorMapping.error || !donorMapping.data) {
-        logger.error('Error creando mapeo donante-bodega', donorMapping.error);
-        return {
-          success: false,
-          error: 'No fue posible vincular al donante con su bodega',
-          errorDetails: donorMapping.error
-        };
-      }
-
       return {
-        success: true,
-        data: { depositoId: donorMapping.data.id_deposito }
+        success: false,
+        error: 'El donante no tiene una bodega principal activa. Debe completar la configuración de su perfil.',
       };
     } catch (error) {
       logger.error('Excepción asegurando mapeo de bodega por donante', error);
