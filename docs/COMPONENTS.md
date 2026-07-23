@@ -118,7 +118,7 @@ src/modules/shared/components/
 
 ### 🎨 Paleta de Colores (Tailwind)
 
-El sistema utiliza una paleta de colores definida en `globals.css` y `tailwind.config.ts`:
+El sistema utiliza Tailwind CSS v4 con configuración CSS-first. La paleta y los tokens visuales se mantienen en `src/app/globals.css`.
 
 #### Colores Principales:
 
@@ -1073,58 +1073,32 @@ export function FormularioSolicitud() {
 
 ### 📦 Configuración de Tailwind
 
-**Archivo**: `tailwind.config.ts`
+Tailwind se integra mediante el plugin de PostCSS definido en `postcss.config.mjs`:
 
-```typescript
-import type { Config } from "tailwindcss";
+```javascript
+const config = {
+  plugins: ["@tailwindcss/postcss"],
+};
 
-export default {
-  content: [
-    "./src/**/*.{js,ts,jsx,tsx,mdx}",
-  ],
-  theme: {
-    extend: {
-      colors: {
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
-        },
-        secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
-        },
-        success: "hsl(var(--success))",
-        warning: "hsl(var(--warning))",
-        error: "hsl(var(--error))",
-        info: "hsl(var(--info))",
-        accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
-        },
-        muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
-        },
-        card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
-        },
-      },
-      borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
-      },
-    },
-  },
-  plugins: [],
-} satisfies Config;
+export default config;
 ```
+
+La hoja global importa Tailwind y expone las fuentes mediante `@theme inline`:
+
+```css
+@import "tailwindcss";
+
+:root {
+  --color-slate-900: #0f172a;
+  --font-sans: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
+}
+
+@theme inline {
+  --font-sans: var(--font-sans);
+}
+```
+
+La configuración se mantiene en CSS y Tailwind v4 detecta las clases utilizadas en las plantillas del proyecto automáticamente. Los estilos compartidos que requieren selectores complejos, como Mapbox y las tablas, permanecen en `src/app/globals.css`; el resto se compone con clases utilitarias directamente en los componentes.
 
 ---
 
@@ -1133,55 +1107,16 @@ export default {
 **Archivo**: `src/app/globals.css`
 
 ```css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer components {
-  /* Botones */
-  .btn {
-    @apply inline-flex items-center justify-center rounded-md font-medium transition-colors;
-    @apply disabled:pointer-events-none disabled:opacity-50;
-  }
-  
-  .btn-primary {
-    @apply bg-primary text-primary-foreground hover:bg-primary/90;
-  }
-  
-  /* Cards */
-  .card {
-    @apply rounded-lg border border-border bg-card shadow-sm;
-  }
-  
-  /* Inputs */
-  .input {
-    @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2;
-    @apply text-sm ring-offset-background placeholder:text-muted-foreground;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
-  }
-  
-  /* Estados */
-  .badge-success {
-    @apply inline-flex items-center rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-semibold text-success;
-  }
-  
-  .badge-warning {
-    @apply inline-flex items-center rounded-full bg-warning/10 px-2.5 py-0.5 text-xs font-semibold text-warning;
-  }
-  
-  .badge-error {
-    @apply inline-flex items-center rounded-full bg-error/10 px-2.5 py-0.5 text-xs font-semibold text-error;
-  }
+/* Clases compartidas para tablas y reglas específicas de Mapbox. */
+.table-surface {
+  overflow: hidden;
+  border: 1px solid var(--color-slate-200);
+  border-radius: 1rem;
+  background: white;
 }
 ```
 
-**Uso**:
-```tsx
-<button className="btn btn-primary">Guardar</button>
-<input type="text" className="input" />
-<span className="badge-success">Activo</span>
-<span className="badge-error">Cancelado</span>
-```
+Los componentes usan las utilidades de Tailwind directamente (`flex`, `rounded-lg`, `text-slate-700`, `hover:bg-slate-50`, etc.). Las clases CSS propias se reservan para patrones compartidos que no se expresan de forma tan clara con una sola utilidad.
 
 ---
 

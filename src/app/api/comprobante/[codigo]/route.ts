@@ -2,7 +2,7 @@
  * @fileoverview API para generar comprobantes electrónicos desde QR o código legible
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { decodificarQRPayload, formatearFecha, formatearFechaSolo } from '@/lib/comprobante';
 import type { DatosComprobante, QRPayload } from '@/lib/comprobante/types';
@@ -134,7 +134,10 @@ function puedeVerComprobante(usuario: AccesoUsuario, tipo: 'solicitud' | 'donaci
   return registro.usuario_id === usuario.id;
 }
 
-export async function GET({ params }: { params: Promise<{ codigo: string }> }) {
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ codigo: string }> }
+) {
   try {
     const { codigo } = await params;
 

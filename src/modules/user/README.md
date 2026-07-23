@@ -33,8 +33,6 @@ user/
 │   ├── InventarioInfo.tsx       # Información de inventario
 │   ├── CantidadUnidadInputs.tsx # Inputs de cantidad/unidad
 │   └── ComentariosInput.tsx     # Input de comentarios
-├── utils/
-│   └── index.ts                 # Utilidades y validaciones
 └── index.ts                     # Exportaciones centralizadas
 ```
 
@@ -53,7 +51,6 @@ user/
 ### Otros
 - `Alimento`: Producto del catálogo
 - `Unidad`: Unidad de medida
-- `StockInfo`: Información de inventario disponible
 - `Ubicacion`: Coordenadas geográficas
 
 ## Servicios
@@ -210,8 +207,7 @@ Muestra información del inventario disponible para un producto.
 
 ## Constantes
 
-### Estados
-- `ESTADOS_SOLICITUD`: Configuración de estados y colores
+### Filtros
 - `FILTROS_ESTADO`: Opciones de filtros
 
 ### Mensajes
@@ -222,18 +218,6 @@ Muestra información del inventario disponible para un producto.
 
 ### Configuración
 - `FORM_CONFIG`: Configuración de formularios
-- `MAP_CONFIG`: Configuración de mapas
-
-## Utilidades
-
-### Validaciones
-- `validatePerfilForm()`: Valida formulario de perfil
-- `validateCantidad()`: Valida cantidad
-- `validateStock()`: Valida stock disponible
-
-### Helpers
-- `getUserInitials()`: Obtiene iniciales del usuario
-- `formatDate()`: Formatea fechas
 
 ## Uso
 
@@ -253,8 +237,6 @@ import {
   AlimentoSelector,
   // Constants
   MESSAGES,
-  // Utils
-  validatePerfilForm,
 } from '@/modules/user';
 ```
 
