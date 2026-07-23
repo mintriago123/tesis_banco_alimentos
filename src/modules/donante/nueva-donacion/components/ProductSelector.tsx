@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { ExternalLink, ShoppingBasket, X } from 'lucide-react';
 
 interface Alimento {
@@ -17,6 +18,7 @@ interface ProductSelectorProps {
   cargando: boolean;
   alimentosFiltrados: Alimento[];
   onSeleccionarProducto: (alimento: Alimento) => void;
+  onCerrarDropdown: () => void;
 }
 
 export default function ProductSelector({
@@ -29,63 +31,125 @@ export default function ProductSelector({
   cargando,
   alimentosFiltrados,
   onSeleccionarProducto,
+  onCerrarDropdown,
 }: ProductSelectorProps) {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [alimentosFiltrados, mostrarDropdown]);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (!mostrarDropdown) {
+        onFocus();
+        setActiveIndex(0);
+      } else {
+        setActiveIndex((index) => Math.min(index + 1, Math.max(alimentosFiltrados.length - 1, 0)));
+      }
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveIndex((index) => Math.max(index - 1, 0));
+      return;
+    }
+
+    if (event.key === 'Enter' && mostrarDropdown && alimentosFiltrados[activeIndex]) {
+      event.preventDefault();
+      onSeleccionarProducto(alimentosFiltrados[activeIndex]);
+      return;
+    }
+
+    if (event.key === 'Escape' && mostrarDropdown) {
+      event.preventDefault();
+      onCerrarDropdown();
+    }
+  };
+
   return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">Productos a donar *</label>
+    <div className="relative">
+      <label htmlFor="producto-donacion" className="mb-1 block text-sm font-medium text-slate-700">
+        Producto a donar <span aria-hidden="true">*</span>
+      </label>
       <div className="relative">
         <input
+          id="producto-donacion"
           type="text"
           placeholder="Buscar o seleccionar producto..."
-          className="w-full border-2 border-gray-300 rounded-lg pl-11 pr-12 py-3 text-gray-700 placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-colors"
+          className="w-full rounded-xl border border-slate-200 py-2 pl-10 pr-12 text-sm text-slate-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-400"
           value={busqueda}
           onChange={onBusquedaChange}
           onFocus={onFocus}
+          onKeyDown={handleKeyDown}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={mostrarDropdown && !alimentoSeleccionado}
+          aria-controls="producto-donacion-lista"
+          aria-activedescendant={mostrarDropdown && !alimentoSeleccionado && alimentosFiltrados[activeIndex]
+            ? `producto-opcion-${alimentosFiltrados[activeIndex].id}`
+            : undefined}
+          required
+          aria-required="true"
+          aria-describedby="producto-donacion-ayuda"
         />
-        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none">
-          <ShoppingBasket className="h-5 w-5" />
+        <span className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400">
+          <ShoppingBasket className="h-5 w-5" aria-hidden="true" />
         </span>
-        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center">
+        <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center">
           {alimentoSeleccionado && (
             <button
               type="button"
               onClick={onLimpiarSeleccion}
-              className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-gray-100 transition-colors"
-              title="Limpiar selección"
+              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+              aria-label="Limpiar producto seleccionado"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
           )}
         </div>
       </div>
 
       {mostrarDropdown && !alimentoSeleccionado && (
-        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div
+          id="producto-donacion-lista"
+          role="listbox"
+          aria-label="Productos disponibles"
+          className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg"
+        >
           {cargando ? (
-            <div className="p-3 text-gray-500 text-center">Cargando productos...</div>
+            <div className="p-3 text-center text-sm text-slate-500" role="status">Cargando productos...</div>
           ) : (
             <>
               {alimentosFiltrados.length > 0 ? (
                 <>
-                  {alimentosFiltrados.map((alimento) => (
-                    <div
+                  {alimentosFiltrados.map((alimento, index) => (
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={index === activeIndex}
                       key={alimento.id}
-                      className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                      id={`producto-opcion-${alimento.id}`}
+                      className={`block w-full border-b border-gray-100 p-3 text-left last:border-b-0 ${
+                        index === activeIndex ? 'bg-emerald-50' : 'hover:bg-gray-50'
+                      } focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-400`}
                       onClick={() => onSeleccionarProducto(alimento)}
                     >
-                      <div className="font-medium text-gray-900">{alimento.nombre}</div>
-                      <div className="text-sm text-gray-500">{alimento.categoria}</div>
-                    </div>
+                      <span className="block font-medium text-gray-900">{alimento.nombre}</span>
+                      <span className="mt-1 block text-sm text-gray-500">{alimento.categoria}</span>
+                    </button>
                   ))}
                 </>
               ) : busqueda ? (
-                <div className="p-3 text-gray-500 text-center">
+                <div className="p-3 text-center text-sm text-gray-500">
                   No se encontraron productos que coincidan con &quot;{busqueda}&quot;
                   <Link
                     href="/donante/solicitar-alimento"
-                    className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg border border-blue-200 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-50"
+                    className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-200 px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
                   >
-                    <ExternalLink className="h-4 w-4" />
+                    <ExternalLink className="h-4 w-4" aria-hidden="true" />
                     Solicitar alta de alimento
                   </Link>
                 </div>
@@ -99,11 +163,13 @@ export default function ProductSelector({
         </div>
       )}
 
-      {busqueda && !cargando && !alimentoSeleccionado && (
-        <p className="text-sm text-gray-500 mt-1">
-          {alimentosFiltrados.length} producto{alimentosFiltrados.length !== 1 ? 's' : ''} encontrado{alimentosFiltrados.length !== 1 ? 's' : ''}
-        </p>
-      )}
+      <p id="producto-donacion-ayuda" className="mt-1 text-xs text-slate-500">
+        {alimentoSeleccionado
+          ? 'Producto seleccionado. Puedes limpiarlo para elegir otro.'
+          : busqueda && !cargando
+            ? `${alimentosFiltrados.length} producto${alimentosFiltrados.length !== 1 ? 's' : ''} encontrado${alimentosFiltrados.length !== 1 ? 's' : ''}.`
+            : 'Escribe para buscar en el catálogo.'}
+      </p>
     </div>
   );
 }

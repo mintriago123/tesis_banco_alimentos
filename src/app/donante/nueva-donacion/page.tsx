@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { Package, MapPin, Heart } from 'lucide-react';
@@ -9,7 +9,7 @@ import {
   StepHeader,
   StepNavigation,
   ProductSelector,
-  ImpactCalculator,
+  DonationContextPanel,
   ImpactEquivalenceTable,
   DonationSummary,
   useProductSelector,
@@ -33,6 +33,7 @@ const obtenerFechaHoy = () => {
 
 export default function NuevaDonacionPage() {
   const { supabase, user: currentUser, isLoading: authLoading } = useSupabase();
+  const mensajeValidacionRef = useRef<HTMLDivElement>(null);
 
   // Hook de navegación multi-paso
   const { pasoActual, siguientePaso: avanzarPaso, pasoAnterior, resetearPaso } = useMultiStepForm(3);
@@ -56,6 +57,7 @@ export default function NuevaDonacionPage() {
     mostrarDropdown,
     alimentoSeleccionado,
     filtroCategoria,
+    setMostrarDropdown,
     manejarBusquedaAlimento,
     manejarFocusInput,
     manejarSeleccionProducto,
@@ -151,32 +153,33 @@ export default function NuevaDonacionPage() {
     limpiarMensajeValidacion();
   };
 
+  const mostrarErrorValidacion = (mensaje: string): false => {
+    setMensajeValidacion(mensaje);
+    window.requestAnimationFrame(() => mensajeValidacionRef.current?.focus());
+    return false;
+  };
+
   const validarPaso = (paso: number): boolean => {
     switch (paso) {
       case 1:
         if (!formulario.tipo_producto || !formulario.cantidad || !formulario.unidad_id) {
-          setMensajeValidacion('Por favor, completa la información del producto.');
-          return false;
+          return mostrarErrorValidacion('Por favor, completa la información del producto.');
         }
         if (!alimentos.some(alimento => alimento.id.toString() === formulario.tipo_producto)) {
-          setMensajeValidacion('Selecciona un alimento existente del catálogo.');
-          return false;
+          return mostrarErrorValidacion('Selecciona un alimento existente del catálogo.');
         }
         if (parseFloat(formulario.cantidad) <= 0) {
-          setMensajeValidacion('La cantidad debe ser mayor a 0.');
-          return false;
+          return mostrarErrorValidacion('La cantidad debe ser mayor a 0.');
         }
         break;
       case 2:
         if (!formulario.fecha_disponible.trim() || !formulario.direccion_entrega.trim()) {
-          setMensajeValidacion('Por favor, completa la información de logística.');
-          return false;
+          return mostrarErrorValidacion('Por favor, completa la información de logística.');
         }
         // Comparar las fechas como strings en formato YYYY-MM-DD
         const fechaHoyString = obtenerFechaHoy();
         if (formulario.fecha_disponible < fechaHoyString) {
-          setMensajeValidacion('La fecha de disponibilidad no puede ser anterior a hoy.');
-          return false;
+          return mostrarErrorValidacion('La fecha de disponibilidad no puede ser anterior a hoy.');
         }
         break;
     }
@@ -235,24 +238,29 @@ export default function NuevaDonacionPage() {
               icon={Package}
               title="Información del Producto"
               description="Selecciona qué vas a donar"
-              iconColor="text-green-600"
+              iconColor="text-emerald-600"
             />
 
             <div className="space-y-4">
               <div className="relative" onBlur={manejarBlurContainer}>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Categoria de Alimentos *</label>
+                <label htmlFor="categoria-alimentos" className="mb-1 block text-sm font-medium text-slate-700">
+                  Categoría de alimentos <span aria-hidden="true">*</span>
+                </label>
 
                 <div className="mb-3">
                   <select
-                    className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition-colors"
+                    id="categoria-alimentos"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={filtroCategoria}
                     onChange={manejarCambioCategoria}
+                    aria-describedby="categoria-alimentos-ayuda"
                   >
                     <option value="">Todas las categorías</option>
                     {categoriasUnicas.map((categoria) => (
                       <option key={categoria} value={categoria}>{categoria}</option>
                     ))}
                   </select>
+                  <p id="categoria-alimentos-ayuda" className="mt-1 text-xs text-slate-500">Filtra el catálogo por tipo de alimento.</p>
                 </div>
 
                 <ProductSelector
@@ -265,32 +273,46 @@ export default function NuevaDonacionPage() {
                   cargando={cargandoAlimentos}
                   alimentosFiltrados={alimentosFiltrados}
                   onSeleccionarProducto={manejarSeleccionProducto}
+                  onCerrarDropdown={() => setMostrarDropdown(false)}
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Cantidad *</label>
+                  <label htmlFor="cantidad-donacion" className="mb-1 block text-sm font-medium text-slate-700">
+                    Cantidad <span aria-hidden="true">*</span>
+                  </label>
                   <input
+                    id="cantidad-donacion"
                     type="number"
                     name="cantidad"
-                    className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition-colors"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={formulario.cantidad}
                     onChange={manejarCambio}
                     placeholder="0"
                     min="0.1"
                     step="0.1"
+                    inputMode="decimal"
+                    required
+                    aria-required="true"
+                    aria-describedby="cantidad-ayuda"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Ingresa la cantidad disponible</p>
+                  <p id="cantidad-ayuda" className="mt-1 text-xs text-slate-500">Ingresa la cantidad disponible.</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Unidad de Medida *</label>
+                  <label htmlFor="unidad-donacion" className="mb-1 block text-sm font-medium text-slate-700">
+                    Unidad de medida <span aria-hidden="true">*</span>
+                  </label>
                   <select
+                    id="unidad-donacion"
                     name="unidad_id"
-                    className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition-colors"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={formulario.unidad_id}
                     onChange={manejarCambio}
+                    required
+                    aria-required="true"
+                    aria-describedby="unidad-ayuda"
                   >
                     <option value="">Selecciona una unidad</option>
                     {cargandoUnidades ? (
@@ -303,20 +325,23 @@ export default function NuevaDonacionPage() {
                       ))
                     )}
                   </select>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p id="unidad-ayuda" className="mt-1 text-xs text-slate-500">
                     {formulario.tipo_producto 
-                      ? `Unidades permitidas para este alimento` 
-                      : 'Selecciona primero un alimento'}
+                      ? 'Unidades permitidas para este alimento.'
+                      : 'Selecciona primero un alimento.'}
                   </p>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Fecha de Vencimiento (opcional)</label>
+                <label htmlFor="fecha-vencimiento" className="mb-1 block text-sm font-medium text-slate-700">
+                  Fecha de vencimiento <span className="font-normal text-slate-500">(opcional)</span>
+                </label>
                 <input
+                  id="fecha-vencimiento"
                   type="date"
                   name="fecha_vencimiento"
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition-colors"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-400"
                   value={formulario.fecha_vencimiento}
                   onChange={manejarCambio}
                   min={obtenerFechaHoy()}
@@ -324,11 +349,6 @@ export default function NuevaDonacionPage() {
               </div>
 
               <ImpactEquivalenceTable />
-
-              <ImpactCalculator
-                impacto={calcularImpactoEstimado()}
-                mostrar={!!(formulario.cantidad && formulario.unidad_id)}
-              />
             </div>
           </div>
         );
@@ -340,40 +360,54 @@ export default function NuevaDonacionPage() {
               icon={MapPin}
               title="Logística de Entrega"
               description="Dinos cuándo y dónde podemos recoger tu donación"
-              iconColor="text-purple-600"
+              iconColor="text-emerald-600"
             />
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Fecha Disponible *</label>
+                <label htmlFor="fecha-disponible" className="mb-1 block text-sm font-medium text-slate-700">
+                  Fecha disponible <span aria-hidden="true">*</span>
+                </label>
                 <input
+                  id="fecha-disponible"
                   type="date"
                   name="fecha_disponible"
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition-colors"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-400"
                   value={formulario.fecha_disponible}
                   onChange={manejarCambio}
                   min={obtenerFechaHoy()}
+                  required
+                  aria-required="true"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Dirección de Entrega *</label>
+                <label htmlFor="direccion-recoleccion" className="mb-1 block text-sm font-medium text-slate-700">
+                  Dirección de recolección <span aria-hidden="true">*</span>
+                </label>
                 <input
+                  id="direccion-recoleccion"
                   type="text"
                   name="direccion_entrega"
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition-colors"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-400"
                   value={formulario.direccion_entrega}
                   onChange={manejarCambio}
-                  placeholder="Calle, número, ciudad, provincia"
+                  placeholder="Calle, número, ciudad y provincia"
                   maxLength={200}
+                  autoComplete="street-address"
+                  required
+                  aria-required="true"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Horario Preferido (opcional)</label>
+                <label htmlFor="horario-preferido" className="mb-1 block text-sm font-medium text-slate-700">
+                  Horario preferido <span className="font-normal text-slate-500">(opcional)</span>
+                </label>
                 <select
+                  id="horario-preferido"
                   name="horario_preferido"
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition-colors"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-400"
                   value={formulario.horario_preferido}
                   onChange={manejarCambio}
                 >
@@ -399,7 +433,7 @@ export default function NuevaDonacionPage() {
               icon={Heart}
               title="Confirmación y Detalles Adicionales"
               description="Revisa tu donación y añade cualquier observación"
-              iconColor="text-red-600"
+              iconColor="text-emerald-600"
             />
 
             <div className="space-y-4">
@@ -417,16 +451,21 @@ export default function NuevaDonacionPage() {
               />
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Observaciones Adicionales (opcional)</label>
+                <label htmlFor="observaciones-donacion" className="mb-1 block text-sm font-medium text-slate-700">
+                  Observaciones adicionales <span className="font-normal text-slate-500">(opcional)</span>
+                </label>
                 <textarea
+                  id="observaciones-donacion"
                   name="observaciones"
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:outline-none transition-colors"
+                  className="min-h-32 w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-400"
                   value={formulario.observaciones}
                   onChange={manejarCambio}
                   placeholder="Cualquier información adicional que consideres importante..."
                   rows={4}
                   maxLength={500}
+                  aria-describedby="observaciones-ayuda"
                 />
+                <p id="observaciones-ayuda" className="mt-1 text-xs text-slate-500">Máximo 500 caracteres.</p>
               </div>
             </div>
           </div>
@@ -438,51 +477,60 @@ export default function NuevaDonacionPage() {
   };
 
   return (
-    <DashboardLayout>
-      <div className="flex flex-col min-h-screen bg-gray-50">
-        <main className="flex-grow flex items-center justify-center p-3 sm:p-4 md:p-6">
-          <div className="bg-white shadow-xl rounded-2xl p-4 sm:p-6 md:p-8 max-w-2xl w-full">
-            {mensaje && (
-              <div className={`p-3 sm:p-4 mb-4 sm:mb-6 rounded-lg text-white text-sm sm:text-base ${
-                mensaje.includes('exitosa') ? 'bg-green-500' : 'bg-red-500'
-              }`}>
-                {mensaje}
-              </div>
-            )}
-            {mensajeValidacion && (
-              <div className="p-3 sm:p-4 mb-4 sm:mb-6 rounded-lg text-white bg-yellow-500 text-sm sm:text-base">
-                {mensajeValidacion}
-              </div>
-            )}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 sm:mb-8 gap-3 sm:gap-4">
-              <h1 className="text-lg sm:text-xl md:text-2xl font-extrabold text-blue-700">Nueva Donación</h1>
-              <StepIndicator
-                currentStep={pasoActual}
-                totalSteps={3}
-                stepLabels={['Producto', 'Logística', 'Confirmación']}
-              />
+    <DashboardLayout
+      requiredRole="DONANTE"
+      title="Nueva donación"
+      description="Registra los alimentos y coordina su llegada al Banco de Alimentos"
+    >
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
+        <section className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6" aria-labelledby="current-step-title">
+          {mensaje && (
+            <div className={`rounded-xl border px-4 py-3 text-sm ${
+              mensaje.includes('exitosa')
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'border-rose-200 bg-rose-50 text-rose-700'
+            }`} role="status" aria-live="polite">
+              {mensaje}
             </div>
-
-            <form onSubmit={manejarEnvio}>
-              {renderPaso()}
-
-              <StepNavigation
-                pasoActual={pasoActual}
-                totalPasos={3}
-                onAnterior={pasoAnterior}
-                onSiguiente={siguientePaso}
-                onEnviar={manejarEnvio}
-                enviando={enviando}
-              />
-            </form>
+          )}
+          {mensajeValidacion && (
+            <div
+              ref={mensajeValidacionRef}
+              id="donation-validation-message"
+              className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+              role="alert"
+              tabIndex={-1}
+            >
+              {mensajeValidacion}
+            </div>
+          )}
+          <div className="border-b border-slate-200 pb-5">
+            <StepIndicator
+              currentStep={pasoActual}
+              totalSteps={3}
+              stepLabels={['Producto', 'Logística', 'Confirmación']}
+            />
           </div>
-        </main>
 
-        <footer className="bg-white shadow-sm p-3 sm:p-4 mt-6 sm:mt-8">
-          <div className="max-w-4xl mx-auto text-center text-gray-500 text-xs sm:text-sm">
-            &copy; {new Date().getFullYear()} Banco de Alimentos. Todos los derechos reservados.
-          </div>
-        </footer>
+          <form onSubmit={manejarEnvio}>
+            {renderPaso()}
+
+            <StepNavigation
+              pasoActual={pasoActual}
+              totalPasos={3}
+              onAnterior={pasoAnterior}
+              onSiguiente={siguientePaso}
+              onEnviar={manejarEnvio}
+              enviando={enviando}
+            />
+          </form>
+        </section>
+
+        <DonationContextPanel
+          pasoActual={pasoActual}
+          impacto={calcularImpactoEstimado()}
+          mostrarImpacto={!!(formulario.cantidad && formulario.unidad_id)}
+        />
       </div>
     </DashboardLayout>
   );

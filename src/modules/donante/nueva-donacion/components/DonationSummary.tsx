@@ -35,23 +35,43 @@ export default function DonationSummary({
   comidaEquivalente,
 }: DonationSummaryProps) {
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-      <h4 className="font-medium text-blue-800 mb-3">Resumen de tu Donación</h4>
-      <div className="space-y-2 text-sm text-blue-700">
-        <p><strong>Donante:</strong> {donante}</p>
-        <p><strong>Producto:</strong> {producto?.nombre} ({producto?.categoria})</p>
-        <p><strong>Cantidad:</strong> {cantidad} {unidad?.simbolo}</p>
-        <p><strong>Fecha disponible:</strong> {formatShortDate(fechaDisponible)}</p>
-        <p><strong>Dirección:</strong> {direccion}</p>
-        {horario && horarioLabel && (
-          <p><strong>Horario:</strong> {horarioLabel}</p>
-        )}
-        <div className="bg-purple-100 p-3 rounded mt-3">
-          <p className="font-medium text-purple-800">Impacto Estimado:</p>
-          <p className="text-purple-700">• {personasAlimentadas} personas alimentadas</p>
-          <p className="text-purple-700">• {comidaEquivalente}</p>
+    <section className="rounded-lg border border-blue-200 bg-blue-50 p-4" aria-labelledby="donation-summary-title">
+      <h3 id="donation-summary-title" className="mb-3 font-medium text-blue-800">Resumen de tu donación</h3>
+      <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-blue-600">Donante</dt>
+          <dd className="mt-1 font-semibold text-blue-800">{donante}</dd>
         </div>
+        <div>
+          <dt className="text-blue-600">Producto</dt>
+          <dd className="mt-1 font-semibold text-blue-800">{producto?.nombre ?? 'No disponible'}{producto?.categoria ? ` (${producto.categoria})` : ''}</dd>
+        </div>
+        <div>
+          <dt className="text-blue-600">Cantidad</dt>
+          <dd className="mt-1 font-semibold text-blue-800">{cantidad} {unidad?.simbolo ?? ''}</dd>
+        </div>
+        <div>
+          <dt className="text-blue-600">Fecha disponible</dt>
+          <dd className="mt-1 font-semibold text-blue-800">{formatShortDate(fechaDisponible)}</dd>
+        </div>
+        <div className="sm:col-span-2">
+          <dt className="text-blue-600">Dirección de recolección</dt>
+          <dd className="mt-1 font-semibold text-blue-800">{direccion}</dd>
+        </div>
+        {horario && horarioLabel && (
+          <div>
+            <dt className="text-blue-600">Horario preferido</dt>
+            <dd className="mt-1 font-semibold text-blue-800">{horarioLabel}</dd>
+          </div>
+        )}
+      </dl>
+      <div className="mt-3 rounded bg-purple-100 p-3">
+        <p className="font-medium text-purple-800">Impacto estimado</p>
+        <ul className="mt-1 space-y-1 text-sm text-purple-700">
+          <li>{personasAlimentadas} personas alimentadas</li>
+          <li>{comidaEquivalente}</li>
+        </ul>
       </div>
-    </div>
+    </section>
   );
 }
