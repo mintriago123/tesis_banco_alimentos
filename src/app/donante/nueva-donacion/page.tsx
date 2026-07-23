@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import DashboardLayout from '@/app/components/DashboardLayout';
+import { validarCantidadParaUnidad } from '@/lib/unidadConversion';
 import { Package, MapPin, Heart } from 'lucide-react';
 import {
   StepIndicator,
@@ -170,6 +171,13 @@ export default function NuevaDonacionPage() {
         }
         if (parseFloat(formulario.cantidad) <= 0) {
           return mostrarErrorValidacion('La cantidad debe ser mayor a 0.');
+        }
+        const cantidadUnidad = validarCantidadParaUnidad(
+          parseFloat(formulario.cantidad),
+          getUnidadSeleccionada() ?? {}
+        );
+        if (!cantidadUnidad.valid) {
+          return mostrarErrorValidacion(cantidadUnidad.error);
         }
         break;
       case 2:

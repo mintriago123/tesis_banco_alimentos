@@ -229,7 +229,6 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
           depositos!inner(nombre)
         `)
         .ilike('productos_donados.nombre_producto', `%${escapeLikePattern(nombre.value)}%`)
-        .gt('cantidad_disponible', 0)
         .order('cantidad_disponible', { ascending: false });
 
       if (error) {
@@ -291,7 +290,13 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
 
       const depositos = [...stockPorDepositoYUnidad.values()];
       if (depositos.length === 0) {
-        return { success: true, data: emptySummary() };
+        return {
+          success: true,
+          data: {
+            ...emptySummary(),
+            producto_encontrado: true,
+          },
+        };
       }
 
       const unidadObjetivo = depositos[0];
