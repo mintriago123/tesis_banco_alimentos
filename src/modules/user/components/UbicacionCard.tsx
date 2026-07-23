@@ -3,7 +3,6 @@
 // Tarjeta de ubicación con mapa
 // ============================================================================
 
-import React from 'react';
 import { MapPin } from 'lucide-react';
 import MapboxMap from './MapboxMap';
 import { Ubicacion } from '../types';

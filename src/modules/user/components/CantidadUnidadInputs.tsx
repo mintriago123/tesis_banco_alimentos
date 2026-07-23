@@ -3,7 +3,7 @@
 // Inputs de cantidad y unidad de medida
 // ============================================================================
 
-import React from 'react';
+import type { ChangeEvent } from 'react';
 import { Unidad } from '../types';
 import { type StockSummary } from '../services/inventoryStockService';
 import { FORM_CONFIG } from '../constants';
@@ -16,8 +16,8 @@ interface CantidadUnidadInputsProps {
   loadingUnidades: boolean;
   stockInfo: StockSummary | null;
   isStockSufficient: (cantidad: number, simboloUnidad?: string) => boolean;
-  onCantidadChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onUnidadChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  onCantidadChange: (e: ChangeEvent<HTMLInputElement>) => void;
+  onUnidadChange: (e: ChangeEvent<HTMLSelectElement>) => void;
   onUseMaxStock: () => void;
 }
 

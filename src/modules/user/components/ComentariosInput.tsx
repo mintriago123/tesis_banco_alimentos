@@ -3,14 +3,14 @@
 // Input de comentarios adicionales
 // ============================================================================
 
-import React from 'react';
+import type { ChangeEvent } from 'react';
 import { MessageCircle } from 'lucide-react';
 import { FORM_CONFIG } from '../constants';
 import { FormField, TextareaInput } from '@/app/components/ui/FormField';
 
 interface ComentariosInputProps {
   comentarios: string;
-  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onChange: (e: ChangeEvent<HTMLTextAreaElement>) => void;
 }
 
 export function ComentariosInput({

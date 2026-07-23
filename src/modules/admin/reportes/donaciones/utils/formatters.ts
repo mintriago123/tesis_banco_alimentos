@@ -6,15 +6,10 @@ import type {
   Donation,
   DonationCounters,
   DonationFilters,
-  DonationEstado,
   DonationEstadoFilter,
   DonationPersonTypeFilter
 } from '../types';
-import { formatShortDate, parseDate } from '@/lib/dateUtils';
-
-export const formatDate = (value?: string | null) => {
-  return formatShortDate(value);
-};
+import { parseDate } from '@/lib/dateUtils';
 
 export const isNearExpiration = (fechaVencimiento?: string | null, days = 7) => {
   if (!fechaVencimiento) return false;
@@ -112,5 +107,3 @@ export const hasActiveFilters = (filters: DonationFilters) => {
   const searchActive = filters.search.trim() !== '';
   return estadoActive || tipoPersonaActive || searchActive;
 };
-
-export const toReadableEstado = (estado: DonationEstado) => estado;

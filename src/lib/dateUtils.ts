@@ -123,13 +123,6 @@ export function formatRelativeTime(date: string | Date | null | undefined): stri
 }
 
 /**
- * Convierte una fecha local a UTC (para enviar a la base de datos)
- */
-export function toUTC(date: Date): string {
-  return date.toISOString();
-}
-
-/**
  * Parsea una fecha ISO string a objeto Date en la zona horaria del usuario
  */
 export function parseDate(dateString: string | null | undefined): Date {

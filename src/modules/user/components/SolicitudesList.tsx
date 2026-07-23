@@ -3,7 +3,6 @@
 // Lista de solicitudes con filtros
 // ============================================================================
 
-import React from 'react';
 import { Solicitud, SolicitudEditData, FiltroEstadoSolicitud } from '../types';
 import { SolicitudCard } from './SolicitudCard';
 import { FILTROS_ESTADO } from '../constants';

@@ -87,12 +87,6 @@ export interface ServiceResult<T> {
   errorDetails?: unknown;
 }
 
-export interface DonationInventoryIntegrationResult {
-  productoId?: number;
-  depositoId?: string;
-  error?: string;
-}
-
 export interface SupabaseDonationRow {
   id: number;
   user_id: string;
@@ -133,10 +127,4 @@ export interface SupabaseAlimentoRow {
   id: number;
   nombre?: string | null;
   categoria?: string | null;
-}
-
-export interface CancelarDonacionRequest {
-  donacionId: number;
-  motivo: MotivoCancelacion;
-  observaciones?: string;
 }

@@ -3,7 +3,7 @@
 // Tarjeta individual de solicitud con opciones de edición y eliminación
 // ============================================================================
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Clock,
   CheckCircle,

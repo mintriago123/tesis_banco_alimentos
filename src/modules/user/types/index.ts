@@ -89,33 +89,6 @@ export interface Unidad {
   tipo?: string;
 }
 
-// ---------- Inventario ----------
-export interface CantidadFormateada {
-  cantidad: number;
-  simbolo: string;
-  unidad_nombre: string;
-  cantidad_original: number;
-  simbolo_original: string;
-  fue_convertido: boolean;
-}
-
-export interface StockInfo {
-  producto_encontrado: boolean;
-  total_disponible: number;
-  depositos: DepositoStock[];
-  unidad_nombre?: string;
-  unidad_simbolo?: string;
-  total_formateado?: CantidadFormateada;
-}
-
-export interface DepositoStock {
-  deposito: string;
-  cantidad_disponible: number;
-  unidad_nombre?: string;
-  unidad_simbolo?: string;
-  cantidad_formateada?: CantidadFormateada;
-}
-
 // ---------- Ubicación ----------
 export interface Ubicacion {
   latitud: number;

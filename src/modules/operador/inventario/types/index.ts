@@ -8,8 +8,6 @@ export type LoadingState = 'idle' | 'loading' | 'success' | 'error';
 export type StockLevelFilter = 'todos' | 'bajo' | 'normal' | 'alto';
 export type StockLevel = Exclude<StockLevelFilter, 'todos'>;
 
-export type InventoryActionType = 'ingreso' | 'egreso' | 'ajuste' | 'baja';
-
 export interface Deposito {
   id_deposito: string;
   nombre: string;
@@ -40,25 +38,6 @@ export interface InventarioItem {
   producto: ProductoInventario;
   necesita_atencion?: boolean; // Para alertas del operador
   stock_status?: StockLevel; // Estado calculado
-}
-
-// Tipos específicos para operaciones de operador
-export interface MovimientoInventario {
-  id_movimiento: string;
-  fecha_movimiento: string;
-  tipo_transaccion: InventoryActionType;
-  cantidad: number;
-  producto: ProductoInventario;
-  deposito: Deposito;
-  observaciones?: string;
-}
-
-export interface AjusteInventario {
-  id_inventario: string;
-  cantidad_anterior: number;
-  cantidad_nueva: number;
-  motivo: string;
-  observaciones?: string;
 }
 
 export interface AlertaInventario {
@@ -127,15 +106,3 @@ export interface ServiceResult<T> {
   error?: string;
   errorDetails?: unknown;
 }
-
-// Constantes específicas del operador
-export const STOCK_LEVELS = {
-  BAJO: 10,     // Menos de 10 unidades
-  NORMAL: 50,   // Entre 10 y 50 unidades  
-  ALTO: 50      // Más de 50 unidades
-} as const;
-
-export const DAYS_TO_EXPIRE = {
-  PROXIMO: 30,  // Próximo a vencer en 30 días
-  CRITICO: 7    // Crítico en 7 días
-} as const;

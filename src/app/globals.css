@@ -100,64 +100,6 @@ textarea:disabled {
   cursor: not-allowed;
 }
 
-/* Utilidades heredadas que siguen siendo parte de la aplicación. */
-.bg-gradient-primary {
-  background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 50%, #2563eb 100%);
-}
-
-.bg-gradient-auth,
-.bg-gradient-dashboard,
-.bg-gradient-hero {
-  background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 52%, #dbeafe 100%);
-}
-
-.btn-primary {
-  background-color: #1d4ed8;
-  color: white;
-  box-shadow: var(--shadow-surface);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background-color: #1e40af;
-}
-
-.btn-outline {
-  border: 1px solid #1d4ed8;
-  background: transparent;
-  color: #1d4ed8;
-}
-
-.btn-outline:hover:not(:disabled) {
-  background-color: #eff6ff;
-}
-
-.glass {
-  border: 1px solid rgb(226 232 240 / 0.8);
-  background: rgb(255 255 255 / 0.8);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-}
-
-.glass-card {
-  border: 1px solid rgb(191 219 254 / 0.7);
-  border-radius: 1rem;
-  background: rgb(255 255 255 / 0.85);
-  box-shadow: var(--shadow-popover);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-}
-
-.form-input:focus {
-  border-color: #2563eb;
-  outline: none;
-  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15);
-}
-
-.nav-link:hover {
-  background-color: #f1f5f9;
-  color: #0f172a;
-}
-
 /* Mapbox */
 .mapboxgl-map {
   overflow: hidden;
@@ -227,10 +169,6 @@ textarea:disabled {
   scrollbar-width: thin;
 }
 
-.transition-all-150 {
-  transition: all 150ms ease;
-}
-
 @keyframes slide-in-right {
   from { transform: translateX(100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
@@ -253,12 +191,6 @@ textarea:disabled {
   outline: 3px solid #1d4ed8 !important;
   outline-offset: 2px !important;
   box-shadow: 0 0 0 3px rgb(29 78 216 / 0.25) !important;
-}
-
-.table-responsive {
-  width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 /* Patrón compartido para tablas: la superficie exterior recorta el contenido
@@ -321,48 +253,7 @@ textarea:disabled {
   border-top-right-radius: 1rem;
 }
 
-.hide-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.hide-scrollbar::-webkit-scrollbar { display: none; }
-
 img { max-width: 100%; height: auto; }
-
-.truncate-2-lines,
-.truncate-3-lines {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-}
-
-.truncate-2-lines { -webkit-line-clamp: 2; }
-.truncate-3-lines { -webkit-line-clamp: 3; }
-
-input[type="range"].slider-thumb {
-  height: 14px;
-  appearance: none;
-  border-radius: 7px;
-  outline: none;
-}
-
-input[type="range"].slider-thumb::-webkit-slider-thumb,
-input[type="range"].slider-thumb::-moz-range-thumb {
-  width: 24px;
-  height: 24px;
-  appearance: none;
-  border: 3px solid #2563eb;
-  border-radius: 50%;
-  background: white;
-  box-shadow: 0 2px 6px rgb(0 0 0 / 0.2);
-  cursor: pointer;
-}
-
-input[type="range"].slider-thumb:focus::-webkit-slider-thumb,
-input[type="range"].slider-thumb:focus::-moz-range-thumb {
-  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.2);
-}
 
 @media (max-width: 640px) {
   .container {

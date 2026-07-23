@@ -128,57 +128,6 @@ export interface ProductSummary {
 }
 
 /**
- * Configuración de tema para exportación de reportes
- * Define colores y estilos para documentos Excel generados
- */
-export interface ExportTheme {
-  /** Color de fondo para títulos principales */
-  readonly titleBg: string;
-  
-  /** Color de fuente para títulos principales */
-  readonly titleFont: string;
-  
-  /** Color primario de acento */
-  readonly accentPrimary: string;
-  
-  /** Color secundario de acento */
-  readonly accentSecondary: string;
-  
-  /** Color para valores positivos/ingresos */
-  readonly positive: string;
-  
-  /** Color para valores negativos/egresos */
-  readonly negative: string;
-  
-  /** Color para etiquetas de metadatos */
-  readonly metadataLabel: string;
-  
-  /** Color para valores de metadatos */
-  readonly metadataValue: string;
-  
-  /** Color base para filas de tabla */
-  readonly zebraBase: string;
-  
-  /** Color alternativo para filas de tabla */
-  readonly zebraAlt: string;
-  
-  /** Color de fondo para encabezados de tabla */
-  readonly tableHeaderBg: string;
-  
-  /** Color de fuente para encabezados de tabla */
-  readonly tableHeaderFont: string;
-  
-  /** Color para bordes de tabla */
-  readonly tableBorder: string;
-  
-  /** Color de fondo para valores de resumen */
-  readonly summaryValueBg: string;
-  
-  /** Color para bordes de resumen */
-  readonly summaryBorder: string;
-}
-
-/**
  * Estructura para rangos de celdas fusionadas en Excel
  */
 export interface WorksheetMerge {
@@ -204,80 +153,6 @@ export interface RowRegistrationOptions {
  * Estados posibles de carga de datos
  */
 export type LoadingState = 'idle' | 'loading' | 'success' | 'error';
-
-/**
- * Información de estado de la aplicación
- */
-export interface AppState {
-  /** Estado actual de carga */
-  loadingState: LoadingState;
-  
-  /** Mensaje de error si existe */
-  errorMessage?: string;
-  
-  /** Timestamp de la última actualización exitosa */
-  lastUpdate?: string;
-}
-
-/**
- * Estructura de datos raw de movimientos desde Supabase
- * Representa la estructura directa de la base de datos
- */
-export interface RawMovementData {
-  id_movimiento: string;
-  fecha_movimiento: string;
-  observaciones?: string;
-  donante?: {
-    nombre: string;
-    rol: string;
-  };
-  solicitante?: {
-    nombre: string;
-    rol: string;
-  };
-  movimiento_inventario_detalle: Array<{
-    cantidad: number;
-    tipo_transaccion: 'ingreso' | 'egreso';
-    rol_usuario: string;
-    observacion_detalle?: string;
-    productos_donados?: {
-      nombre_producto: string;
-      unidad_medida: string;
-    };
-  }>;
-}
-
-/**
- * Estructura de datos raw de donaciones legacy
- */
-export interface RawLegacyDonation {
-  id: string;
-  creado_en: string;
-  tipo_producto?: string;
-  unidad_simbolo?: string;
-  cantidad?: number;
-  observaciones?: string;
-  estado: string;
-  usuarios?: {
-    nombre: string;
-    rol: string;
-  };
-}
-
-/**
- * Estructura de datos raw de solicitudes legacy
- */
-export interface RawLegacyRequest {
-  id: string;
-  created_at: string;
-  tipo_alimento?: string;
-  cantidad?: number;
-  comentarios?: string;
-  usuarios?: {
-    nombre: string;
-    rol: string;
-  };
-}
 
 /**
  * Resultado de operaciones de servicio

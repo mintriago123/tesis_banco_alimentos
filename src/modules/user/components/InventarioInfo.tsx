@@ -3,7 +3,6 @@
 // Información del inventario disponible
 // ============================================================================
 
-import React from 'react';
 import { Package, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { LoadingSpinner } from '@/app/components';
 import { type StockSummary } from '../services/inventoryStockService';

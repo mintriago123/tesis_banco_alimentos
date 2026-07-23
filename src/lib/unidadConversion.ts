@@ -249,28 +249,6 @@ export const convertirCantidad = (
 };
 
 /**
- * Obtiene el texto formateado de una cantidad con su unidad
- */
-export const obtenerTextoFormateado = (cantidadFormateada: CantidadFormateada): string => {
-  const cantidad = formatearNumero(cantidadFormateada.cantidad);
-  return `${cantidad} ${cantidadFormateada.simbolo}`;
-};
-
-/**
- * Obtiene el texto con la conversión original entre paréntesis si fue convertido
- */
-export const obtenerTextoConOriginal = (cantidadFormateada: CantidadFormateada): string => {
-  const textoFormateado = obtenerTextoFormateado(cantidadFormateada);
-  
-  if (cantidadFormateada.fue_convertido) {
-    const cantidadOriginal = formatearNumero(cantidadFormateada.cantidad_original);
-    return `${textoFormateado} (${cantidadOriginal} ${cantidadFormateada.simbolo_original})`;
-  }
-  
-  return textoFormateado;
-};
-
-/**
  * Convierte una cantidad de una unidad específica a otra unidad específica
  * Si no hay conversión directa, intenta encontrar una conversión inversa
  * @param cantidad - La cantidad a convertir

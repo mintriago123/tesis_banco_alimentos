@@ -3,7 +3,6 @@
 // Tarjetas de acceso rápido del dashboard de usuario
 // ============================================================================
 
-import React from 'react';
 import Link from 'next/link';
 
 interface DashboardCard {

@@ -36,8 +36,3 @@ export const SYSTEM_MESSAGES = {
   inventoryCreate: (cantidad: number, unidad: string, producto: string) =>
     `Se registró un nuevo producto en inventario con ${cantidad} ${unidad} de ${producto}.`
 };
-
-export const PERSON_TYPE_LABELS = {
-  Natural: 'Persona Natural',
-  Juridica: 'Persona Jurídica'
-};

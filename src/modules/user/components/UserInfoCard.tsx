@@ -3,7 +3,6 @@
 // Tarjeta de información del usuario solicitante
 // ============================================================================
 
-import React from 'react';
 import { User, IdCard, Phone } from 'lucide-react';
 import { UserProfile } from '../types';
 

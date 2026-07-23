@@ -3,7 +3,7 @@
 // Selector de alimentos con búsqueda y filtros
 // ============================================================================
 
-import React from 'react';
+import type { ChangeEvent, FocusEvent } from 'react';
 import { ShoppingBasket, X, AlertCircle } from 'lucide-react';
 import { Alimento } from '../types';
 import { MESSAGES } from '../constants';
@@ -17,12 +17,12 @@ interface AlimentoSelectorProps {
   filtroCategoria: string;
   categorias: string[];
   mostrarDropdown: boolean;
-  onBusquedaChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onCategoriaChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  onBusquedaChange: (e: ChangeEvent<HTMLInputElement>) => void;
+  onCategoriaChange: (e: ChangeEvent<HTMLSelectElement>) => void;
   onAlimentoSelect: (alimento: Alimento) => void;
   onLimpiarSeleccion: () => void;
   onFocus: () => void;
-  onBlur: (e: React.FocusEvent) => void;
+  onBlur: (e: FocusEvent) => void;
 }
 
 export function AlimentoSelector({

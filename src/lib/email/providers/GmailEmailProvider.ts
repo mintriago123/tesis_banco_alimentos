@@ -12,10 +12,8 @@ function normalizeRecipient(recipient?: Recipient): string | undefined {
 export class GmailEmailProvider implements EmailProvider {
   private transporter: Transporter;
   private readonly defaultFrom: string;
-  private readonly config: ResolvedEmailConfig;
 
   constructor(config: ResolvedEmailConfig) {
-    this.config = config;
     this.defaultFrom = `"${config.defaultFromName}" <${config.defaultFromEmail}>`;
 
     this.transporter = nodemailer.createTransport({

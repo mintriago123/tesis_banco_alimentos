@@ -11,14 +11,12 @@ import ExcelJS from 'exceljs';
 import type { 
   MovementItem, 
   MovementSummary, 
-  ExportTheme, 
   WorksheetMerge, 
   RowRegistrationOptions 
 } from '../types';
 import { 
   EXPORT_HEADERS, 
   EXPORT_COLUMN_WIDTHS, 
-  EXPORT_THEME, 
   EXPORT_CONFIG, 
   EXCEL_ROW_HEIGHTS, 
   MOVEMENT_TYPE_LABELS 
@@ -57,11 +55,9 @@ interface DataRowInfo {
  * Encapsula toda la lógica de generación de archivos Excel profesionales
  */
 export class ExportService {
-  private readonly theme: ExportTheme;
   private readonly columnCount: number;
 
-  constructor(theme: ExportTheme = EXPORT_THEME) {
-    this.theme = theme;
+  constructor() {
     this.columnCount = EXPORT_HEADERS.length;
   }
 
@@ -504,9 +500,8 @@ export class ExportService {
 /**
  * Factory function para crear instancias del servicio de exportación
  * 
- * @param theme - Tema personalizado opcional para la exportación
  * @returns Instancia configurada del servicio de exportación
  */
-export const createExportService = (theme?: ExportTheme): ExportService => {
-  return new ExportService(theme);
+export const createExportService = (): ExportService => {
+  return new ExportService();
 };

@@ -15,7 +15,6 @@
     "@heroicons/react": "^2.2.0",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.7",
-    "@types/mapbox-gl": "^3.4.1",
     "@types/qrcode": "^1.5.6",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
@@ -29,7 +28,6 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -42,7 +40,6 @@
     "eslint-config-next": "16.2.10",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
-    "ts-node": "^10.9.2",
     "typescript": "^5",
     "vitest": "^4.1.10"
   }

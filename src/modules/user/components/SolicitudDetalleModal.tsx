@@ -3,7 +3,7 @@
 // Modal con detalles completos de una solicitud del usuario
 // ============================================================================
 
-import React from 'react';
+import type { MouseEvent } from 'react';
 import {
   X,
   Clock,
@@ -68,7 +68,7 @@ export function SolicitudDetalleModal({
     }
   };
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
+  const handleBackdropClick = (e: MouseEvent) => {
     if (e.target === e.currentTarget) {
       onClose();
     }
