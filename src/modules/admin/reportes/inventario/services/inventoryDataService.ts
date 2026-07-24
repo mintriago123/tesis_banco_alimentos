@@ -94,6 +94,7 @@ export const createInventoryDataService = (supabaseClient: SupabaseClient) => {
       const { data, error } = await supabaseClient
         .from('depositos')
         .select('id_deposito, nombre, descripcion')
+        .eq('activo', true)
         .order('nombre', { ascending: true });
 
       if (error) {
