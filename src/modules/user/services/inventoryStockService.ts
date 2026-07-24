@@ -5,8 +5,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CantidadFormateada, ConversionData } from '@/lib/unidadConversion';
 import {
-  convertirCantidad,
-  convertirEntreUnidades,
+  aplicarConversion,
+  redondear,
   resolverConversionLocal,
 } from '@/lib/unidadConversion';
 import {
@@ -22,7 +22,7 @@ export type StockStatus =
   | 'unidades_no_convertibles';
 
 export interface StockInfo {
-  id_inventario: string;
+  id_entrada: string;
   id_deposito: string;
   cantidad_disponible: number;
   deposito: string;
@@ -72,6 +72,7 @@ type StockInventarioRow = {
   id_deposito: string;
   cantidad_disponible: number | null;
   fecha_ingreso: string | null;
+  unidad_id: number | null;
   productos_donados: {
     id_producto?: string | null;
     nombre_producto?: string | null;
@@ -108,6 +109,33 @@ const emptySummary = (): StockSummary => ({
   producto_encontrado: false,
   estado_stock: 'sin_stock',
 });
+
+const crearCantidadFormateada = (
+  cantidad: number,
+  simbolo: string,
+  nombreUnidad: string,
+): CantidadFormateada => ({
+  cantidad: redondear(cantidad),
+  simbolo,
+  unidad_nombre: nombreUnidad,
+  cantidad_original: cantidad,
+  simbolo_original: simbolo,
+  fue_convertido: false,
+});
+
+const obtenerUnidadIdPorSimbolo = (
+  simbolo: string,
+  conversiones: ConversionData[],
+): number | undefined => {
+  const conversion = conversiones.find(item =>
+    item.simbolo_origen === simbolo || item.simbolo_destino === simbolo
+  );
+
+  if (!conversion) return undefined;
+  return conversion.simbolo_origen === simbolo
+    ? conversion.unidad_origen_id
+    : conversion.unidad_destino_id;
+};
 
 export interface StockTotalResolution {
   calculable: boolean;
@@ -216,6 +244,7 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
         .select(`
           id_entrada,
           id_deposito,
+          unidad_id,
           cantidad_disponible,
           fecha_ingreso,
           productos_donados!inner(
@@ -253,11 +282,10 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
         const existente = stockPorDepositoYUnidad.get(key);
         if (existente) {
           existente.cantidad_disponible += cantidad;
-          existente.cantidad_formateada = convertirCantidad(
+          existente.cantidad_formateada = crearCantidadFormateada(
             existente.cantidad_disponible,
             existente.unidad_simbolo ?? '',
             existente.unidad_nombre ?? '',
-            conversiones,
           );
           if (
             row.fecha_ingreso &&
@@ -269,19 +297,18 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
         }
 
         stockPorDepositoYUnidad.set(key, {
-          id_inventario: row.id_entrada,
+          id_entrada: row.id_entrada,
           id_deposito: row.id_deposito,
           cantidad_disponible: cantidad,
           deposito: deposito?.nombre ?? 'Sin depósito',
           fecha_actualizacion: row.fecha_ingreso,
-          unidad_id: producto.unidad_id,
+          unidad_id: row.unidad_id ?? producto.unidad_id,
           unidad_nombre: unidad?.nombre ?? undefined,
           unidad_simbolo: unidad?.simbolo ?? undefined,
-          cantidad_formateada: convertirCantidad(
+          cantidad_formateada: crearCantidadFormateada(
             cantidad,
             unidad?.simbolo ?? '',
             unidad?.nombre ?? '',
-            conversiones,
           ),
         });
       }
@@ -310,11 +337,10 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
         unidad_nombre: unidadObjetivo.unidad_nombre,
         unidad_simbolo: unidadObjetivo.unidad_simbolo,
         total_formateado: total.calculable
-          ? convertirCantidad(
+          ? crearCantidadFormateada(
               total.cantidad,
               unidadObjetivo.unidad_simbolo ?? '',
               unidadObjetivo.unidad_nombre ?? '',
-              conversiones,
             )
           : undefined,
       };
@@ -395,17 +421,24 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
       return { success: false, error: 'El stock está separado en unidades no convertibles' };
     }
 
-    const stockSymbol = stockData.unidad_simbolo ?? '';
-    const conversion = convertirEntreUnidades(
+    const conversiones = await obtenerConversiones();
+    const unidadOrigenId = obtenerUnidadIdPorSimbolo(simboloUnidadSolicitada, conversiones);
+    const unidadDestinoId = stockData.unidad_id;
+    if (!unidadOrigenId || !unidadDestinoId) {
+      return {
+        success: false,
+        error: `No se puede resolver la unidad ${simboloUnidadSolicitada}`,
+      };
+    }
+
+    const conversion = aplicarConversion(
       cantidad.value,
-      simboloUnidadSolicitada,
-      stockSymbol,
-      await obtenerConversiones(),
+      resolverConversionLocal(unidadOrigenId, unidadDestinoId, conversiones),
     );
     if (!conversion.success) {
       return {
         success: false,
-        error: `No se puede convertir de ${simboloUnidadSolicitada} a ${stockSymbol}`,
+        error: `No se puede convertir de ${simboloUnidadSolicitada} a ${stockData.unidad_simbolo ?? ''}`,
       };
     }
 

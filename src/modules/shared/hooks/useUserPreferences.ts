@@ -1,10 +1,6 @@
 import { useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-type ErrorWithCode = {
-  code?: string;
-};
-
 interface UserPreferences {
   recibir_notificaciones: boolean;
 }
@@ -45,10 +41,6 @@ export function useUserPreferences(
         .eq('id', userId);
 
       if (error) {
-        if ((error as ErrorWithCode).code === 'PGRST204') {
-          console.warn('Columna recibir_notificaciones no existe en usuarios, la preferencia de correo no se persistirá.');
-          return true;
-        }
         throw error;
       }
 

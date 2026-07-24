@@ -160,12 +160,12 @@ const OperadorInventoryTable = ({
               {items.map(item => {
                 const stockLevel = item.stock_status || 'normal';
                 const estadoCaducidad = item.producto.estado_caducidad || 'vigente';
-                const isProcessing = processingId === item.id_inventario;
+                const isProcessing = processingId === item.id_entrada;
                 const necesitaAtencion = item.necesita_atencion;
 
                 return (
                   <tr 
-                    key={item.id_inventario} 
+                    key={item.id_entrada} 
                     className={`transition-colors duration-150 hover:bg-slate-50 ${
                       necesitaAtencion ? 'bg-red-25 border-l-4 border-l-red-400' : ''
                     }`}
@@ -191,7 +191,7 @@ const OperadorInventoryTable = ({
                           <div className="text-xs text-gray-400">
                             Unidad: {item.producto.unidad_simbolo 
                               ? `${item.producto.unidad_nombre} (${item.producto.unidad_simbolo})`
-                              : item.producto.unidad_medida || 'No especificada'}
+                              : item.producto.unidad_nombre || 'No especificada'}
                           </div>
                         </div>
                       </div>
@@ -219,7 +219,7 @@ const OperadorInventoryTable = ({
                         <span>
                           {formatQuantity(item.cantidad_disponible)} {
                             item.producto.unidad_simbolo || 
-                            item.producto.unidad_medida || 
+                            item.producto.unidad_nombre || 
                             'unidades'
                           }
                         </span>
