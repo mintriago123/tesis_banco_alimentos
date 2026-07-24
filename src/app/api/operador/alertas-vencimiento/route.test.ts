@@ -97,7 +97,7 @@ describe('/api/operador/alertas-vencimiento', () => {
     mocks.adminRpc.mockResolvedValue({
       data: [
         {
-          id_inventario: 'inventory-1',
+          id_entrada: 'entry-1',
           id_producto: 'product-1',
           nombre_producto: 'Arroz',
           cantidad_disponible: '5.5',
@@ -109,7 +109,7 @@ describe('/api/operador/alertas-vencimiento', () => {
           prioridad: 'vencido',
         },
         {
-          id_inventario: 'inventory-2',
+          id_entrada: 'entry-2',
           id_producto: 'product-2',
           nombre_producto: 'Lenteja',
           cantidad_disponible: 3,
@@ -142,7 +142,7 @@ describe('/api/operador/alertas-vencimiento', () => {
         cantidad_total_vencidos: 5.5,
       },
       alertas: [{
-        id_inventario: 'inventory-1',
+        id_entrada: 'entry-1',
         cantidad_disponible: 5.5,
         estado: 'vencido',
       }],

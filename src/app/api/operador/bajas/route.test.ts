@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { GET, POST } from './route';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
-const INVENTARIO_ID = '22222222-2222-4222-8222-222222222222';
+const ENTRADA_ID = '22222222-2222-4222-8222-222222222222';
 
 const mocks = vi.hoisted(() => ({
   createServerSupabaseClient: vi.fn(),
@@ -87,7 +87,7 @@ describe('/api/operador/bajas', () => {
     });
 
     const response = await POST(jsonRequest({
-      id_inventario: 'not-a-uuid',
+      id_entrada: 'not-a-uuid',
       cantidad: '30abc',
       motivo: 'otro',
     }));
@@ -112,7 +112,7 @@ describe('/api/operador/bajas', () => {
 
   it('rejects invalid body before calling the RPC', async () => {
     const response = await POST(jsonRequest({
-      id_inventario: 'not-a-uuid',
+      id_entrada: 'not-a-uuid',
       cantidad: 1,
       motivo: 'otro',
     }));
@@ -123,7 +123,7 @@ describe('/api/operador/bajas', () => {
 
   it('calls the RPC with sanitized valid input', async () => {
     const response = await POST(jsonRequest({
-      id_inventario: INVENTARIO_ID,
+      id_entrada: ENTRADA_ID,
       cantidad: '2.5',
       motivo: 'vencido',
       observaciones: '  Producto vencido en bodega  ',
@@ -131,7 +131,7 @@ describe('/api/operador/bajas', () => {
 
     expect(response.status).toBe(200);
     expect(mocks.adminRpc).toHaveBeenCalledWith('dar_baja_producto', {
-      p_id_inventario: INVENTARIO_ID,
+      p_id_entrada: ENTRADA_ID,
       p_cantidad: 2.5,
       p_motivo: 'vencido',
       p_usuario_id: USER_ID,
