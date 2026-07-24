@@ -172,10 +172,11 @@ export interface SupabaseSolicitudRow {
 }
 
 export interface SupabaseInventarioDisponibleRow {
-  id_inventario: string | number;
+  id_entrada: string | number;
   id_deposito: string;
+  unidad_id: number | null;
   cantidad_disponible: number | null;
-  fecha_actualizacion: string | null;
+  fecha_ingreso: string | null;
   productos_donados: { 
     nombre_producto?: string | null;
     unidad_id?: number | null;

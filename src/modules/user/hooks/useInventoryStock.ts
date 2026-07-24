@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createInventoryStockService, type StockSummary } from '../services/inventoryStockService';
 import type { ConversionData } from '@/lib/unidadConversion';
-import { convertirEntreUnidades } from '@/lib/unidadConversion';
+import { aplicarConversion, resolverConversionLocal } from '@/lib/unidadConversion';
 
 type LoadingState = 'idle' | 'loading' | 'success' | 'error';
 
@@ -29,6 +29,20 @@ const singleRelation = <T>(relation: T | T[] | null | undefined): T | null => {
     return relation[0] ?? null;
   }
   return relation ?? null;
+};
+
+const obtenerUnidadIdPorSimbolo = (
+  simbolo: string,
+  conversiones: ConversionData[],
+): number | undefined => {
+  const conversion = conversiones.find(item =>
+    item.simbolo_origen === simbolo || item.simbolo_destino === simbolo
+  );
+
+  if (!conversion) return undefined;
+  return conversion.simbolo_origen === simbolo
+    ? conversion.unidad_origen_id
+    : conversion.unidad_destino_id;
 };
 
 interface UseInventoryStockResult {
@@ -149,11 +163,12 @@ export const useInventoryStock = (supabaseClient: SupabaseClient): UseInventoryS
     }
     
     // Convertir la cantidad solicitada a la unidad base del stock
-    const cantidadConvertida = convertirEntreUnidades(
+    const unidadOrigenId = obtenerUnidadIdPorSimbolo(simboloUnidad, conversiones);
+    if (!unidadOrigenId || !stockInfo.unidad_id) return false;
+
+    const cantidadConvertida = aplicarConversion(
       cantidadSolicitada,
-      simboloUnidad,
-      stockSymbol,
-      conversiones
+      resolverConversionLocal(unidadOrigenId, stockInfo.unidad_id, conversiones),
     );
 
     if (!cantidadConvertida.success) {
@@ -208,11 +223,14 @@ export const useInventoryStock = (supabaseClient: SupabaseClient): UseInventoryS
       }
       
       // Necesitamos convertir
-      const cantidadConvertida = convertirEntreUnidades(
+      const unidadOrigenId = obtenerUnidadIdPorSimbolo(simboloUnidad, conversiones);
+      if (!unidadOrigenId || !stockInfo.unidad_id) {
+        return `${baseMessage} (no se puede resolver la unidad ${simboloUnidad})`;
+      }
+
+      const cantidadConvertida = aplicarConversion(
         cantidadSolicitada,
-        simboloUnidad,
-        stockSymbol,
-        conversiones
+        resolverConversionLocal(unidadOrigenId, stockInfo.unidad_id, conversiones),
       );
 
       if (!cantidadConvertida.success) {

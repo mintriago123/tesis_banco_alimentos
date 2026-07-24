@@ -70,7 +70,7 @@ export default function BajaProductoModal({
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          id_inventario: item.id_inventario,
+          id_entrada: item.id_entrada,
           cantidad: cantidadNum,
           motivo,
           observaciones: observaciones.trim() || undefined

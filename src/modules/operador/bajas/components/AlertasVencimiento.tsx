@@ -99,8 +99,8 @@ export default function AlertasVencimiento({
     cargarAlertas();
   };
 
-  const handleCerrarAlerta = (idInventario: string) => {
-    setAlertasCerradas(prev => new Set(prev).add(idInventario));
+  const handleCerrarAlerta = (idEntrada: string) => {
+    setAlertasCerradas(prev => new Set(prev).add(idEntrada));
   };
 
   if (isLoading) {
@@ -147,7 +147,7 @@ export default function AlertasVencimiento({
 
   // Filtrar alertas
   const alertasFiltradas = data.alertas.filter(alerta => {
-    if (alertasCerradas.has(alerta.id_inventario)) return false;
+    if (alertasCerradas.has(alerta.id_entrada)) return false;
     
     if (filtroActivo === 'vencidos') return alerta.prioridad === 'vencido';
     if (filtroActivo === 'proximos') return alerta.prioridad !== 'vencido';
@@ -258,7 +258,7 @@ export default function AlertasVencimiento({
             const colors = prioridadColors[alerta.prioridad];
             return (
               <div
-                key={alerta.id_inventario}
+                key={alerta.id_entrada}
                 className={`${colors.bg} border ${colors.border} rounded-lg p-4 transition-all hover:shadow-md`}
               >
                 <div className="flex items-start justify-between">
@@ -305,7 +305,7 @@ export default function AlertasVencimiento({
                     </div>
                   </div>
                   <button
-                    onClick={() => handleCerrarAlerta(alerta.id_inventario)}
+                    onClick={() => handleCerrarAlerta(alerta.id_entrada)}
                     className={`ml-2 ${colors.text} hover:opacity-70 transition-opacity`}
                     title="Cerrar alerta"
                   >
