@@ -94,6 +94,19 @@ describe('/api/proxy/consultar-cedula', () => {
     expect(mocks.createAdminSupabaseClient).not.toHaveBeenCalled();
   });
 
+  it('returns 500 when the external identity service is unavailable', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('upstream unavailable'));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('SERVICIO_CONSULTAS_DINARAP', 'https://consultas.example.test/cedula');
+
+    const response = await GET(new NextRequest(
+      'http://localhost/api/proxy/consultar-cedula?identificacion=1710034065'
+    ));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: 'Error al consultar identificación' });
+  });
+
   it('returns 429 when the server-side rate limit is exceeded', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

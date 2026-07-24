@@ -696,6 +696,7 @@ Scripts:
 
 ```bash
 pnpm test
+pnpm test:coverage
 pnpm test:watch
 ```
 
@@ -734,6 +735,7 @@ Estado verificado en la rama `refactoring_clean_code`:
 - `pnpm lint` pasa correctamente.
 - `pnpm build` pasa correctamente con Next.js 16.x.
 - `pnpm test` pasa correctamente con Vitest.
+- `pnpm test:coverage` pasa correctamente y genera reporte V8 en `coverage/`.
 - La arquitectura real es modular monolítica con capas, no Clean Architecture estricta.
 - El flujo de solicitudes se separó en fachada, casos de uso y servicios internos.
 - La protección de rutas de página está centralizada en `src/proxy.ts`; las API routes sensibles validan sesión, perfil activo y rol dentro del handler.

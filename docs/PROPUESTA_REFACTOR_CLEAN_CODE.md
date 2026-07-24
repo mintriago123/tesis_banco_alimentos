@@ -13,11 +13,18 @@ La propuesta prioriza primero los riesgos de mayor impacto y deja las mejoras es
 Estado actualizado: refactor incremental ejecutado en la rama `refactoring_clean_code`.
 
 - Fase 1 completada: las APIs sensibles intervenidas validan sesión, perfil activo y rol dentro del handler; el proxy protege páginas privadas compartidas y rutas por rol.
-- Fase 2 completada: se agregó Vitest + React Testing Library con scripts `pnpm test` y `pnpm test:watch`.
+- Fase 2 completada: se agregó Vitest + React Testing Library con scripts `pnpm test`, `pnpm test:coverage` y `pnpm test:watch`.
 - Fase 3 completada para solicitudes: la fachada `createSolicitudesActionService()` delega en casos de uso y servicios internos de inventario, movimientos y notificaciones.
 - Fase 4 completada como mitigación de aplicación: aprobaciones y entregas parciales restauran inventario y revierten estado si falla una operación posterior. La frontera BD/aplicación está documentada en `DATABASE.md`.
 - Fase 5 completada para perfil/configuración común: perfiles por rol usan `UserProfilePageContent`; configuración de donante y solicitante usa `UserSettingsContent`.
-- Fase 6 iniciada: se redujeron páginas App Router con `'use client'` de 41 a 35 mediante wrappers server + client islands.
+- Fase 6 completada parcialmente: se redujeron páginas App Router con `'use client'` de 41 a 35 mediante wrappers server + client islands.
+- Fase 7 completada: el inventario usa `entradas_inventario` como fuente única
+  de lotes; las operaciones trabajan con `id_entrada`, aplican FEFO y las
+  reversiones restauran la entrada exacta. El catálogo `productos_donados` ya
+  no representa saldo.
+- Fase 8 completada: se retiraron consumidores de tablas y columnas legacy,
+  wrappers de conversión y fallbacks de `PGRST204` para
+  `recibir_notificaciones`. Las migraciones históricas permanecen intactas.
 
 ## 2. Objetivo
 
@@ -110,7 +117,8 @@ Cambios:
 Entregables:
 
 - Configuración de pruebas: implementada con `vitest.config.ts`.
-- Tests mínimos para autorización, validaciones y servicios críticos: implementados.
+- Tests mínimos para autorización, validaciones, donaciones, inventario, bajas y servicios externos: implementados.
+- Medición de cobertura V8: implementada mediante `pnpm test:coverage`.
 
 Criterios de aceptación:
 
@@ -143,6 +151,7 @@ Entregables:
 - Servicios más pequeños por responsabilidad: implementado para solicitudes.
 - Tipos compartidos ordenados: ampliados para resultados de inventario.
 - Código comentado legacy eliminado o documentado fuera del código activo: aplicado en donaciones.
+- Inventario por entradas/lotes con trazabilidad por `id_entrada`: implementado.
 
 Criterios de aceptación:
 
@@ -222,7 +231,7 @@ Criterios de aceptación:
 1. Seguridad de APIs sensibles y páginas privadas.
 2. Base de pruebas automatizadas.
 3. Separación de servicios de solicitudes.
-4. Consistencia transaccional de inventario.
+4. Consistencia transaccional de inventario por entrada.
 5. Limpieza de donaciones y código legacy comentado.
 6. Refactor de perfil/configuración por rol.
 7. Migración selectiva a Server Components.
@@ -231,7 +240,7 @@ Criterios de aceptación:
 
 | Riesgo | Impacto | Mitigación |
 |--------|---------|------------|
-| Cambiar flujos de inventario rompe stock o trazabilidad | Alto | Tests de caracterización y cambios por caso de uso |
+| Cambiar flujos de inventario rompe stock o trazabilidad | Alto | Tests de caracterización, FEFO por entrada y diagnóstico de saldos antes de retirar legacy |
 | Endpoints con service role permiten acciones no autorizadas | Alto | Autorización server-side obligatoria |
 | Refactor grande difícil de revisar | Medio | Commits pequeños por fase |
 | Migrar a Server Components rompe interactividad | Medio | Mantener formularios y modales como Client Components |
@@ -244,6 +253,7 @@ Cada fase debe cerrar con:
 - `pnpm lint`
 - `pnpm build`
 - `pnpm test`
+- `pnpm test:coverage`
 - Revisión manual del flujo afectado
 - Actualización de documentación si cambia arquitectura o comportamiento
 
@@ -264,6 +274,7 @@ Al finalizar la propuesta, el sistema debe conservar su comportamiento funcional
 - Endpoints sensibles protegidos correctamente.
 - Servicios críticos más pequeños y mantenibles.
 - Menor riesgo de estados parciales en inventario.
+- Cada donación conserva su propio lote y cada baja/reversión apunta a `id_entrada`.
 - Base inicial de pruebas automatizadas.
 - Menos duplicación de UI por rol.
 - Documentación alineada con la arquitectura real.
@@ -276,4 +287,5 @@ La refactorización se considera completa cuando:
 - Existe suite mínima de pruebas y se ejecuta en validación local.
 - Los servicios críticos de solicitudes ya no concentran múltiples casos de uso no relacionados.
 - Los flujos de inventario intervenidos tienen una unidad transaccional clara o compensación explícita.
+- `entradas_inventario` es la única fuente de saldo y no existen escrituras activas sobre `inventario`, `productos_donados.cantidad` o `productos_donados.unidad_medida`.
 - `ARCHITECTURE.md`, `COMPONENTS.md`, `WORKFLOW.md`, `DATABASE.md` y documentos de calidad reflejan el estado final.

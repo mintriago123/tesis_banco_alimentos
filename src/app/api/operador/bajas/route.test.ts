@@ -138,4 +138,23 @@ describe('/api/operador/bajas', () => {
       p_observaciones: 'Producto vencido en bodega',
     });
   });
+
+  it('returns 500 when the baja RPC fails', async () => {
+    mocks.adminRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'database unavailable' },
+    });
+
+    const response = await POST(jsonRequest({
+      id_entrada: ENTRADA_ID,
+      cantidad: 2,
+      motivo: 'vencido',
+    }));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Error al procesar la baja del producto',
+      details: 'database unavailable',
+    });
+  });
 });

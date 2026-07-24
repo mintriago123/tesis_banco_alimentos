@@ -108,6 +108,19 @@ describe('/api/proxy/consultar-ruc', () => {
     expect(mocks.auditInsert.mock.calls[0][0].document_hash).not.toBe('1710034065001');
   });
 
+  it('returns 500 when the external RUC service is unavailable', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('upstream unavailable'));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('SERVICIO_CONSULTAS_RUC', 'https://consultas.example.test/ruc');
+
+    const response = await GET(new NextRequest(
+      'http://localhost/api/proxy/consultar-ruc?ruc=1710034065001'
+    ));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: 'Error al consultar RUC' });
+  });
+
   it('rejects non-HTTPS service URLs in production', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

@@ -1,9 +1,5 @@
 # 🗄️ Base de Datos - Banco de Alimentos ULEAM
 
-codex resume 019f76bf-6cd7-73a3-b760-3cacd8bd66db
-
-
-
 ## Índice
 - [Visión General](#visión-general)
 - [Diagrama Entidad-Relación](#diagrama-entidad-relación)

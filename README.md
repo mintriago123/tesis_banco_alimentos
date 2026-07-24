@@ -28,6 +28,13 @@ La documentación técnica completa del proyecto se encuentra organizada en mód
 | **🎨 Componentes Frontend** | Sistema de diseño, componentes UI reutilizables, hooks personalizados, patrones de composición y configuración de Tailwind CSS | [docs/COMPONENTS.md](./docs/COMPONENTS.md) |
 | **🧹 Calidad y Refactor** | Estado posterior al refactor incremental, cambios implementados, riesgos residuales y próximos pasos técnicos | [docs/CODE_QUALITY_REFACTORING.md](./docs/CODE_QUALITY_REFACTORING.md) |
 | **📋 Propuesta de Refactor** | Propuesta formal con estado de ejecución, fases, entregables, criterios de aceptación y plan de validación | [docs/PROPUESTA_REFACTOR_CLEAN_CODE.md](./docs/PROPUESTA_REFACTOR_CLEAN_CODE.md) |
+| **🧪 Pruebas y validación** | Suite automatizada, matriz manual por rol y registro de resultados | [docs/TESTING.md](./docs/TESTING.md) |
+| **🚀 Despliegue en Vercel** | Variables de entorno, configuración de Supabase y validación posterior al despliegue | [docs/DEPLOYMENT_VERCEL.md](./docs/DEPLOYMENT_VERCEL.md) |
+| **📘 Manual de usuario** | Flujos operativos de donantes, solicitantes y operadores | [docs/MANUAL_USUARIO.md](./docs/MANUAL_USUARIO.md) |
+| **🛠️ Manual administrativo** | Gestión de usuarios, catálogo, reportes y cancelaciones | [docs/MANUAL_ADMINISTRATIVO.md](./docs/MANUAL_ADMINISTRATIVO.md) |
+| **💾 Respaldo y restauración** | Procedimiento operativo para respaldar y restaurar Supabase | [docs/BACKUP_RESTORE.md](./docs/BACKUP_RESTORE.md) |
+| **📋 Matriz de requisitos** | Trazabilidad entre requisitos, módulos, pruebas y validación manual | [docs/MATRIZ_REQUISITOS.md](./docs/MATRIZ_REQUISITOS.md) |
+| **📸 Capturas académicas** | Lista de capturas requeridas y reglas para proteger datos de prueba | [docs/CAPTURAS_ENTREGA.md](./docs/CAPTURAS_ENTREGA.md) |
 
 > 💡 **Nota para desarrolladores:** Cada documento incluye diagramas técnicos, código comentado y explicaciones detalladas del funcionamiento interno del sistema.
 
@@ -78,10 +85,11 @@ NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=tu_clave_publica
 SUPABASE_SERVICE_ROLE_KEY=tu_clave_privada_server_only
 DATABASE_URL=postgresql://postgres:tu_password@db.tu-proyecto.supabase.co:5432/postgres
+APP_ORIGIN=https://tu-dominio.example
 
 # Validación de Identidad - Ecuador (Requerido)
-NEXT_PUBLIC_SERVICIO_CONSULTAS_RUC=https://api-ruc.ec
-NEXT_PUBLIC_SERVICIO_CONSULTAS_DINARAP=https://api-cedula.ec
+SERVICIO_CONSULTAS_RUC=https://api-ruc.ec
+SERVICIO_CONSULTAS_DINARAP=https://api-cedula.ec
 
 # Email (Requerido para notificaciones)
 EMAIL_PROVIDER=gmail
@@ -89,7 +97,7 @@ EMAIL_GMAIL_USER=tu-cuenta@gmail.com
 EMAIL_GMAIL_PASS=tu_password_de_aplicacion
 
 # Mapbox (Opcional)
-NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=tu_token_mapbox
+NEXT_PUBLIC_MAPBOX_API_KEY=tu_token_mapbox
 ```
 
 > 📧 **Gmail:** Habilita verificación en dos pasos y genera una [contraseña de aplicación](https://support.google.com/accounts/answer/185833).
@@ -102,6 +110,9 @@ NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=tu_token_mapbox
 - No crees usuarios manualmente desde SQL; los perfiles nacen desde Supabase Auth y el trigger `public.handle_new_user()`
 - Habilita autenticación por email en Supabase Auth
 - `SUPABASE_SERVICE_ROLE_KEY` se usa solo en servidor para endpoints privilegiados como `/api/admin/usuarios` y `/api/notificaciones`
+- `SERVICIO_CONSULTAS_RUC` y `SERVICIO_CONSULTAS_DINARAP` son variables server-only. No deben llevar el prefijo `NEXT_PUBLIC_` porque sus URLs se consumen desde los proxies protegidos de identidad
+- `NEXT_PUBLIC_MAPBOX_API_KEY` sí se entrega al navegador para renderizar mapas; configúrala como variable pública en Vercel
+- `APP_ORIGIN` debe coincidir exactamente con el origen público de producción y se usa para validar CSRF
 - Las APIs operativas validan sesión, perfil activo y rol dentro del handler; el proxy protege páginas privadas, pero no reemplaza la autorización server-side de APIs
 - `DATABASE_URL` debe ser una URL Postgres válida; si copias el connection string del dashboard, reemplaza el password sin dejar corchetes literales
 
@@ -136,7 +147,7 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 - **Vitest + React Testing Library** - Pruebas unitarias y de componentes
 - **PostCSS** - Procesamiento CSS avanzado
 
-> Estado validado: `pnpm lint`, `pnpm build` y `pnpm test` ejecutan correctamente.
+> Estado validado: `pnpm lint`, `pnpm build`, `pnpm test` y `pnpm test:coverage` ejecutan correctamente.
 
 ---
 
@@ -208,9 +219,12 @@ banco-alimentos/
 | `pnpm start` | Ejecutar versión de producción |
 | `pnpm lint` | Verificar código con ESLint |
 | `pnpm test` | Ejecutar pruebas con Vitest |
+| `pnpm test:coverage` | Ejecutar pruebas y generar cobertura V8 en `coverage/` |
 | `pnpm test:watch` | Ejecutar pruebas en modo watch |
 
-La suite actual cubre autorización server-side, la API administrativa de usuarios, casos de uso de solicitudes y componentes compartidos de configuración.
+La suite actual cubre autorización server-side, donaciones, inventario, bajas,
+proxies de servicios externos, casos de uso de solicitudes y componentes
+compartidos de configuración.
 
 ---
 

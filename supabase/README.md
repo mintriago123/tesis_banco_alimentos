@@ -32,6 +32,9 @@ La secuencia actual permite levantar una base nueva desde cero:
 22. `20260724054609_remove_legacy_deposito_principal.sql`
 23. `20260724061740_harden_security_definer_rpcs.sql`
 24. `20260724062623_remove_category_placeholder_functions.sql`
+25. `20260724220103_consolidate_entries_inventory_source.sql`
+26. `20260724222434_reuse_catalog_identity_for_entries.sql`
+27. `20260724222657_index_inventory_entry_foreign_keys.sql`
 
 Para consultar qué migraciones ya recibió el proyecto vinculado:
 
@@ -49,3 +52,11 @@ env SUPABASE_TELEMETRY_DISABLED=1 supabase migration list --linked
   o un flujo server-side con `service_role`.
 - `supabase/migrations/` es la única fuente SQL versionada para nuevas
   instalaciones y actualizaciones de la base de datos.
+
+## Validación antes de producción
+
+Antes de aplicar nuevas migraciones, realiza un respaldo y ejecuta la lista de
+comprobaciones descrita en [`docs/SUPABASE_VALIDATION.md`](../docs/SUPABASE_VALIDATION.md).
+No se debe ejecutar `supabase db push --linked` hasta confirmar que el respaldo
+es recuperable y que la migración aparece en el plan esperado con
+`supabase db push --linked --dry-run`.

@@ -5,10 +5,11 @@
 Este documento resume el estado real del código en la rama `refactoring_clean_code` después del refactor incremental de seguridad, pruebas, servicios críticos y frontend por rol.
 
 - Stack validado localmente: Next.js 16.x, React 19, TypeScript 5, Tailwind CSS 4, Supabase.
-- Comandos verificados: `pnpm lint`, `pnpm build` y `pnpm test` pasan correctamente.
+- Comandos verificados: `pnpm lint`, `pnpm build`, `pnpm test` y `pnpm test:coverage` pasan correctamente.
 - Tamaño aproximado de `src`: 339 archivos y 50k líneas.
 - Páginas App Router: 43 páginas; 35 usan `'use client'`.
-- Pruebas automatizadas: Vitest + React Testing Library, con tests de autorización, API route administrativa, casos de uso de solicitudes y componente compartido de configuración.
+- Pruebas automatizadas: Vitest + React Testing Library, con tests de autorización, donaciones, inventario, bajas, proxies de identidad, casos de uso de solicitudes y componentes compartidos.
+- Cobertura V8 registrada localmente: 56.42% de statements, 48.46% de branches, 59.16% de funciones y 57.97% de líneas sobre el alcance instrumentado.
 
 ## Arquitectura Real
 
@@ -75,6 +76,7 @@ Se agregó Vitest + React Testing Library.
 Scripts:
 
 - `pnpm test`
+- `pnpm test:coverage`
 - `pnpm test:watch`
 
 Cobertura inicial:
