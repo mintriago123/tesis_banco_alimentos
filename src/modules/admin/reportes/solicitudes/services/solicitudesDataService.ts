@@ -108,12 +108,14 @@ export const createSolicitudesDataService = (supabaseClient: SupabaseClient) => 
       }
 
       const { data, error } = await supabaseClient
-        .from('inventario')
+        .from('entradas_inventario')
         .select(`
-          id_inventario,
+          id_entrada,
           id_deposito,
+          unidad_id,
           cantidad_disponible,
-          fecha_actualizacion,
+          fecha_ingreso,
+          fecha_vencimiento,
           productos_donados!inner(
             nombre_producto,
             unidad_id,
@@ -128,8 +130,9 @@ export const createSolicitudesDataService = (supabaseClient: SupabaseClient) => 
           )
         `)
         .ilike('productos_donados.nombre_producto', `%${escapeLikePattern(termino)}%`)
+        .eq('estado', 'disponible')
         .gt('cantidad_disponible', 0)
-        .order('fecha_actualizacion', { ascending: true, nullsFirst: false });
+        .order('fecha_ingreso', { ascending: true, nullsFirst: false });
 
       if (error) {
         logger.error('Error al consultar inventario disponible', error);
@@ -257,7 +260,7 @@ const mapInventarioDisponibleRowToDomainInternal = async (
   const deposito = normalizeRelation(row.depositos);
   const unidad = producto?.unidades ? normalizeRelation(producto.unidades) : null;
   const cantidadOriginal = row.cantidad_disponible ?? 0;
-  const unidadProductoId = producto?.unidad_id ?? undefined;
+  const unidadProductoId = row.unidad_id ?? producto?.unidad_id ?? undefined;
 
   let cantidadDisponible = cantidadOriginal;
   let unidadNombre = unidad?.nombre ?? undefined;
@@ -284,14 +287,14 @@ const mapInventarioDisponibleRowToDomainInternal = async (
   }
 
   return {
-    id: String(row.id_inventario),
+    id: String(row.id_entrada),
     id_deposito: row.id_deposito,
     tipo_alimento: producto?.nombre_producto ?? 'Producto desconocido',
     cantidad_disponible: cantidadDisponible,
     cantidad_disponible_original: cantidadOriginal,
     deposito: deposito?.nombre ?? 'Depósito desconocido',
-    fecha_vencimiento: row.fecha_actualizacion ?? null,
-    unidad_id: unidadProductoId,
+    fecha_vencimiento: row.fecha_vencimiento ?? row.fecha_ingreso ?? null,
+    unidad_id: row.unidad_id ?? unidadProductoId,
     unidad_nombre: unidadNombre,
     unidad_simbolo: unidadSimbolo,
     unidad_nombre_original: unidad?.nombre ?? undefined,

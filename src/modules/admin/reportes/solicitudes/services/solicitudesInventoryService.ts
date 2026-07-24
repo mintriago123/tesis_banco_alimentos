@@ -333,63 +333,10 @@ export const createSolicitudesInventoryService = (
           continue;
         }
 
-        const { data: inventarioItems, error: inventarioError } = await supabaseClient
-          .from('inventario')
-          .select('id_inventario, cantidad_disponible, id_deposito, id_producto')
-          .eq('id_producto', movimiento.producto.id_producto)
-          .order('fecha_actualizacion', { ascending: false });
-
-        if (inventarioError) {
-          logger.error(`Error obteniendo inventario para producto ${movimiento.producto.nombre_producto}`, inventarioError);
-          continue;
-        }
-
-        const inventarioEnDeposito = movimiento.idDeposito
-          ? inventarioItems?.filter(item => item.id_deposito === movimiento.idDeposito)
-          : inventarioItems;
-
-        if (inventarioEnDeposito && inventarioEnDeposito.length > 0) {
-          const item = inventarioEnDeposito[0];
-          const nuevaCantidad = (item.cantidad_disponible ?? 0) + cantidadEntregada.value;
-
-          const { error: updateError } = await supabaseClient
-            .from('inventario')
-            .update({
-              cantidad_disponible: nuevaCantidad,
-              fecha_actualizacion: new Date().toISOString(),
-            })
-            .eq('id_inventario', item.id_inventario);
-
-          if (updateError) {
-            logger.error(`Error restaurando inventario para producto ${movimiento.producto.nombre_producto}`, updateError);
-            continue;
-          }
-
-          productosActualizados++;
-          logger.info(`Restauradas ${movimiento.cantidadEntregada} unidades de ${movimiento.producto.nombre_producto} (nuevo stock: ${nuevaCantidad})`);
-        } else {
-          if (!movimiento.idDeposito || !isUuid(movimiento.idDeposito)) {
-            logger.error(`No se pudo identificar el depósito para restaurar ${movimiento.producto.nombre_producto}`);
-            continue;
-          }
-
-          const { error: insertError } = await supabaseClient
-            .from('inventario')
-            .insert({
-              id_producto: movimiento.producto.id_producto,
-              id_deposito: movimiento.idDeposito,
-              cantidad_disponible: cantidadEntregada.value,
-              fecha_actualizacion: new Date().toISOString(),
-            });
-
-          if (insertError) {
-            logger.error(`Error creando inventario para producto ${movimiento.producto.nombre_producto}`, insertError);
-            continue;
-          }
-
-          productosActualizados++;
-          logger.info(`Creado nuevo registro de inventario con ${movimiento.cantidadEntregada} unidades de ${movimiento.producto.nombre_producto}`);
-        }
+        logger.warn(
+          `No se puede restaurar ${movimiento.producto.nombre_producto} sin id_entrada explícito`,
+          movimiento,
+        );
       }
 
       return {
