@@ -156,21 +156,21 @@ graph LR
    - Marca donación como "Recogida"
    - Coordina logística de recogida
    - Marca como "Entregada" cuando llega al depósito
-   - El sistema actualiza inventario automáticamente
+   - El trigger crea una entrada independiente en `entradas_inventario`
 
 2. **Aprobación de Solicitudes**
    - Ve solicitudes pendientes en `/operador/solicitudes`
    - Revisa detalles de la solicitud
-   - Verifica disponibilidad en inventario
+   - Verifica disponibilidad sumando entradas compatibles
    - Aprueba o rechaza con motivo
-   - Sistema descuenta inventario automáticamente si aprueba
+   - La RPC descuenta entradas con FEFO y devuelve sus `id_entrada`
    - Se genera comprobante con código único
 
 3. **Control de Inventario**
    - Ve stock en tiempo real por depósito
    - Puede ajustar cantidades manualmente
    - Registra bajas de productos (vencidos, dañados)
-   - Todos los movimientos se registran para trazabilidad
+   - Todos los movimientos conservan `id_entrada` para trazabilidad
 
 ---
 
@@ -781,22 +781,21 @@ sequenceDiagram
     API->>S: solicitudService.aprobar(solicitudId, operadorId)
     
     S->>IS: Verificar stock disponible
-    IS->>DB: SELECT inventario WHERE producto = ?
-    DB-->>IS: {cantidad_disponible: 50}
+    IS->>DB: SELECT entradas_inventario disponibles WHERE producto = ?
+    DB-->>IS: Suma de entradas compatibles: 50
     IS-->>S: Stock suficiente
     
-    S->>DB: BEGIN TRANSACTION
+    S->>DB: RPC descontar_stock_por_lote(...)
+    DB->>DB: Bloquear entradas y aplicar FEFO
+    DB-->>S: idEntrada y cantidad descontada por lote
     
     S->>DB: UPDATE solicitudes SET estado = 'aprobada'
-    
-    Note over DB: Trigger automático se ejecuta
-    DB->>DB: Descontar inventario
-    DB->>DB: Registrar movimiento_inventario
+    S->>DB: INSERT movimiento con id_entrada
     
     S->>DB: Generar código comprobante único
     S->>DB: UPDATE solicitudes SET codigo_comprobante = ?
     
-    S->>DB: COMMIT TRANSACTION
+    Note over S: Si falla un paso posterior, restaura cada id_entrada afectado
     
     S->>NAPI: POST {event: food_request_status_changed, entityId}
     NAPI->>NAPI: Validar sesión, perfil activo y rol permitido
@@ -810,14 +809,14 @@ sequenceDiagram
 
 **Aspectos importantes:**
 1. Todo ocurre en una **transacción** para garantizar consistencia
-2. Los **triggers de la BD** se ejecutan automáticamente
-3. El inventario se **descuenta automáticamente**
+2. La RPC de inventario bloquea entradas y aplica FEFO
+3. El stock se **descuenta directamente en entradas_inventario**
 4. Se **genera un comprobante** con código único
 5. Se envía **notificación** al beneficiario
 
 ---
 
-### 📊 Flujo: Actualizar Inventario desde Donación Entregada
+### 📊 Flujo: Actualizar Inventario desde Donación Aprobada
 
 ```mermaid
 sequenceDiagram
@@ -828,28 +827,22 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant T as Database Trigger
     
-    O->>API: PATCH /api/donaciones/456 {estado: 'Entregada'}
-    API->>S: donacionService.marcarComoEntregada(id)
+    O->>API: PATCH /api/donaciones/456 {estado: 'Aprobada'}
+    API->>S: donationActionService.updateDonationEstado(id, 'Aprobada')
     
-    S->>DB: UPDATE donaciones SET estado = 'Entregada'
+    S->>DB: UPDATE donaciones SET estado = 'Aprobada'
     
     Note over T: Trigger "trigger_crear_producto" se ejecuta
     
-    T->>DB: Buscar producto existente con mismo nombre + unidad
+    T->>DB: Buscar o crear identidad en productos_donados
     
     alt Producto existe
-        T->>DB: UPDATE productos_donados SET cantidad += nueva_cantidad
+        T->>DB: Reutilizar producto de catálogo sin modificar saldos
     else Producto no existe
         T->>DB: INSERT INTO productos_donados
     end
     
-    T->>DB: Buscar en inventario (producto + depósito)
-    
-    alt Ya existe en inventario
-        T->>DB: UPDATE inventario SET cantidad_disponible += cantidad
-    else No existe en inventario
-        T->>DB: INSERT INTO inventario
-    end
+    T->>DB: INSERT entradas_inventario con donacion_id
     
     DB-->>S: Donación actualizada
     S-->>API: {success: true}
@@ -858,8 +851,8 @@ sequenceDiagram
 
 **Puntos clave:**
 - El **trigger de PostgreSQL** hace todo el trabajo pesado
-- **Previene duplicados** de productos con normalización de nombres
-- **Actualiza inventario automáticamente**
+- **Previene duplicados** de entradas con `donacion_id`
+- **Crea un lote independiente** aunque el producto de catálogo se repita
 - **Garantiza consistencia** de datos
 
 ---
@@ -935,17 +928,17 @@ sequenceDiagram
     NS->>DB: INSERT INTO notificaciones
     NS->>DB: SELECT usuarios/preferencias para email
     
-    Note over U: Frontend carga por RLS y escucha realtime por usuario, rol y TODOS
-    U->>DB: SELECT notificaciones visibles
-    DB-->>U: Notificaciones visibles
+    Note over U: Frontend usa RPC y escucha realtime por contenido y estado del usuario
+    U->>DB: RPC obtener_notificaciones_usuario(50)
+    DB-->>U: Notificaciones visibles + leida calculada
     
     U->>U: Mostrar badge con contador
     U->>U: Usuario hace clic en notificación
-    U->>DB: UPDATE notificaciones SET leida = true
+    U->>DB: RPC marcar_notificacion_leida(id)
     DB-->>U: Success
 ```
 
-`/api/notificaciones` no acepta `titulo`, `mensaje`, `destinatarioId`, `rolDestinatario`, `email`, `metadatos` ni `urlAccion` desde el cliente. El contrato público es `{ event, entityId }`. El hook de notificaciones carga las filas visibles por RLS y mantiene tres suscripciones realtime: `destinatario_id`, `rol_destinatario` del usuario y `rol_destinatario = TODOS`. El handler deduplica por `id` para evitar duplicados cuando una fila coincide con más de un filtro.
+`/api/notificaciones` no acepta `titulo`, `mensaje`, `destinatarioId`, `rolDestinatario`, `email`, `metadatos` ni `urlAccion` desde el cliente. El contrato público es `{ event, entityId }`. El hook de notificaciones carga mediante `obtener_notificaciones_usuario(50)`, que aplica la visibilidad y combina el estado desde `notificaciones_usuario`. Realtime escucha tres filtros de `notificaciones` (`destinatario_id`, rol y `TODOS`) y un filtro de `notificaciones_usuario` por `usuario_id`; el handler deduplica por `id` y actualiza el contador individual.
 
 ---
 
@@ -964,7 +957,7 @@ sequenceDiagram
    - Coordinan operaciones entre entidades
 
 3. **Database Triggers** automatizan operaciones
-   - Actualizan inventario automáticamente para donaciones
+   - Crean entradas de inventario automáticamente para donaciones
    - Crean notificaciones en tiempo real
    - Garantizan integridad de datos
 

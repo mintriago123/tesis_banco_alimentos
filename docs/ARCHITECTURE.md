@@ -26,6 +26,24 @@ El Banco de Alimentos ULEAM está construido con una **arquitectura modular mono
 - **Middleware de Autenticación**: Control de acceso centralizado
 - **Arquitectura por Capas**: Separación clara entre presentación, lógica de negocio y datos
 
+### Fuente de verdad del inventario
+
+El dominio de inventario trabaja con `entradas_inventario` como agregado de
+lotes. Los lectores obtienen las entradas disponibles y las operaciones reciben
+`id_entrada` cuando deben afectar un lote concreto. El stock visible se calcula
+sumando `cantidad_disponible` por producto, depósito y unidad compatible; el
+descuento usa FEFO y devuelve las entradas afectadas para permitir una
+reversión exacta.
+
+`productos_donados` es únicamente catálogo e identidad del producto. No se
+utilizan saldos agregados ni `unidad_medida`; las unidades se resuelven por
+`unidad_id` contra `unidades`. La tabla legacy `inventario` no forma parte del
+contrato de aplicación.
+
+Las donaciones aprobadas crean una entrada mediante el trigger SQL. Bajas,
+descuentos y restauraciones modifican las entradas directamente; los detalles
+de movimiento conservan `id_entrada` para trazabilidad.
+
 ---
 
 ## Diagrama de Alto Nivel
@@ -134,10 +152,10 @@ No implementa Clean Architecture estricta. Los servicios de `src/modules` depend
    ```
 
 3. **Domain-Driven Design (DDD) Elements**
-   - Agregados: `donaciones`, `solicitudes`, `inventario`
-   - Entidades: `usuarios`, `productos_donados`, `movimientos`
+   - Agregados: `donaciones`, `solicitudes`, `entradas_inventario`
+   - Entidades: `usuarios`, `productos_donados`, `entradas`, `movimientos`
    - Value Objects: Unidades de medida, estados, roles
-   - Servicios de Dominio: Conversión de unidades, cálculo de impacto
+   - Servicios de Dominio: Resolución de unidades, cálculo de impacto y reglas FEFO
 
 ---
 

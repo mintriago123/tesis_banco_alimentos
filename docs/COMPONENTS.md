@@ -854,12 +854,9 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
     
     async function cargarNotificaciones() {
       const rol = await obtenerRolDelUsuario(user.id);
-      const { data, error } = await supabase
-        .from('notificaciones')
-        .select('*')
-        .or(`destinatario_id.eq.${user.id},rol_destinatario.eq.${rol},rol_destinatario.eq.TODOS`)
-        .eq('activa', true)
-        .order('fecha_creacion', { ascending: false });
+      const { data, error } = await supabase.rpc('obtener_notificaciones_usuario', {
+        p_limite: 50,
+      });
       
       if (!error && data) {
         notificationIdsRef.current = new Set(data.map(n => n.id));
@@ -876,24 +873,24 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
   useEffect(() => {
     if (!user || !userRole || userRole.userId !== user.id) return;
 
-    const filters = [
-      `destinatario_id=eq.${user.id}`,
-      `rol_destinatario=eq.${userRole.role}`,
-      'rol_destinatario=eq.TODOS',
+    const subscriptions = [
+      { table: 'notificaciones', filter: `destinatario_id=eq.${user.id}` },
+      { table: 'notificaciones', filter: `rol_destinatario=eq.${userRole.role}` },
+      { table: 'notificaciones', filter: 'rol_destinatario=eq.TODOS' },
+      { table: 'notificaciones_usuario', filter: `usuario_id=eq.${user.id}` },
     ];
 
-    const channels = filters.map((filter, index) =>
-      supabase
-        .channel(`notificaciones_realtime:${user.id}:${index}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'notificaciones', filter },
-          (payload) => actualizarEstadoLocal(payload, notificationIdsRef)
-        )
-        .subscribe()
-    );
+    const channel = supabase.channel(`notificaciones_realtime:${user.id}`);
+    subscriptions.forEach(({ table, filter }) => {
+      channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table, filter },
+        (payload) => actualizarEstadoLocal(payload, notificationIdsRef)
+      );
+    });
+    channel.subscribe();
 
-    return () => channels.forEach(channel => supabase.removeChannel(channel));
+    return () => supabase.removeChannel(channel);
   }, [user, userRole]);
 
   const crearNotificacion = async (payload: NotificationEventPayload) => {
@@ -910,10 +907,9 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
   
   // Marcar como leída
   const marcarComoLeida = async (notificacionId: string) => {
-    const { error } = await supabase
-      .from('notificaciones')
-      .update({ leida: true, fecha_leida: new Date().toISOString() })
-      .eq('id', notificacionId);
+    const { error } = await supabase.rpc('marcar_notificacion_leida', {
+      p_notificacion_id: notificacionId,
+    });
     
     if (!error) {
       setNotificaciones(prev =>
@@ -932,7 +928,7 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
 }
 ```
 
-`crearNotificacion` no acepta `titulo`, `mensaje`, `destinatarioId`, `rolDestinatario`, `email` ni metadata libre. Debe recibir un `NotificationEventPayload` como `{ event: 'catalog_food_request_created', entityId }`. La carga inicial incluye notificaciones por `destinatario_id`, `rol_destinatario` y `TODOS`; realtime usa los mismos criterios mediante filtros separados y deduplica por `id`.
+`crearNotificacion` no acepta `titulo`, `mensaje`, `destinatarioId`, `rolDestinatario`, `email` ni metadata libre. Debe recibir un `NotificationEventPayload` como `{ event: 'catalog_food_request_created', entityId }`. La carga inicial usa `obtener_notificaciones_usuario(50)`, que devuelve `leida` calculada desde `notificaciones_usuario` y excluye las filas ocultas o expiradas. Las acciones usan `marcar_notificacion_leida`, `marcar_todas_notificaciones_leidas` y `ocultar_notificacion`; el cliente no actualiza directamente `notificaciones`. Realtime escucha los tres filtros de contenido y el estado individual filtrado por `usuario_id`, y deduplica por `id`.
 
 ---
 
