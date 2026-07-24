@@ -18,7 +18,6 @@ export interface ProductoInventario {
   nombre_producto: string;
   descripcion: string | null;
   categoria: string | null;
-  unidad_medida: string | null;
   unidad_id: number | null;
   unidad_nombre: string | null;
   unidad_simbolo: string | null;
@@ -27,7 +26,7 @@ export interface ProductoInventario {
 }
 
 export interface InventarioItem {
-  id_inventario: string;
+  id_entrada: string;
   id_deposito: string;
   id_producto: string;
   cantidad_disponible: number;
@@ -47,10 +46,7 @@ export type SupabaseProductoRelation = {
   id_usuario?: string | null;
   nombre_producto?: string | null;
   descripcion?: string | null;
-  unidad_medida?: string | null;
   unidad_id?: number | null;
-  fecha_caducidad?: string | null;
-  fecha_donacion?: string | null;
   alimento_id?: number | null;
   unidades?: {
     id?: number | null;
@@ -65,11 +61,14 @@ export type SupabaseProductoRelation = {
 } | null;
 
 export interface SupabaseInventarioRow {
-  id_inventario: string;
+  id_entrada: string;
   id_deposito: string;
   id_producto: string;
+  unidad_id: number | null;
   cantidad_disponible: number | null;
-  fecha_actualizacion: string | null;
+  fecha_ingreso: string | null;
+  fecha_vencimiento: string | null;
+  updated_at: string | null;
   depositos: SupabaseDepositoRelation | SupabaseDepositoRelation[];
   productos: SupabaseProductoRelation | SupabaseProductoRelation[];
 }

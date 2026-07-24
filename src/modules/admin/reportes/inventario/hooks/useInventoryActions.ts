@@ -29,7 +29,7 @@ export const useInventoryActions = (supabaseClient: SupabaseClient): UseInventor
   );
 
   const updateCantidad = useCallback(async (item: InventarioItem, nuevaCantidad: number) => {
-    setProcessingId(item.id_inventario);
+    setProcessingId(item.id_entrada);
     setLastError(undefined);
 
     try {

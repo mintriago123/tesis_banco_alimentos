@@ -26,27 +26,27 @@ export const createInventoryDataService = (supabaseClient: SupabaseClient) => {
   const fetchInventario = async (): Promise<ServiceResult<InventarioItem[]>> => {
     try {
       const { data, error } = await supabaseClient
-        .from('inventario')
+        .from('entradas_inventario')
         .select(`
-          id_inventario,
+          id_entrada,
           id_deposito,
           id_producto,
+          unidad_id,
           cantidad_disponible,
-          fecha_actualizacion,
-          depositos:depositos!inventario_id_deposito_fkey(
+          fecha_ingreso,
+          fecha_vencimiento,
+          updated_at,
+          depositos!inner(
             id_deposito,
             nombre,
             descripcion
           ),
-          productos:productos_donados!inventario_id_producto_fkey(
+          productos:productos_donados!inner(
             id_producto,
             id_usuario,
             nombre_producto,
             descripcion,
-            unidad_medida,
             unidad_id,
-            fecha_caducidad,
-            fecha_donacion,
             alimento_id,
             unidades:unidades(
               id,
@@ -60,7 +60,9 @@ export const createInventoryDataService = (supabaseClient: SupabaseClient) => {
             )
           )
         `)
-        .order('fecha_actualizacion', { ascending: false });
+        .eq('estado', 'disponible')
+        .gt('cantidad_disponible', 0)
+        .order('updated_at', { ascending: false });
 
       if (error) {
         logger.error('Error consultando inventario', error);
@@ -254,11 +256,11 @@ const mapInventarioRowToDomain = (
     : null;
 
   return {
-    id_inventario: row.id_inventario,
+    id_entrada: row.id_entrada,
     id_deposito: donorDeposit?.id_deposito ?? deposito?.id_deposito ?? row.id_deposito,
     id_producto: row.id_producto,
     cantidad_disponible: row.cantidad_disponible ?? 0,
-    fecha_actualizacion: row.fecha_actualizacion ?? null,
+    fecha_actualizacion: row.updated_at ?? row.fecha_ingreso ?? null,
     deposito: {
       id_deposito: donorDeposit?.id_deposito ?? deposito?.id_deposito ?? row.id_deposito,
       nombre: donorDeposit?.nombre ?? deposito?.nombre ?? 'Sin depósito',
@@ -269,12 +271,11 @@ const mapInventarioRowToDomain = (
       nombre_producto: producto?.nombre_producto ?? 'Sin nombre',
       descripcion: producto?.descripcion ?? null,
       categoria: alimentoNormalizado?.categoria ?? null,
-      unidad_medida: producto?.unidad_medida ?? null,
-      unidad_id: producto?.unidad_id ?? null,
+      unidad_id: row.unidad_id ?? producto?.unidad_id ?? null,
       unidad_nombre: unidadNormalizada?.nombre ?? null,
       unidad_simbolo: unidadNormalizada?.simbolo ?? null,
-      fecha_caducidad: producto?.fecha_caducidad ?? null,
-      fecha_donacion: producto?.fecha_donacion ?? null
+      fecha_caducidad: row.fecha_vencimiento ?? null,
+      fecha_donacion: row.fecha_ingreso ?? null
     }
   };
 };
