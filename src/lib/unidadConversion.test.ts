@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   aplicarConversion,
-  convertirEntreUnidades,
   resolverConversionLocal,
   validarCantidadParaUnidad,
 } from './unidadConversion';
@@ -78,14 +77,14 @@ describe('resolverConversionLocal', () => {
   });
 
   it('mantiene una conversión explícita para la previsualización', () => {
-    expect(convertirEntreUnidades(2, 'kg', 'g', conversiones)).toMatchObject({
+    expect(aplicarConversion(2, resolverConversionLocal(1, 2, conversiones))).toMatchObject({
       success: true,
       cantidad: 2000,
     });
   });
 
   it('no usa IDs implícitos cuando los símbolos no están en el catálogo', () => {
-    expect(convertirEntreUnidades(3, 'caja', 'lata', conversiones)).toEqual({
+    expect(aplicarConversion(3, resolverConversionLocal(12, 13, conversiones))).toEqual({
       success: false,
       reason: 'no_conversion',
     });

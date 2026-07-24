@@ -45,15 +45,8 @@ export async function POST(request: NextRequest) {
     const jsonBody = await readJsonObject(request);
     if (!jsonBody.success) return jsonBody.response;
 
-    const idInventario = parseUuid(jsonBody.value.id_inventario, { name: 'id_inventario' });
-    if (!idInventario.success) return idInventario.response;
-
-    let idEntrada: string | undefined;
-    if (jsonBody.value.id_entrada !== undefined && jsonBody.value.id_entrada !== null) {
-      const parsedIdEntrada = parseUuid(jsonBody.value.id_entrada, { name: 'id_entrada' });
-      if (!parsedIdEntrada.success) return parsedIdEntrada.response;
-      idEntrada = parsedIdEntrada.value;
-    }
+    const idEntrada = parseUuid(jsonBody.value.id_entrada, { name: 'id_entrada' });
+    if (!idEntrada.success) return idEntrada.response;
 
     const cantidad = parsePositiveNumber(jsonBody.value.cantidad, { name: 'cantidad' });
     if (!cantidad.success) return cantidad.response;
@@ -71,12 +64,11 @@ export async function POST(request: NextRequest) {
 
     // Llamar a la función de base de datos desde el servidor tras validar rol.
     const rpcParams = {
-      p_id_inventario: idInventario.value,
+      p_id_entrada: idEntrada.value,
       p_cantidad: cantidad.value,
       p_motivo: motivo.value,
       p_usuario_id: authResult.user.id,
       p_observaciones: observaciones.value,
-      ...(idEntrada ? { p_id_entrada: idEntrada } : {}),
     };
 
     const { data, error } = await adminSupabase

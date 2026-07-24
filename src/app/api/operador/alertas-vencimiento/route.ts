@@ -18,7 +18,7 @@ type PrioridadAlerta = 'vencido' | 'alta' | 'media' | 'baja';
 const PRIORIDADES_ALERTA_FILTRO = ['todos', 'vencido', 'alta', 'media', 'baja'] as const;
 
 type AlertaVencimientoRpcRow = {
-  id_inventario: string;
+  id_entrada: string;
   id_producto: string;
   nombre_producto: string;
   cantidad_disponible: number | string;
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
       },
       estadisticas,
       alertas: alertas.map((alerta) => ({
-        id_inventario: alerta.id_inventario,
+        id_entrada: alerta.id_entrada,
         id_producto: alerta.id_producto,
         nombre_producto: alerta.nombre_producto,
         cantidad_disponible: Number(alerta.cantidad_disponible),

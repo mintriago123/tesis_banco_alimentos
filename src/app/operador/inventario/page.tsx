@@ -61,10 +61,10 @@ export default function OperadorInventarioPage() {
   const [processingId, setProcessingId] = useState<string>();
 
   const handleUpdateCantidad = useCallback(async (item: InventarioItem, nuevaCantidad: number) => {
-    setProcessingId(item.id_inventario);
+    setProcessingId(item.id_entrada);
     
     try {
-      const success = await updateCantidad(item.id_inventario, nuevaCantidad);
+      const success = await updateCantidad(item.id_entrada, nuevaCantidad);
       
       if (success) {
         showSuccess(`Cantidad actualizada: ${item.producto.nombre_producto} - ${nuevaCantidad} unidades`);
@@ -122,7 +122,7 @@ export default function OperadorInventarioPage() {
 
   const handleAlertaVencimientoClick = useCallback((alerta: AlertaVencimiento) => {
     // Buscar el item de inventario correspondiente
-    const item = inventario.find(i => i.id_inventario === alerta.id_inventario);
+    const item = inventario.find(i => i.id_entrada === alerta.id_entrada);
     if (item) {
       handleDarDeBaja(item);
     }
