@@ -448,7 +448,7 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
       data: {
         sufficient,
         available: stockData.total_disponible,
-        availableSymbol: stockSymbol,
+        availableSymbol: stockData.unidad_simbolo ?? '',
         requested: cantidad.value,
         requestedSymbol: simboloUnidadSolicitada,
         requestedInBaseUnit: conversion.cantidad,

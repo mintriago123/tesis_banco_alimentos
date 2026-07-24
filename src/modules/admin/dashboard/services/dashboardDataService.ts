@@ -274,14 +274,6 @@ const toDateOrNull = (value: string | null) => {
   return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
 };
 
-const normalizeRelation = <T>(value: T | T[] | null | undefined): T | null => {
-  if (Array.isArray(value)) {
-    return (value[0] ?? null) as T | null;
-  }
-
-  return (value ?? null) as T | null;
-};
-
 const isResolvedRequest = (solicitud: SolicitudesRow) => (
   ['aprobada', 'rechazada', 'entregada'].includes(solicitud.estado) &&
   Boolean(toDateOrNull(solicitud.fecha_respuesta)) &&

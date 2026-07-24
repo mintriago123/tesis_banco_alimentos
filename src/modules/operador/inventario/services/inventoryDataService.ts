@@ -763,7 +763,7 @@ const mapInventarioRowToDomainWithOperatorInfo = (
 
   // Calcular información específica para operador
   const cantidad = row.cantidad_disponible ?? 0;
-  const fechaCaducidad = producto?.fecha_caducidad;
+  const fechaCaducidad = row.fecha_vencimiento;
   const diasParaVencer = fechaCaducidad ? getDiasParaVencer(fechaCaducidad) : null;
   
   const stockStatus = getStockStatus(cantidad);

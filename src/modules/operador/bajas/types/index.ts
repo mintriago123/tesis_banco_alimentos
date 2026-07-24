@@ -31,7 +31,6 @@ export interface BajaProductoDetalle extends BajaProducto {
   deposito_nombre?: string;
   deposito_descripcion?: string;
   producto_descripcion?: string;
-  unidad_medida?: string;
   fecha_caducidad?: string;
   unidad_nombre?: string;
   unidad_simbolo?: string;

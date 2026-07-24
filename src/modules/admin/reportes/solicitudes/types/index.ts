@@ -177,6 +177,7 @@ export interface SupabaseInventarioDisponibleRow {
   unidad_id: number | null;
   cantidad_disponible: number | null;
   fecha_ingreso: string | null;
+  fecha_vencimiento: string | null;
   productos_donados: { 
     nombre_producto?: string | null;
     unidad_id?: number | null;
