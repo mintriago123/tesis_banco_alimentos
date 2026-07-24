@@ -39,8 +39,6 @@ export interface NotificacionRecord {
   url_accion: string | null;
   metadatos: Record<string, unknown> | null;
   fecha_creacion: string;
-  leida: boolean;
-  activa: boolean;
   expira_en: string | null;
 }
 
@@ -84,8 +82,6 @@ export class NotificationService {
         url_accion: urlAccion,
         metadatos: input.metadatos ?? {},
         expira_en: input.expiraEn ?? null,
-        fecha_creacion: new Date().toISOString(),
-        activa: true,
       })
       .select()
       .single();

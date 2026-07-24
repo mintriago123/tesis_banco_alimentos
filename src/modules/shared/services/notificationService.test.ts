@@ -12,8 +12,7 @@ const createSupabaseMock = () => {
       single: vi.fn(async () => ({
         data: {
           id: 'notification-1',
-          fecha_creacion: record.fecha_creacion,
-          leida: false,
+          fecha_creacion: '2026-07-19T00:00:00.000Z',
           ...record,
         },
         error: null,
@@ -50,6 +49,9 @@ describe('NotificationService', () => {
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({
       url_accion: '/admin/dashboard',
     }));
+    expect(insert.mock.calls[0]?.[0]).not.toHaveProperty('leida');
+    expect(insert.mock.calls[0]?.[0]).not.toHaveProperty('fecha_leida');
+    expect(insert.mock.calls[0]?.[0]).not.toHaveProperty('activa');
   });
 
   it('converts unsafe action URLs to null', async () => {

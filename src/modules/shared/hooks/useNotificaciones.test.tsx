@@ -93,23 +93,6 @@ const createSupabaseMock = ({
       };
     }
 
-    if (table === 'notificaciones') {
-      return {
-        select: vi.fn(() => ({
-          or: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              order: vi.fn(() => ({
-                limit: vi.fn(async () => ({
-                  data: notifications,
-                  error: null,
-                })),
-              })),
-            })),
-          })),
-        })),
-      };
-    }
-
     if (table === 'configuracion_notificaciones') {
       return {
         select: vi.fn(() => ({
@@ -124,14 +107,24 @@ const createSupabaseMock = ({
     throw new Error(`Unexpected table: ${table}`);
   });
 
+  const rpc = vi.fn(async (functionName: string) => {
+    if (functionName === 'obtener_notificaciones_usuario') {
+      return { data: notifications, error: null };
+    }
+
+    return { data: true, error: null };
+  });
+
   const supabase = {
     from,
+    rpc,
     channel,
     removeChannel,
   };
 
   return {
     channels,
+    rpc,
     removeChannel,
     supabase: supabase as unknown as SupabaseClient,
   };
@@ -164,6 +157,7 @@ describe('useNotificaciones', () => {
       'destinatario_id=eq.user-1',
       'rol_destinatario=eq.ADMINISTRADOR',
       'rol_destinatario=eq.TODOS',
+      'usuario_id=eq.user-1',
     ]));
 
     unmount();
@@ -199,6 +193,69 @@ describe('useNotificaciones', () => {
 
     expect(result.current.notificaciones).toHaveLength(1);
     expect(result.current.conteoNoLeidas).toBe(1);
+  });
+
+  it('uses the per-user RPC to mark one notification as read', async () => {
+    const notification = createNotification();
+    const { rpc, supabase } = createSupabaseMock({ notifications: [notification] });
+    const { result } = renderHook(() => useNotificaciones(supabase, user));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.marcarComoLeida(notification.id);
+    });
+
+    expect(rpc).toHaveBeenCalledWith('marcar_notificacion_leida', {
+      p_notificacion_id: notification.id,
+    });
+    expect(result.current.notificaciones[0]?.leida).toBe(true);
+    expect(result.current.conteoNoLeidas).toBe(0);
+  });
+
+  it('uses the per-user RPCs for bulk read and hiding', async () => {
+    const notification = createNotification();
+    const { rpc, supabase } = createSupabaseMock({ notifications: [notification] });
+    const { result } = renderHook(() => useNotificaciones(supabase, user));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.marcarTodasComoLeidas();
+    });
+    expect(rpc).toHaveBeenCalledWith('marcar_todas_notificaciones_leidas');
+
+    await act(async () => {
+      await result.current.eliminarNotificacion(notification.id);
+    });
+    expect(rpc).toHaveBeenCalledWith('ocultar_notificacion', {
+      p_notificacion_id: notification.id,
+    });
+    expect(result.current.notificaciones).toHaveLength(0);
+  });
+
+  it('applies realtime state changes only for the subscribed user', async () => {
+    const notification = createNotification();
+    const { channels, supabase } = createSupabaseMock({ notifications: [notification] });
+    const { result } = renderHook(() => useNotificaciones(supabase, user));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const handleStateChange = findHandlerByFilter(channels, 'usuario_id=eq.user-1');
+
+    act(() => {
+      handleStateChange({
+        eventType: 'UPDATE',
+        new: {
+          notificacion_id: notification.id,
+          usuario_id: 'user-1',
+          leida: true,
+          oculta: false,
+        },
+      });
+    });
+
+    expect(result.current.notificaciones[0]?.leida).toBe(true);
+    expect(result.current.conteoNoLeidas).toBe(0);
   });
 
   it('keeps rendering when Realtime cannot open a WebSocket', async () => {
