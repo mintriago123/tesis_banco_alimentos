@@ -24,16 +24,7 @@ interface DonacionesRow {
 
 interface InventoryRiskRow {
   cantidad_disponible: number | null;
-  productos:
-    | {
-      fecha_caducidad?: string | null;
-      alimentos?: { categoria?: string | null } | { categoria?: string | null }[] | null;
-    }
-    | {
-      fecha_caducidad?: string | null;
-      alimentos?: { categoria?: string | null } | { categoria?: string | null }[] | null;
-    }[]
-    | null;
+  fecha_vencimiento: string | null;
 }
 
 const REQUEST_STATUS_DEFAULTS: Record<SolicitudesRow['estado'], number> = {
@@ -104,16 +95,12 @@ export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
         .gte('creado_en', startOfMonth.toISOString())
         .throwOnError(),
       supabaseClient
-        .from('inventario')
+        .from('entradas_inventario')
         .select(`
           cantidad_disponible,
-          productos:productos_donados!inventario_id_producto_fkey(
-            fecha_caducidad,
-            alimentos:alimentos(
-              categoria
-            )
-          )
+          fecha_vencimiento
         `)
+        .eq('estado', 'disponible')
         .gt('cantidad_disponible', 0)
         .throwOnError()
     ]);
@@ -171,8 +158,7 @@ export const createDashboardDataService = (supabaseClient: SupabaseClient) => {
     const inventoryRisk: InventoryRisk = inventoryRows.reduce(
       (acc, row) => {
         const cantidadDisponible = Number(row.cantidad_disponible ?? 0);
-        const producto = normalizeRelation(row.productos);
-        const fechaCaducidad = toDateOrNull(producto?.fecha_caducidad ?? null);
+        const fechaCaducidad = toDateOrNull(row.fecha_vencimiento);
 
         if (cantidadDisponible > 0 && cantidadDisponible <= LOW_STOCK_THRESHOLD) {
           acc.stockBajo += 1;

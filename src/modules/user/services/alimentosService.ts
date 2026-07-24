@@ -87,8 +87,9 @@ export class AlimentosService {
     try {
       // Primero obtener productos con stock
       const { data: inventarioData, error: inventarioError } = await this.supabase
-        .from('inventario')
+        .from('entradas_inventario')
         .select('id_producto')
+        .eq('estado', 'disponible')
         .gt('cantidad_disponible', 0);
 
       if (inventarioError) {
@@ -164,8 +165,9 @@ export class AlimentosService {
     try {
       // Paso 1: Obtener productos con stock
       const { data: inventarioData, error: inventarioError } = await this.supabase
-        .from('inventario')
+        .from('entradas_inventario')
         .select('id_producto')
+        .eq('estado', 'disponible')
         .gt('cantidad_disponible', 0);
 
       if (inventarioError) {

@@ -13,8 +13,6 @@ import { SYSTEM_MESSAGES } from '../constants';
 import { sendNotification } from '@/modules/shared/services/notificationClient';
 import { generarCodigoComprobante } from '@/lib/comprobante';
 import {
-  escapeLikePattern,
-  isUuid,
   parseEnumValue,
   parseFiniteNumberValue,
   parseOptionalTextValue,
@@ -91,194 +89,53 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
 
   const rollbackDonationFromInventory = async (donation: Donation): Promise<ServiceResult<void>> => {
     try {
-      const donationValidation = validateDonationForMutation(donation);
-      if (!donationValidation.success) {
-        return donationValidation;
-      }
-
-      const donorId = parseUuidValue(donation.user_id, { name: 'donation.user_id' });
-      const unidadId = parsePositiveIntegerValue(donation.unidad_id, {
-        name: 'donation.unidad_id',
+      const donationId = parsePositiveIntegerValue(donation.id, {
+        name: 'donation.id',
         min: 1,
+        max: 2147483647,
       });
-      const cantidad = parseFiniteNumberValue(donation.cantidad, {
-        name: 'donation.cantidad',
-        min: 0,
-      });
+      if (!donationId.success) return { success: false, error: donationId.error };
 
-      if (!donorId.success || !unidadId.success || !cantidad.success || cantidad.value <= 0) {
-        return {
-          success: false,
-          error: !donorId.success
-            ? donorId.error
-            : !unidadId.success
-              ? unidadId.error
-              : cantidad.success
-                ? 'donation.cantidad debe ser mayor a 0.'
-                : cantidad.error,
-        };
-      }
-
-      const productoBusqueda = donation.tipo_producto.trim();
-      if (!productoBusqueda) {
-        return {
-          success: false,
-          error: 'La donación no tiene un producto válido para revertir inventario',
-        };
-      }
-
-      let depositoPreferido: string | null = null;
-      const preferredDeposit = await supabaseClient
-        .from('donante_depositos')
-        .select('id_deposito, es_principal, created_at')
-        .eq('donante_id', donorId.value)
-        .eq('activo', true)
-        .order('es_principal', { ascending: false })
-        .order('created_at', { ascending: true })
-        .limit(1)
+      const { data: entrada, error: entradaError } = await supabaseClient
+        .from('entradas_inventario')
+        .select('id_entrada, estado')
+        .eq('donacion_id', donationId.value)
         .maybeSingle();
 
-      if (!preferredDeposit.error && preferredDeposit.data?.id_deposito) {
-        depositoPreferido = preferredDeposit.data.id_deposito;
-      }
-
-      const { data: productsData, error: productError } = await supabaseClient
-        .from('productos_donados')
-        .select('id_producto, cantidad')
-        .eq('id_usuario', donorId.value)
-        .eq('unidad_id', unidadId.value)
-        .ilike('nombre_producto', escapeLikePattern(productoBusqueda))
-        .order('id_producto', { ascending: false })
-        .limit(20);
-
-      if (productError) {
+      if (entradaError) {
         return {
           success: false,
-          error: 'No fue posible ubicar el producto para revertir inventario',
-          errorDetails: productError
+          error: 'No fue posible ubicar la entrada de la donación para revertirla',
+          errorDetails: entradaError,
         };
       }
 
-      if (!productsData || productsData.length === 0) {
-        logger.warn('No se encontró producto para rollback de donación', { donationId: donation.id });
+      if (!entrada) {
+        logger.warn('No se encontró entrada para rollback de donación', { donationId: donationId.value });
         return { success: true };
       }
 
-      let cantidadPendiente = cantidad.value;
+      if (entrada.estado === 'cancelado') return { success: true };
 
-      for (const productData of productsData) {
-        if (cantidadPendiente <= 0) break;
-        if (!isUuid(productData.id_producto)) {
-          logger.warn('Producto con id inválido durante rollback de donación', {
-            donationId: donation.id,
-            productId: productData.id_producto,
-          });
-          continue;
-        }
+      const { error: updateError } = await supabaseClient
+        .from('entradas_inventario')
+        .update({
+          cantidad_disponible: 0,
+          estado: 'cancelado',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id_entrada', entrada.id_entrada)
+        .eq('donacion_id', donationId.value);
 
-        const { data: invRows, error: invError } = await supabaseClient
-          .from('inventario')
-          .select('id_inventario, id_deposito, cantidad_disponible')
-          .eq('id_producto', productData.id_producto)
-          .gt('cantidad_disponible', 0)
-          .order('fecha_actualizacion', { ascending: false })
-          .limit(50);
-
-        if (invError) {
-          return {
-            success: false,
-            error: 'No fue posible ubicar inventario para rollback',
-            errorDetails: invError
-          };
-        }
-
-        const inventories = [...(invRows ?? [])].sort((a, b) => {
-          if (!depositoPreferido) return 0;
-          const aPreferred = a.id_deposito === depositoPreferido ? 1 : 0;
-          const bPreferred = b.id_deposito === depositoPreferido ? 1 : 0;
-          return bPreferred - aPreferred;
-        });
-
-        const totalInventarioProducto = inventories.reduce(
-          (acc, row) => acc + Number(row.cantidad_disponible ?? 0),
-          0
-        );
-
-        if (totalInventarioProducto <= 0) {
-          continue;
-        }
-
-        const maxProducto = Number(productData.cantidad ?? 0);
-        const cantidadARevertir = Math.min(cantidadPendiente, totalInventarioProducto, maxProducto);
-
-        if (cantidadARevertir <= 0) {
-          continue;
-        }
-
-        const nuevaCantidadProducto = Math.max(maxProducto - cantidadARevertir, 0);
-        const { error: updateProductError } = await supabaseClient
-          .from('productos_donados')
-          .update({ cantidad: nuevaCantidadProducto })
-          .eq('id_producto', productData.id_producto);
-
-        if (updateProductError) {
-          return {
-            success: false,
-            error: 'No fue posible revertir cantidad en productos donados',
-            errorDetails: updateProductError
-          };
-        }
-
-        let pendienteInventario = cantidadARevertir;
-        for (const invRow of inventories) {
-          if (pendienteInventario <= 0) break;
-          if (!isUuid(invRow.id_inventario)) {
-            logger.warn('Inventario con id inválido durante rollback de donación', {
-              donationId: donation.id,
-              idInventario: invRow.id_inventario,
-            });
-            continue;
-          }
-
-          const disponible = Number(invRow.cantidad_disponible ?? 0);
-          const descuento = Math.min(disponible, pendienteInventario);
-          const nuevaCantidadInventario = Math.max(disponible - descuento, 0);
-
-          const { error: updateInvError } = await supabaseClient
-            .from('inventario')
-            .update({
-              cantidad_disponible: nuevaCantidadInventario,
-              fecha_actualizacion: new Date().toISOString()
-            })
-            .eq('id_inventario', invRow.id_inventario);
-
-          if (updateInvError) {
-            return {
-              success: false,
-              error: 'No fue posible revertir cantidad en inventario',
-              errorDetails: updateInvError
-            };
-          }
-
-          pendienteInventario -= descuento;
-        }
-
-        cantidadPendiente -= cantidadARevertir;
+      if (updateError) {
+        return {
+          success: false,
+          error: 'No fue posible cancelar la entrada de inventario de la donación',
+          errorDetails: updateError,
+        };
       }
 
-      if (cantidadPendiente > 0) {
-        logger.warn('Rollback parcial de inventario: no se encontró suficiente stock para revertir todo', {
-          donationId: donation.id,
-          cantidadOriginal: donation.cantidad,
-          cantidadNoRevertida: cantidadPendiente
-        });
-      }
-
-      logger.info('Rollback de inventario aplicado para donación', {
-        donationId: donation.id,
-        cantidadOriginal: donation.cantidad,
-        cantidadRevertida: cantidad.value - cantidadPendiente
-      });
+      logger.info('Rollback de inventario aplicado por donacion_id', { donationId: donationId.value });
 
       return { success: true };
     } catch (error) {
