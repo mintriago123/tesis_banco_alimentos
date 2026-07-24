@@ -2,6 +2,29 @@
 
 Esta carpeta contiene todos los componentes reutilizables relacionados con el sistema de notificaciones de la aplicación.
 
+## Persistencia y estado
+
+`public.notificaciones` almacena únicamente el contenido global de cada
+notificación. No contiene estado de lectura, ocultamiento ni activación por
+usuario.
+
+El estado individual se guarda en `public.notificaciones_usuario`, asociado por
+`notificacion_id` y `usuario_id`. El hook `useNotificaciones` usa exclusivamente
+estas RPCs para interactuar con la base de datos:
+
+- `obtener_notificaciones_usuario(p_limite)` carga las notificaciones visibles y
+  devuelve `leida` calculada para el usuario autenticado.
+- `marcar_notificacion_leida(p_notificacion_id)` marca una notificación como
+  leída para el usuario actual.
+- `marcar_todas_notificaciones_leidas()` marca como leídas solo las del usuario
+  actual.
+- `ocultar_notificacion(p_notificacion_id)` oculta una notificación solo para el
+  usuario actual; no elimina el registro global.
+
+Las notificaciones nuevas llegan por Realtime desde `notificaciones`. Los
+cambios de lectura u ocultamiento llegan desde `notificaciones_usuario`, siempre
+filtrados por `usuario_id`.
+
 ## 📁 Estructura
 
 ```
@@ -13,7 +36,7 @@ notificaciones/
 ├── EmptyStateNotificaciones.tsx    # Estado vacío cuando no hay notificaciones
 ├── ConfiguracionCategoriaItem.tsx  # Item de configuración por categoría
 ├── Switch.tsx                      # Componente Switch reutilizable
-├── AccionesRapidas.tsx            # Acciones rápidas (activar/desactivar todas)
+├── AccionesRapidas.tsx            # Acciones rápidas de preferencias por categoría
 ├── InformacionNotificaciones.tsx  # Panel informativo sobre notificaciones
 ├── index.ts                       # Exportaciones
 └── README.md                      # Esta documentación
@@ -41,7 +64,7 @@ Renderiza una tarjeta individual de notificación con todos sus detalles y accio
   onSeleccionar?: (id: string) => void;
   onClick: (notificacion) => void;
   onMarcarLeida: (id: string) => void;
-  onEliminar: (id: string) => void;
+    onEliminar: (id: string) => void; // Oculta la notificación para el usuario actual
 }
 ```
 
@@ -191,7 +214,9 @@ Componente switch/toggle reutilizable.
 ```
 
 ### AccionesRapidas
-Panel de acciones rápidas para activar/desactivar todas las notificaciones.
+Panel de acciones rápidas para activar o desactivar las preferencias de email,
+push y sonido de todas las categorías. No cambia la visibilidad ni elimina
+notificaciones existentes.
 
 **Props:**
 ```typescript

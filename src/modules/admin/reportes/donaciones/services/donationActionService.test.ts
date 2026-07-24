@@ -35,13 +35,23 @@ const createQuery = (data: unknown, error: { message: string; code?: string } | 
   update: vi.fn().mockReturnThis(),
   delete: vi.fn().mockReturnThis(),
   eq: vi.fn().mockReturnThis(),
+  order: vi.fn().mockReturnThis(),
+  limit: vi.fn().mockReturnThis(),
   select: vi.fn().mockReturnThis(),
   maybeSingle: vi.fn().mockResolvedValue({ data, error }),
 });
 
-const createSupabase = (updateData: unknown, updateError: { message: string; code?: string } | null = null) => {
+const createSupabase = (
+  updateData: unknown,
+  updateError: { message: string; code?: string } | null = null,
+  includeDonorMapping = false,
+) => {
+  const mappingQuery = createQuery({ id_deposito: '33333333-3333-4333-8333-333333333333' });
   const stateQuery = createQuery({ estado: 'Pendiente' });
   const updateQuery = createQuery(updateData, updateError);
+  const queries = includeDonorMapping
+    ? [mappingQuery, stateQuery, updateQuery]
+    : [stateQuery, updateQuery];
   const supabase = {
     auth: {
       getUser: vi.fn().mockResolvedValue({
@@ -49,10 +59,9 @@ const createSupabase = (updateData: unknown, updateError: { message: string; cod
         error: null,
       }),
     },
-    from: vi.fn()
-      .mockReturnValueOnce(stateQuery)
-      .mockReturnValueOnce(updateQuery),
+    from: vi.fn(),
   } as unknown as SupabaseClient;
+  (supabase.from as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => queries.shift());
 
   return { supabase, stateQuery, updateQuery };
 };
@@ -126,5 +135,25 @@ describe('createDonationActionService cancellation', () => {
       success: false,
       error: 'La donación ya no está pendiente o fue cancelada por otro usuario',
     });
+  });
+
+  it('propaga un constraint inválido sin intentar guardar Entregada como fallback', async () => {
+    const constraintError = {
+      message: 'new row violates check constraint "donaciones_estado_check"',
+      code: '23514',
+    };
+    const { supabase, updateQuery } = createSupabase(null, constraintError, true);
+    const service = createDonationActionService(supabase);
+
+    const result = await service.updateDonationEstado({ ...donation, id: 12 }, 'Aprobada');
+
+    expect(result).toEqual({
+      success: false,
+      error: 'No fue posible actualizar el estado de la donación',
+      errorDetails: constraintError,
+    });
+    expect(supabase.from).toHaveBeenCalledTimes(3);
+    expect(updateQuery.update).toHaveBeenCalledTimes(1);
+    expect(updateQuery.update).toHaveBeenCalledWith(expect.objectContaining({ estado: 'Aprobada' }));
   });
 });

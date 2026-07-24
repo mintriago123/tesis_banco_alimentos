@@ -303,7 +303,6 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
           message: parsedDonationId.error,
           code: 'VALIDATION_ERROR',
         },
-        usedLegacyEstado: false,
       };
     }
 
@@ -322,7 +321,7 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
       .maybeSingle();
 
     if (!primary.error && primary.data) {
-      return { error: null as null | typeof primary.error, usedLegacyEstado: false };
+      return { error: null as null | typeof primary.error };
     }
 
     if (!primary.error) {
@@ -333,36 +332,10 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
             : 'No se encontró la donación para actualizar',
           code: 'NO_MATCHING_DONATION',
         },
-        usedLegacyEstado: false,
       };
     }
 
-    const isConstraintError = primary.error.code === '23514';
-
-    if (isConstraintError && estadoValue === 'Aprobada') {
-      const fallbackData = {
-        ...updateData,
-        estado: 'Entregada'
-      };
-
-      const legacy = await supabaseClient
-        .from('donaciones')
-        .update(fallbackData)
-        .eq('id', parsedDonationId.value)
-        .select('id')
-        .maybeSingle();
-
-      if (!legacy.error && legacy.data) {
-        logger.warn('BD con constraint legacy detectada. Se guardó estado Entregada como equivalente de Aprobada.', {
-          donationId
-        });
-        return { error: null as null | typeof legacy.error, usedLegacyEstado: true };
-      }
-
-      return { error: legacy.error, usedLegacyEstado: false };
-    }
-
-    return { error: primary.error, usedLegacyEstado: false };
+    return { error: primary.error };
   };
 
   const ensureDonorDepositMapping = async (donorId: string): Promise<ServiceResult<{ depositoId: string }>> => {
@@ -526,7 +499,7 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
       const wasApprovedLike = isApprovedLikeState(previousEstado);
       const willBeApprovedLike = isApprovedLikeState(nuevoEstado);
 
-      const { error, usedLegacyEstado } = await updateDonationEstadoInDatabase(donation.id, updateData);
+      const { error } = await updateDonationEstadoInDatabase(donation.id, updateData);
 
       if (error) {
         logger.error('Error actualizando estado de donación', error);
@@ -582,9 +555,7 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
       return {
         success: true,
         data: {
-          message: usedLegacyEstado
-            ? `${SYSTEM_MESSAGES.stateUpdateSuccess(nuevoEstado)} (compatibilidad temporal con BD legacy activa)`
-            : SYSTEM_MESSAGES.stateUpdateSuccess(nuevoEstado),
+          message: SYSTEM_MESSAGES.stateUpdateSuccess(nuevoEstado),
           warning: false
         }
       };
