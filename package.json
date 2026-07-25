@@ -10,6 +10,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:coverage:critical": "vitest run --config vitest.critical.config.ts --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:watch": "vitest"
   },
   "dependencies": {

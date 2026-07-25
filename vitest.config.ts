@@ -17,6 +17,13 @@ export default defineConfig({
         '**/*.d.ts',
         '**/index.ts',
       ],
+      thresholds: {
+        // Initial global gate. The critical suite has a stricter, independent gate.
+        statements: 60,
+        branches: 50,
+        functions: 60,
+        lines: 60,
+      },
     },
   },
   resolve: {
