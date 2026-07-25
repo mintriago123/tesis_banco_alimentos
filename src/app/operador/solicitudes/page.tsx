@@ -329,6 +329,11 @@ export default function OperadorSolicitudesPage() {
   const handleDonacion = useCallback(async (cantidad: number, porcentaje: number, comentario: string) => {
     if (!solicitudSeleccionada) return;
 
+    if (!Number.isFinite(cantidad) || cantidad <= 0 || cantidad > solicitudSeleccionada.cantidad) {
+      showError('La cantidad a donar debe ser mayor a 0 y no superar la cantidad solicitada.');
+      return;
+    }
+
     // Obtener el ID del usuario actual
     const { data: { user } } = await supabase.auth.getUser();
     const operadorId = user?.id;

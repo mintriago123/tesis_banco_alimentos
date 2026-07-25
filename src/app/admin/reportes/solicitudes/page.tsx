@@ -273,7 +273,7 @@ export default function SolicitudesPage() {
       return;
     }
 
-    if (cantidadAprobar <= 0 || cantidadAprobar > maxAprobable) {
+    if (!Number.isFinite(cantidadAprobar) || cantidadAprobar <= 0 || cantidadAprobar > maxAprobable) {
       showError(`La cantidad debe estar entre 0.01 y ${maxAprobable.toFixed(2).replace(/\.?0+$/, '')}.`);
       return;
     }
