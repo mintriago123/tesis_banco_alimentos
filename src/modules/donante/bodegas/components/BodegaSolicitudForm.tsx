@@ -92,7 +92,7 @@ export default function BodegaSolicitudForm({
           <p className="mt-1 text-sm text-slate-600">
             {isModification
               ? 'Los cambios se aplicarán únicamente después de una nueva revisión.'
-              : 'La bodega quedará disponible cuando el equipo operativo la apruebe.'}
+              : 'La bodega quedará disponible cuando el equipo operativo la apruebe. Su nombre se guardará con tu nombre o razón social.'}
           </p>
         </div>
         <button type="button" onClick={onCancel} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Cerrar formulario">
@@ -104,9 +104,10 @@ export default function BodegaSolicitudForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="bodega-nombre" className="mb-1 block text-sm font-medium text-slate-700">Nombre de la bodega</label>
+          <label htmlFor="bodega-nombre" className="mb-1 block text-sm font-medium text-slate-700">Nombre o referencia de la bodega</label>
           <input id="bodega-nombre" name="nombre" value={form.nombre} onChange={handleChange} maxLength={150} required aria-required="true" aria-invalid={Boolean(errors.nombre)} aria-describedby={errors.nombre ? 'bodega-nombre-error' : undefined} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200" />
           {errors.nombre && <p id="bodega-nombre-error" role="alert" className="mt-1 text-xs text-rose-600">{errors.nombre}</p>}
+          {!isModification && <p className="mt-1 text-xs text-slate-500">Se guardará como: nombre de usuario o empresa - referencia ingresada.</p>}
         </div>
         <div>
           <label htmlFor="bodega-telefono" className="mb-1 block text-sm font-medium text-slate-700">Teléfono de contacto</label>

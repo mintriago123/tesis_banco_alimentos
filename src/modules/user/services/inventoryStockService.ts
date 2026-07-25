@@ -32,11 +32,22 @@ export interface StockInfo {
   cantidad_formateada?: CantidadFormateada;
 }
 
+export interface StockUnitSummary {
+  unidad_id: number;
+  unidad_nombre?: string;
+  unidad_simbolo?: string;
+  cantidad_disponible: number;
+  cantidad_formateada: CantidadFormateada;
+  /** Se conserva para cálculos internos, pero no se muestra al solicitante. */
+  depositos: StockInfo[];
+}
+
 export interface StockSummary {
   /** Es cero cuando no existe una unidad común calculable. */
   total_disponible: number;
   total_calculable: boolean;
   depositos: StockInfo[];
+  unidades_disponibles: StockUnitSummary[];
   producto_encontrado: boolean;
   estado_stock: StockStatus;
   unidad_id?: number;
@@ -99,6 +110,7 @@ const emptySummary = (): StockSummary => ({
   total_disponible: 0,
   total_calculable: false,
   depositos: [],
+  unidades_disponibles: [],
   producto_encontrado: false,
   estado_stock: 'sin_stock',
 });
@@ -115,6 +127,41 @@ const crearCantidadFormateada = (
   simbolo_original: simbolo,
   fue_convertido: false,
 });
+
+export const agruparStockPorUnidad = (saldos: StockInfo[]): StockUnitSummary[] => {
+  const saldosPorUnidad = new Map<number, StockUnitSummary>();
+
+  for (const saldo of saldos) {
+    if (!saldo.unidad_id) continue;
+
+    const existente = saldosPorUnidad.get(saldo.unidad_id);
+    if (existente) {
+      existente.cantidad_disponible += saldo.cantidad_disponible;
+      existente.depositos.push(saldo);
+      existente.cantidad_formateada = crearCantidadFormateada(
+        existente.cantidad_disponible,
+        existente.unidad_simbolo ?? '',
+        existente.unidad_nombre ?? '',
+      );
+      continue;
+    }
+
+    saldosPorUnidad.set(saldo.unidad_id, {
+      unidad_id: saldo.unidad_id,
+      unidad_nombre: saldo.unidad_nombre,
+      unidad_simbolo: saldo.unidad_simbolo,
+      cantidad_disponible: saldo.cantidad_disponible,
+      cantidad_formateada: crearCantidadFormateada(
+        saldo.cantidad_disponible,
+        saldo.unidad_simbolo ?? '',
+        saldo.unidad_nombre ?? '',
+      ),
+      depositos: [saldo],
+    });
+  }
+
+  return [...saldosPorUnidad.values()];
+};
 
 const obtenerUnidadIdPorSimbolo = (
   simbolo: string,
@@ -300,12 +347,14 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
       }
 
       const unidadObjetivo = depositos[0];
+      const unidadesDisponibles = agruparStockPorUnidad(depositos);
       const total = calcularTotalPorUnidades(depositos, conversiones);
 
       const summary: StockSummary = {
         total_disponible: total.calculable ? total.cantidad : 0,
         total_calculable: total.calculable,
         depositos,
+        unidades_disponibles: unidadesDisponibles,
         producto_encontrado: true,
         estado_stock: total.calculable ? 'disponible' : 'unidades_no_convertibles',
         unidad_id: unidadObjetivo.unidad_id,

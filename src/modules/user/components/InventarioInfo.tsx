@@ -8,16 +8,6 @@ import { LoadingSpinner } from '@/app/components';
 import { type StockSummary } from '../services/inventoryStockService';
 import { type LoadingState } from '../types';
 
-/**
- * Formatea una cantidad numérica con máximo 2 decimales.
- */
-const formatQuantity = (cantidad: number): string => {
-  if (Number.isInteger(cantidad)) {
-    return cantidad.toString();
-  }
-  return cantidad.toFixed(2).replace(/\.?0+$/, '');
-};
-
 interface InventarioInfoProps {
   stockInfo: StockSummary | null;
   loadingState: LoadingState;
@@ -69,12 +59,12 @@ export function InventarioInfo({
             <>
               <div
                 className={`flex items-center text-sm font-semibold ${
-                  stockInfo.total_disponible > 0
+                  stockInfo.unidades_disponibles.length > 0
                     ? 'text-emerald-700'
                     : 'text-rose-700'
                 }`}
               >
-                {stockInfo.total_disponible > 0 ? (
+                {stockInfo.unidades_disponibles.length > 0 ? (
                   <CheckCircle className="mr-2 h-4 w-4" aria-hidden="true" />
                 ) : (
                   <AlertTriangle className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -82,17 +72,29 @@ export function InventarioInfo({
                 {getStockMessage(cantidad || undefined, simboloUnidad)}
               </div>
 
-              {cantidad > 0 && stockInfo.total_disponible > 0 && (
+              {stockInfo.unidades_disponibles.length > 0 && (
+                <div className="rounded-lg border border-slate-200 bg-white p-3" aria-label="Stock disponible por unidad">
+                  <p className="mb-2 text-xs font-semibold text-slate-600">Disponible por unidad</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {stockInfo.unidades_disponibles.map((unidad) => (
+                      <div key={unidad.unidad_id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                        <span className="block text-xs text-slate-500">{unidad.unidad_nombre || unidad.unidad_simbolo || 'Unidad'}</span>
+                        <span className="text-sm font-semibold text-slate-800">
+                          {unidad.cantidad_formateada.cantidad} {unidad.unidad_simbolo || unidad.unidad_nombre || 'unidades'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {cantidad > 0 && stockInfo.unidades_disponibles.length > 0 && (
                 <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
                   <p className="text-xs text-blue-800">
                     💡{' '}
                     {isStockSufficient(cantidad, simboloUnidad)
                       ? 'Hay suficiente stock para tu solicitud'
-                      : `Cantidad disponible insuficiente. Considera reducir a máximo ${
-                          stockInfo.total_formateado && stockInfo.total_formateado.fue_convertido
-                            ? `${stockInfo.total_formateado.cantidad} ${stockInfo.total_formateado.simbolo}`
-                            : `${formatQuantity(stockInfo.total_disponible)} ${stockInfo.unidad_simbolo || stockInfo.unidad_nombre || 'unidades'}`
-                        }`}
+                      : getStockMessage(cantidad, simboloUnidad)}
                   </p>
                 </div>
               )}

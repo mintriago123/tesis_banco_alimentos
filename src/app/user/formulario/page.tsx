@@ -165,25 +165,26 @@ export default function FormularioSolicitante() {
           simbolo: u.simbolo,
         }));
 
-    // Si el catálogo del alimento no tiene asociada la unidad del stock,
-    // agregarla como respaldo para que el usuario pueda solicitarla.
-    if (
-      stockInfo?.producto_encontrado &&
-      stockInfo.unidad_id &&
-      !unidadesDisponibles.some((unidad) => unidad.id === stockInfo.unidad_id)
-    ) {
-      const unidadDeCatalogo = unidades.find((unidad) => unidad.id === stockInfo.unidad_id);
-      return [
-        ...unidadesDisponibles,
-        unidadDeCatalogo ?? {
-          id: stockInfo.unidad_id,
-          nombre: stockInfo.unidad_nombre ?? 'Unidad disponible',
-          simbolo: stockInfo.unidad_simbolo ?? '',
-        },
-      ];
-    }
+    // Agregar todas las unidades con stock, incluso cuando no existe una
+    // equivalencia entre ellas. Así el solicitante puede elegir caja, lata,
+    // kg, etc. sin que el selector dependa de una unidad principal.
+    const unidadesStock = stockInfo?.producto_encontrado
+      ? stockInfo.unidades_disponibles.map((stockUnit) => {
+          const unidadDeCatalogo = unidades.find((unidad) => unidad.id === stockUnit.unidad_id);
+          return unidadDeCatalogo ?? {
+            id: stockUnit.unidad_id,
+            nombre: stockUnit.unidad_nombre ?? 'Unidad disponible',
+            simbolo: stockUnit.unidad_simbolo ?? '',
+          };
+        })
+      : [];
 
-    return unidadesDisponibles;
+    return [
+      ...unidadesDisponibles,
+      ...unidadesStock.filter((unidadStock) =>
+        !unidadesDisponibles.some((unidad) => unidad.id === unidadStock.id),
+      ),
+    ];
   };
 
   const unidadSeleccionadaActual = getUnidadesDisponibles().find(
