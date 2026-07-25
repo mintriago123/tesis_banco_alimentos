@@ -90,6 +90,16 @@ const SolicitudDetailModal = ({
   const stockDepositoSeleccionado = depositoActual?.cantidad_disponible ?? 0;
   const maxAprobable = Math.max(0, Math.min(solicitud.cantidad, stockDepositoSeleccionado));
 
+  const handleCantidadAprobarChange = (value: string) => {
+    if (value.trim() === '') {
+      onCantidadAprobarChange(0);
+      return;
+    }
+
+    const cantidad = Number(value);
+    onCantidadAprobarChange(Number.isFinite(cantidad) ? Math.max(0, cantidad) : 0);
+  };
+
   // Cargar datos del operador/admin que rechazó
   useEffect(() => {
     if (solicitud.estado === 'rechazada' && solicitud.operador_rechazo_id) {
@@ -399,11 +409,11 @@ const SolicitudDetailModal = ({
                         </label>
                         <input
                           type="number"
-                          min={0.01}
-                          max={Math.max(0.01, maxAprobable)}
+                          min={0}
+                          max={maxAprobable}
                           step={0.01}
                           value={cantidadAprobar}
-                          onChange={(event) => onCantidadAprobarChange(parseFloat(event.target.value) || 0)}
+                          onChange={(event) => handleCantidadAprobarChange(event.target.value)}
                           className="w-full p-2 border border-gray-300 rounded-lg"
                           disabled={isProcessing || !depositoSeleccionado}
                         />

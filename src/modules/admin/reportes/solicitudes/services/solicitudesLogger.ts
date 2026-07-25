@@ -13,5 +13,17 @@ export const solicitudesLogger: SolicitudesLogger = {
     }
   },
   warn: (message: string, details?: unknown) => console.warn(`[SolicitudesActionService] ${message}`, details),
-  error: (message: string, error?: unknown) => console.error(`[SolicitudesActionService] ${message}`, error),
+  error: (message: string, error?: unknown) => {
+    const details = error instanceof Error
+      ? { name: error.name, message: error.message, stack: error.stack }
+      : error && typeof error === 'object'
+        ? {
+            code: Reflect.get(error, 'code'),
+            message: Reflect.get(error, 'message'),
+            details: Reflect.get(error, 'details'),
+            hint: Reflect.get(error, 'hint'),
+          }
+        : error;
+    console.error(`[SolicitudesActionService] ${message}`, details);
+  },
 };

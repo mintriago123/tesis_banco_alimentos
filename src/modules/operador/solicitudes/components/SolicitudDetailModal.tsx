@@ -121,7 +121,13 @@ const SolicitudDetailModal = ({
   }, [maxDisponibleDeposito, inventarioLoading]);
 
   const handleDonacionSubmit = () => {
-    if (onDonar && cantidadDonar > 0 && cantidadDonar <= solicitud.cantidad) {
+    if (
+      onDonar &&
+      Number.isFinite(cantidadDonar) &&
+      cantidadDonar > 0 &&
+      cantidadDonar <= solicitud.cantidad &&
+      cantidadDonar <= maxDisponibleDeposito
+    ) {
       // Calcular porcentaje automáticamente para el backend
       const porcentaje = Math.round((cantidadDonar / solicitud.cantidad) * 100);
       onDonar(cantidadDonar, porcentaje, comentarioDonacion);
@@ -129,9 +135,13 @@ const SolicitudDetailModal = ({
   };
 
   const handleCantidadChange = (value: string) => {
-    const cantidad = parseFloat(value) || 0;
+    const cantidad = Number(value);
     const maxDisponible = maxDisponibleDeposito;
-    setCantidadDonar(Math.min(Math.max(0, cantidad), maxDisponible));
+    setCantidadDonar(
+      value.trim() === '' || !Number.isFinite(cantidad)
+        ? 0
+        : Math.min(Math.max(0, cantidad), maxDisponible),
+    );
   };
 
   return (
@@ -639,9 +649,10 @@ const SolicitudDetailModal = ({
                     </label>
                     <div className="flex items-center space-x-2">
                       <input
+                        id="cantidad-donar"
                         type="number"
-                        min="0.01"
-                        max={Math.max(0.01, maxDisponibleDeposito)}
+                        min="0"
+                        max={maxDisponibleDeposito}
                         step="0.01"
                         value={cantidadDonar}
                         onChange={(e) => handleCantidadChange(e.target.value)}
@@ -682,7 +693,7 @@ const SolicitudDetailModal = ({
                       type="button"
                       onClick={() => {
                         setModoDonacion(false);
-                        setCantidadDonar(solicitud.cantidad);
+                        setCantidadDonar(Math.min(Math.max(0, solicitud.cantidad), maxDisponibleDeposito));
                         setComentarioDonacion('');
                       }}
                       disabled={isProcessing}
