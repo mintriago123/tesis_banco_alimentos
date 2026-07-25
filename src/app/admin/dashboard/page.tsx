@@ -1,82 +1,88 @@
 'use client';
 
-import { useMemo } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import { RefreshCw } from 'lucide-react';
+import { Alert } from '@/app/components/ui/Alert';
+import { Button } from '@/app/components/ui/Button';
 
-import { useDashboardData, RequestStatus } from '@/modules/shared/dashboard';
-import DashboardHeader from '@/modules/admin/dashboard/components/DashboardHeader';
+import { DashboardHero, DashboardQuickActions, RequestStatus, useDashboardData } from '@/modules/shared/dashboard';
+import DashboardActivity from '@/modules/admin/dashboard/components/DashboardActivity';
+import DashboardRiskCards from '@/modules/admin/dashboard/components/DashboardRiskCards';
 import DashboardSummaryCards from '@/modules/admin/dashboard/components/DashboardSummaryCards';
-import RoleDistribution from '@/modules/admin/dashboard/components/RoleDistribution';
-import UserTypeDistribution from '@/modules/admin/dashboard/components/UserTypeDistribution';
+import TopCategories from '@/modules/admin/dashboard/components/TopCategories';
 
 export default function AdminDashboardPage() {
   const { supabase } = useSupabase();
   const { data, loading, error, refresh } = useDashboardData(supabase);
 
-  const hasData = useMemo(() => Boolean(data), [data]);
+  const hasData = data !== null;
 
   return (
     <DashboardLayout
       requiredRole="ADMINISTRADOR"
       title="Panel administrativo"
-      description="Resumen ejecutivo del Banco de Alimentos"
+      description="Métricas operativas del Banco de Alimentos"
     >
-      <div className="p-6 space-y-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <DashboardHeader description="Indicadores clave del ecosistema de usuarios y solicitudes." />
+      <div className="space-y-8">
+        <DashboardHero
+          role="admin"
+          eyebrow="Centro de control"
+          title="Administra el impacto del banco"
+          description="Supervisa solicitudes, donaciones e inventario desde una vista clara para priorizar la operación del equipo."
+          metricLabel="Solicitudes pendientes"
+          metricValue={data?.counts.pendientes ?? '—'}
+          primaryAction={{ href: '/admin/reportes/solicitudes', label: 'Revisar solicitudes' }}
+          secondaryAction={{ href: '/admin/reportes/inventario', label: 'Ver inventario' }}
+        />
 
-          <button
+        <div className="flex justify-end">
+          <Button
             type="button"
             onClick={refresh}
             disabled={loading}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-              loading
-                ? 'cursor-not-allowed bg-slate-200 text-slate-400'
-                : 'bg-slate-900 text-white shadow-sm hover:bg-slate-700 focus:ring-slate-500'
-            }`}
+            loading={loading}
+            accent="admin"
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw aria-hidden="true" className="h-4 w-4" />
             Actualizar datos
-          </button>
+          </Button>
         </div>
 
         {error && (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-600">
-            {error}
-          </div>
+          <Alert tipo="error" mensaje={error} />
         )}
 
         {loading && !hasData && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {[1, 2, 3, 4].map((id) => (
+          <div className="space-y-8" aria-label="Cargando dashboard" aria-busy="true">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((id) => (
                 <div
                   key={`skeleton-${id}`}
-                  className="h-28 animate-pulse rounded-2xl border border-slate-200 bg-white/60"
+                  className="h-32 animate-pulse rounded-2xl border border-slate-200 bg-white/70"
                 />
               ))}
             </div>
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="h-64 animate-pulse rounded-2xl border border-slate-200 bg-white/60" />
-              <div className="h-64 animate-pulse rounded-2xl border border-slate-200 bg-white/60" />
-            </div>
-            <div className="h-56 animate-pulse rounded-2xl border border-slate-200 bg-white/60" />
+            <div className="h-72 animate-pulse rounded-2xl border border-slate-200 bg-white/70" />
           </div>
         )}
 
         {hasData && data && (
-          <>
+          <div className="space-y-8">
             <DashboardSummaryCards counts={data.counts} />
+            <DashboardRiskCards counts={data.counts} inventoryRisk={data.inventoryRisk} />
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <RoleDistribution items={data.roleDistribution} />
-              <RequestStatus items={data.requestStatus} />
-            </div>
+            <RequestStatus items={data.requestStatus} />
 
-            <UserTypeDistribution items={data.userTypes} />
-          </>
+            <DashboardActivity
+              solicitudes={data.activity.solicitudesUltimos30Dias}
+              donaciones={data.activity.donacionesUltimos30Dias}
+            />
+
+            <TopCategories categories={data.topCategories} />
+
+            <DashboardQuickActions role="admin" />
+          </div>
         )}
       </div>
     </DashboardLayout>

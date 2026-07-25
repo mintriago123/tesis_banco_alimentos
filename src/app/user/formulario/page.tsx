@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useSupabase } from "@/app/components/SupabaseProvider";
 import DashboardLayout from "@/app/components/DashboardLayout";
 import { useInventoryStock } from "@/modules/user/hooks/useInventoryStock";
-import { ShoppingBasket, Send, AlertTriangle } from "lucide-react";
+import { validarCantidadParaUnidad } from "@/lib/unidadConversion";
+import { CheckCircle2, ClipboardCheck, Send, AlertTriangle, ShoppingBasket } from "lucide-react";
+import { Alert } from '@/app/components/ui/Alert';
+import { Button } from '@/app/components/ui/Button';
 import {
   useDatosBasicosUsuario,
   useAlimentos,
@@ -21,12 +23,10 @@ import {
   SolicitudFormData,
   Alimento,
   MESSAGES,
-  FORM_CONFIG,
 } from "@/modules/user";
 
 export default function FormularioSolicitante() {
   const { supabase, user } = useSupabase();
-  const router = useRouter();
 
   // Hooks de datos
   const { userData } = useDatosBasicosUsuario(supabase, user?.id);
@@ -52,6 +52,7 @@ export default function FormularioSolicitante() {
     checkStock,
     clearStock,
     isStockSufficient,
+    getUnitCompatibilityMessage,
     getStockMessage,
   } = useInventoryStock(supabase);
 
@@ -156,19 +157,48 @@ export default function FormularioSolicitante() {
 
     // Obtener unidades específicas del alimento seleccionado
     const unidadesAlimento = obtenerUnidadesAlimento(alimentoId);
-    
-    // Si el alimento no tiene unidades configuradas, mostrar todas
-    if (unidadesAlimento.length === 0) {
-      return unidades;
-    }
+    const unidadesDisponibles = unidadesAlimento.length === 0
+      ? unidades
+      : unidadesAlimento.map(u => ({
+          id: u.unidad_id,
+          nombre: u.nombre,
+          simbolo: u.simbolo,
+        }));
 
-    // Convertir UnidadAlimento a Unidad
-    return unidadesAlimento.map(u => ({
-      id: u.unidad_id,
-      nombre: u.nombre,
-      simbolo: u.simbolo
-    }));
+    // Agregar todas las unidades con stock, incluso cuando no existe una
+    // equivalencia entre ellas. Así el solicitante puede elegir caja, lata,
+    // kg, etc. sin que el selector dependa de una unidad principal.
+    const unidadesStock = stockInfo?.producto_encontrado
+      ? stockInfo.unidades_disponibles.map((stockUnit) => {
+          const unidadDeCatalogo = unidades.find((unidad) => unidad.id === stockUnit.unidad_id);
+          return unidadDeCatalogo ?? {
+            id: stockUnit.unidad_id,
+            nombre: stockUnit.unidad_nombre ?? 'Unidad disponible',
+            simbolo: stockUnit.unidad_simbolo ?? '',
+          };
+        })
+      : [];
+
+    return [
+      ...unidadesDisponibles,
+      ...unidadesStock.filter((unidadStock) =>
+        !unidadesDisponibles.some((unidad) => unidad.id === unidadStock.id),
+      ),
+    ];
   };
+
+  const unidadSeleccionadaActual = getUnidadesDisponibles().find(
+    (unidad) => unidad.id === parseInt(unidadId),
+  );
+  const simboloUnidadSeleccionada = unidadSeleccionadaActual?.simbolo;
+  const unitCompatibilityMessage = getUnitCompatibilityMessage(simboloUnidadSeleccionada);
+  const cantidadSolicitadaActual = parseFloat(cantidad) || 0;
+  const stockBloqueaEnvio = Boolean(
+    cantidadSolicitadaActual > 0 &&
+      stockInfo?.producto_encontrado &&
+      (!isStockSufficient(cantidadSolicitadaActual, simboloUnidadSeleccionada) ||
+        unitCompatibilityMessage),
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,16 +221,25 @@ export default function FormularioSolicitante() {
     }
 
     // Obtener el símbolo de la unidad seleccionada
-    const unidadSeleccionada = getUnidadesDisponibles().find(u => u.id === parseInt(unidadId));
-    const simboloUnidadSeleccionada = unidadSeleccionada?.simbolo || '';
+    const unidadSeleccionada = unidadSeleccionadaActual;
+    const simboloUnidadParaSolicitud = simboloUnidadSeleccionada || '';
+
+    const cantidadUnidad = validarCantidadParaUnidad(cantidadNum, unidadSeleccionada ?? {});
+    if (!cantidadUnidad.valid) {
+      setMensaje(cantidadUnidad.error);
+      setLoading(false);
+      return;
+    }
 
     // Verificar stock disponible si hay información de inventario
-    if (stockInfo && stockInfo.producto_encontrado && !isStockSufficient(cantidadNum, simboloUnidadSeleccionada)) {
+    if (stockInfo && stockInfo.producto_encontrado && !isStockSufficient(cantidadNum, simboloUnidadParaSolicitud)) {
       // Usar el mensaje del hook que ya maneja las conversiones correctamente
-      const mensajeStock = getStockMessage(cantidadNum, simboloUnidadSeleccionada);
+      const mensajeStock = getStockMessage(cantidadNum, simboloUnidadParaSolicitud);
       
       setMensaje(
-        `${MESSAGES.SOLICITUD.STOCK_INSUFFICIENT} ${mensajeStock}`
+        unitCompatibilityMessage
+          ? mensajeStock
+          : `${MESSAGES.SOLICITUD.STOCK_INSUFFICIENT} ${mensajeStock}`
       );
       setLoading(false);
       return;
@@ -243,184 +282,176 @@ export default function FormularioSolicitante() {
       title="Solicitar Alimentos"
       description="Rellena el formulario para enviar tu solicitud al Banco de Alimentos."
     >
-      <div className="flex flex-col min-h-screen bg-gray-50">
-        <main className="flex-grow flex items-center justify-center p-4">
-          <div className="bg-white shadow-xl rounded-2xl p-8 max-w-2xl w-full">
-            <header className="bg-white shadow-sm p-4 sticky top-0 z-10">
-              <div className="max-w-4xl mx-auto flex justify-between items-center">
-                <h1 className="text-3xl font-extrabold text-blue-700 flex items-center">
-                  <ShoppingBasket className="w-8 h-8 mr-3 text-blue-600" />
-                  Solicitar Alimentos
-                </h1>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
+        <section
+          className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+          aria-labelledby="solicitud-form-title"
+        >
+          {/* Mensajes */}
+          {!ubicacion && (
+            <Alert tipo="warning" mensaje="Ubicación requerida: permite el acceso a tu ubicación en el navegador para continuar." />
+          )}
+          {mensaje && (
+            <Alert tipo={mensaje.includes("éxito") ? 'success' : 'error'} mensaje={mensaje} />
+          )}
+
+          {/* Encabezado equivalente al StepHeader de Nueva donación */}
+          <div className="border-b border-slate-200 pb-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-700">
+                <ShoppingBasket className="h-5 w-5" aria-hidden="true" />
               </div>
-            </header>
-
-            {/* Información del usuario */}
-            {userData && <UserInfoCard userData={userData} />}
-
-            {/* Ubicación */}
-            {ubicacion && (
-              <UbicacionCard
-                ubicacion={ubicacion}
-                onUbicacionChange={manejarCambioUbicacion}
-              />
-            )}
-
-            {/* Alerta de ubicación requerida */}
-            {!ubicacion && (
-              <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-6">
-                <div className="flex items-start">
-                  <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-semibold text-yellow-800 mb-1">
-                      Ubicación requerida
-                    </h4>
-                    <p className="text-sm text-yellow-700">
-                      Para enviar tu solicitud, debes compartir tu ubicación. Por favor, permite el acceso a tu ubicación en el navegador para continuar.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Mensajes */}
-            {mensaje && (
-              <div
-                className={`p-4 mb-6 rounded-lg text-white ${
-                  mensaje.includes("éxito") ? "bg-green-500" : "bg-red-500"
-                }`}
-              >
-                {mensaje}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="text-center mb-6">
-                <h3 className="text-xl font-bold text-gray-800">
-                  Detalles de la Solicitud
-                </h3>
-                <p className="text-gray-600">
-                  Especifica qué alimentos necesitas
+              <div>
+                <h2 id="solicitud-form-title" className="text-base font-semibold text-slate-800 sm:text-lg">
+                  Detalles de la solicitud
+                </h2>
+                <p className="mt-1 max-w-xl text-sm leading-5 text-slate-500">
+                  Especifica qué alimentos necesitas y la cantidad solicitada.
                 </p>
               </div>
+            </div>
+          </div>
 
-              <div className="space-y-4">
-                {/* Selector de alimentos */}
-                <AlimentoSelector
-                  alimentos={[]}
-                  alimentosFiltrados={alimentosFiltrados}
-                  alimentoSeleccionado={alimentoSeleccionado}
-                  busqueda={busqueda}
-                  filtroCategoria={filtroCategoria}
-                  categorias={categorias}
-                  mostrarDropdown={mostrarDropdown}
-                  onBusquedaChange={manejarBusquedaAlimento}
-                  onCategoriaChange={manejarCambioCategoria}
-                  onAlimentoSelect={manejarSeleccionAlimento}
-                  onLimpiarSeleccion={limpiarSeleccion}
-                  onFocus={manejarFocusInput}
-                  onBlur={manejarBlurContainer}
-                />
+          {/* Información del usuario */}
+          {userData && <UserInfoCard userData={userData} />}
 
-                {/* Información de inventario */}
-                {alimentoSeleccionado && (
-                  <InventarioInfo
-                    stockInfo={stockInfo}
-                    loadingState={inventoryLoadingState}
-                    errorMessage={inventoryErrorMessage || null}
-                    cantidad={parseFloat(cantidad) || 0}
-                    simboloUnidad={getUnidadesDisponibles().find(u => u.id === parseInt(unidadId))?.simbolo}
-                    isStockSufficient={isStockSufficient}
-                    getStockMessage={getStockMessage}
-                    onUseMaxStock={manejarUseMaxStock}
-                  />
-                )}
+          {/* Ubicación */}
+          {ubicacion && (
+            <UbicacionCard
+              ubicacion={ubicacion}
+              onUbicacionChange={manejarCambioUbicacion}
+            />
+          )}
 
-                {/* Cantidad y Unidad */}
-                <CantidadUnidadInputs
-                  cantidad={cantidad}
-                  unidadId={unidadId}
-                  unidades={getUnidadesDisponibles()}
-                  loadingUnidades={loadingUnidades === 'loading'}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-4">
+              {/* Selector de alimentos */}
+              <AlimentoSelector
+                alimentos={[]}
+                alimentosFiltrados={alimentosFiltrados}
+                alimentoSeleccionado={alimentoSeleccionado}
+                busqueda={busqueda}
+                filtroCategoria={filtroCategoria}
+                categorias={categorias}
+                mostrarDropdown={mostrarDropdown}
+                onBusquedaChange={manejarBusquedaAlimento}
+                onCategoriaChange={manejarCambioCategoria}
+                onAlimentoSelect={manejarSeleccionAlimento}
+                onLimpiarSeleccion={limpiarSeleccion}
+                onFocus={manejarFocusInput}
+                onBlur={manejarBlurContainer}
+              />
+
+              {/* Información de inventario */}
+              {alimentoSeleccionado && (
+                <InventarioInfo
                   stockInfo={stockInfo}
+                  loadingState={inventoryLoadingState}
+                  errorMessage={inventoryErrorMessage || null}
+                  cantidad={parseFloat(cantidad) || 0}
+                  simboloUnidad={simboloUnidadSeleccionada}
                   isStockSufficient={isStockSufficient}
-                  onCantidadChange={(e) => setCantidad(e.target.value)}
-                  onUnidadChange={(e) => setUnidadId(e.target.value)}
+                  getStockMessage={getStockMessage}
                   onUseMaxStock={manejarUseMaxStock}
                 />
+              )}
 
-                {/* Comentarios */}
-                <ComentariosInput
-                  comentarios={comentarios}
-                  onChange={(e) => setComentarios(e.target.value)}
-                />
-              </div>
+              {/* Cantidad y Unidad */}
+              <CantidadUnidadInputs
+                cantidad={cantidad}
+                unidadId={unidadId}
+                unidades={getUnidadesDisponibles()}
+                loadingUnidades={loadingUnidades === 'loading'}
+                stockInfo={stockInfo}
+                unitCompatibilityMessage={unitCompatibilityMessage}
+                isStockSufficient={isStockSufficient}
+                onCantidadChange={(e) => setCantidad(e.target.value)}
+                onUnidadChange={(e) => setUnidadId(e.target.value)}
+                onUseMaxStock={manejarUseMaxStock}
+              />
 
-              <button
+              {/* Comentarios */}
+              <ComentariosInput
+                comentarios={comentarios}
+                onChange={(e) => setComentarios(e.target.value)}
+              />
+            </div>
+
+            <div className="mt-8 flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end">
+              <Button
                 type="submit"
                 disabled={
                   loading ||
                   !ubicacion ||
-                  (!!cantidad &&
-                    parseFloat(cantidad) > 0 &&
-                    !!stockInfo &&
-                    stockInfo.producto_encontrado &&
-                    !isStockSufficient(
-                      parseFloat(cantidad),
-                      getUnidadesDisponibles().find(u => u.id === parseInt(unidadId))?.simbolo
-                    ))
+                  stockBloqueaEnvio
                 }
-                className={`w-full flex items-center justify-center px-6 py-3 rounded-lg shadow-md transition-colors font-semibold ${
-                  loading ||
-                  !ubicacion ||
-                  (!!cantidad &&
-                    parseFloat(cantidad) > 0 &&
-                    !!stockInfo &&
-                    stockInfo.producto_encontrado &&
-                    !isStockSufficient(
-                      parseFloat(cantidad),
-                      getUnidadesDisponibles().find(u => u.id === parseInt(unidadId))?.simbolo
-                    ))
-                    ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                    : "bg-blue-600 text-white hover:bg-blue-700"
-                }`}
+                loading={loading}
+                accent="solicitante"
+                className="w-full sm:w-auto"
               >
                 {loading ? (
                   "Enviando Solicitud..."
                 ) : !ubicacion ? (
                   <>
-                    <AlertTriangle className="w-5 h-5 mr-2" />
+                    <AlertTriangle className="h-5 w-5" aria-hidden="true" />
                     Ubicación Requerida
                   </>
-                ) : !!cantidad &&
-                  parseFloat(cantidad) > 0 &&
-                  !!stockInfo &&
-                  stockInfo.producto_encontrado &&
-                  !isStockSufficient(
-                    parseFloat(cantidad),
-                    getUnidadesDisponibles().find(u => u.id === parseInt(unidadId))?.simbolo
-                  ) ? (
+              ) : stockBloqueaEnvio ? (
                   <>
-                    <AlertTriangle className="w-5 h-5 mr-2" />
-                    Stock Insuficiente
+                    <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+                    {unitCompatibilityMessage ? 'Unidad no compatible' : 'Stock insuficiente'}
                   </>
                 ) : (
                   <>
-                    <Send className="w-5 h-5 mr-2" />
+                    <Send className="h-5 w-5" aria-hidden="true" />
                     Enviar Solicitud
                   </>
                 )}
-              </button>
-            </form>
-          </div>
-        </main>
+              </Button>
+            </div>
+          </form>
+        </section>
 
-        <footer className="bg-white shadow-sm p-4 mt-8">
-          <div className="max-w-4xl mx-auto text-center text-gray-500 text-sm">
-            &copy; {new Date().getFullYear()} Banco de Alimentos. Todos los
-            derechos reservados.
+        <aside
+          className="h-fit space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:sticky lg:top-6"
+          aria-labelledby="solicitud-context-title"
+        >
+          <div className="mb-4 flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-700">
+              <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 id="solicitud-context-title" className="text-base font-semibold text-slate-800">
+                Tu solicitud cuenta
+              </h2>
+              <p className="mt-1 text-sm leading-5 text-slate-500">
+                Completa la información para que el Banco de Alimentos pueda revisar tu pedido.
+              </p>
+            </div>
           </div>
-        </footer>
+
+          <ol className="space-y-4">
+            {[
+              'Selecciona el alimento que necesitas.',
+              'Indica la cantidad y unidad de medida.',
+              'Comparte tu ubicación para coordinar la entrega.',
+            ].map((step, index) => (
+              <li key={step} className="flex items-start gap-3 text-sm leading-5 text-slate-500">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xs font-bold text-blue-700">
+                  {index + 1}
+                </span>
+                {step}
+              </li>
+            ))}
+          </ol>
+
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm leading-5 text-blue-800">
+            <p className="flex items-start gap-2">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" aria-hidden="true" />
+              Puedes revisar el estado de tu solicitud desde “Mis solicitudes”.
+            </p>
+          </div>
+        </aside>
       </div>
     </DashboardLayout>
   );

@@ -99,7 +99,7 @@ export default function OperadorConfiguracionPage() {
       setTimeout(() => {
         setMessage(null);
       }, 3000);
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: 'Error al guardar las preferencias' });
     }
   };

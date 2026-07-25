@@ -1,25 +1,56 @@
 /**
- * @fileoverview Servicio para consultar stock disponible en inventario
+ * Consulta de stock sin sumar saldos de unidades no equivalentes.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CantidadFormateada, ConversionData } from '@/lib/unidadConversion';
-import { convertirCantidad } from '@/lib/unidadConversion';
+import {
+  aplicarConversion,
+  redondear,
+  resolverConversionLocal,
+} from '@/lib/unidadConversion';
+import {
+  parseFiniteNumberValue,
+  parseOptionalTextValue,
+} from '@/lib/validation-core';
+
+export type StockStatus =
+  | 'sin_stock'
+  | 'disponible'
+  | 'stock_en_otra_unidad'
+  | 'unidades_no_convertibles';
 
 export interface StockInfo {
-  id_inventario: string;
+  id_entrada: string;
+  id_deposito: string;
   cantidad_disponible: number;
   deposito: string;
   fecha_actualizacion: string | null;
+  unidad_id?: number;
   unidad_nombre?: string;
   unidad_simbolo?: string;
   cantidad_formateada?: CantidadFormateada;
 }
 
-export interface StockSummary {
-  total_disponible: number;
+export interface StockUnitSummary {
+  unidad_id: number;
+  unidad_nombre?: string;
+  unidad_simbolo?: string;
+  cantidad_disponible: number;
+  cantidad_formateada: CantidadFormateada;
+  /** Se conserva para cálculos internos, pero no se muestra al solicitante. */
   depositos: StockInfo[];
+}
+
+export interface StockSummary {
+  /** Es cero cuando no existe una unidad común calculable. */
+  total_disponible: number;
+  total_calculable: boolean;
+  depositos: StockInfo[];
+  unidades_disponibles: StockUnitSummary[];
   producto_encontrado: boolean;
+  estado_stock: StockStatus;
+  unidad_id?: number;
   unidad_nombre?: string;
   unidad_simbolo?: string;
   total_formateado?: CantidadFormateada;
@@ -31,337 +62,428 @@ export interface ServiceResult<T> {
   error?: string;
 }
 
+type UnidadRelation = {
+  id?: number | null;
+  nombre?: string | null;
+  simbolo?: string | null;
+} | null;
+
+type ConversionRow = {
+  unidad_origen_id: number;
+  unidad_destino_id: number;
+  factor_conversion: number | string | null;
+  activo: boolean | null;
+  unidad_origen: UnidadRelation | UnidadRelation[];
+  unidad_destino: UnidadRelation | UnidadRelation[];
+};
+
+type StockRpcRow = {
+  id_entrada: string;
+  id_deposito: string;
+  cantidad_disponible: number | null;
+  fecha_ingreso: string | null;
+  unidad_id: number | null;
+  unidad_nombre: string | null;
+  unidad_simbolo: string | null;
+  deposito: string | null;
+};
+
+const singleRelation = <T>(relation: T | T[] | null | undefined): T | null => {
+  if (Array.isArray(relation)) {
+    return relation[0] ?? null;
+  }
+  return relation ?? null;
+};
+
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 const logger = {
-  info: (message: string, details?: unknown) => console.info(`[InventoryStockService] ${message}`, details),
-  error: (message: string, error?: unknown) => console.error(`[InventoryStockService] ${message}`, error)
+  info: (message: string, details?: unknown) => {
+    if (isDevelopment) {
+      console.info(`[InventoryStockService] ${message}`, details);
+    }
+  },
+  error: (message: string, error?: unknown) => console.error(`[InventoryStockService] ${message}`, error),
+};
+
+const emptySummary = (): StockSummary => ({
+  total_disponible: 0,
+  total_calculable: false,
+  depositos: [],
+  unidades_disponibles: [],
+  producto_encontrado: false,
+  estado_stock: 'sin_stock',
+});
+
+const crearCantidadFormateada = (
+  cantidad: number,
+  simbolo: string,
+  nombreUnidad: string,
+): CantidadFormateada => ({
+  cantidad: redondear(cantidad),
+  simbolo,
+  unidad_nombre: nombreUnidad,
+  cantidad_original: cantidad,
+  simbolo_original: simbolo,
+  fue_convertido: false,
+});
+
+export const agruparStockPorUnidad = (saldos: StockInfo[]): StockUnitSummary[] => {
+  const saldosPorUnidad = new Map<number, StockUnitSummary>();
+
+  for (const saldo of saldos) {
+    if (!saldo.unidad_id) continue;
+
+    const existente = saldosPorUnidad.get(saldo.unidad_id);
+    if (existente) {
+      existente.cantidad_disponible += saldo.cantidad_disponible;
+      existente.depositos.push(saldo);
+      existente.cantidad_formateada = crearCantidadFormateada(
+        existente.cantidad_disponible,
+        existente.unidad_simbolo ?? '',
+        existente.unidad_nombre ?? '',
+      );
+      continue;
+    }
+
+    saldosPorUnidad.set(saldo.unidad_id, {
+      unidad_id: saldo.unidad_id,
+      unidad_nombre: saldo.unidad_nombre,
+      unidad_simbolo: saldo.unidad_simbolo,
+      cantidad_disponible: saldo.cantidad_disponible,
+      cantidad_formateada: crearCantidadFormateada(
+        saldo.cantidad_disponible,
+        saldo.unidad_simbolo ?? '',
+        saldo.unidad_nombre ?? '',
+      ),
+      depositos: [saldo],
+    });
+  }
+
+  return [...saldosPorUnidad.values()];
+};
+
+const obtenerUnidadIdPorSimbolo = (
+  simbolo: string,
+  conversiones: ConversionData[],
+): number | undefined => {
+  const conversion = conversiones.find(item =>
+    item.simbolo_origen === simbolo || item.simbolo_destino === simbolo
+  );
+
+  if (!conversion) return undefined;
+  return conversion.simbolo_origen === simbolo
+    ? conversion.unidad_origen_id
+    : conversion.unidad_destino_id;
+};
+
+export interface StockTotalResolution {
+  calculable: boolean;
+  cantidad: number;
+}
+
+export const calcularTotalPorUnidades = (
+  saldos: Pick<StockInfo, 'cantidad_disponible' | 'unidad_id' | 'unidad_simbolo'>[],
+  conversiones: ConversionData[],
+): StockTotalResolution => {
+  const unidadObjetivo = saldos[0];
+  if (!unidadObjetivo?.unidad_id) {
+    return { calculable: false, cantidad: 0 };
+  }
+
+  return saldos.reduce<StockTotalResolution>(
+    (resultado, saldo) => {
+      if (!resultado.calculable || !saldo.unidad_id) {
+        return { calculable: false, cantidad: 0 };
+      }
+
+      const resolution = resolverConversionLocal(
+        saldo.unidad_id,
+        unidadObjetivo.unidad_id as number,
+        conversiones,
+      );
+      if (!resolution.convertible) {
+        return { calculable: false, cantidad: 0 };
+      }
+
+      return {
+        calculable: true,
+        cantidad: resultado.cantidad + saldo.cantidad_disponible * resolution.factor,
+      };
+    },
+    { calculable: true, cantidad: 0 },
+  );
 };
 
 export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
-  /**
-   * Obtiene las conversiones disponibles de la base de datos
-   */
   const obtenerConversiones = async (): Promise<ConversionData[]> => {
-    try {
-      const { data, error } = await supabaseClient
-        .from('conversiones')
-        .select(`
-          factor_conversion,
-          unidad_origen:unidades!conversiones_unidad_origen_id_fkey(nombre, simbolo),
-          unidad_destino:unidades!conversiones_unidad_destino_id_fkey(nombre, simbolo)
-        `);
+    const { data, error } = await supabaseClient
+      .from('conversiones')
+      .select(`
+        unidad_origen_id,
+        unidad_destino_id,
+        factor_conversion,
+        activo,
+        unidad_origen:unidades!conversiones_unidad_origen_id_fkey(id, nombre, simbolo),
+        unidad_destino:unidades!conversiones_unidad_destino_id_fkey(id, nombre, simbolo)
+      `)
+      .eq('activo', true);
 
-      if (error || !data) {
-        logger.error('Error obteniendo conversiones', error);
+    if (error || !data) {
+      logger.error('Error obteniendo conversiones', error);
+      return [];
+    }
+
+    return (data as ConversionRow[]).flatMap(row => {
+      const unidadOrigen = singleRelation(row.unidad_origen);
+      const unidadDestino = singleRelation(row.unidad_destino);
+      const factor = Number(row.factor_conversion);
+
+      if (
+        !unidadOrigen?.id ||
+        !unidadDestino?.id ||
+        !unidadOrigen.simbolo ||
+        !unidadDestino.simbolo ||
+        !Number.isFinite(factor) ||
+        factor <= 0
+      ) {
         return [];
       }
 
-      return data.map(row => ({
-        unidad_origen: (row.unidad_origen as any)?.nombre || '',
-        simbolo_origen: (row.unidad_origen as any)?.simbolo || '',
-        unidad_destino: (row.unidad_destino as any)?.nombre || '',
-        simbolo_destino: (row.unidad_destino as any)?.simbolo || '',
-        factor_conversion: Number(row.factor_conversion) || 0
-      }));
-    } catch (err) {
-      logger.error('Excepción obteniendo conversiones', err);
-      return [];
-    }
+      return [{
+        unidad_origen_id: row.unidad_origen_id,
+        unidad_destino_id: row.unidad_destino_id,
+        unidad_origen: unidadOrigen.nombre ?? '',
+        simbolo_origen: unidadOrigen.simbolo,
+        unidad_destino: unidadDestino.nombre ?? '',
+        simbolo_destino: unidadDestino.simbolo,
+        factor_conversion: factor,
+        activo: row.activo ?? false,
+      }];
+    });
   };
 
-  /**
-   * Obtiene el stock disponible de un producto por nombre
-   */
   const getStockByProductName = async (nombreProducto: string): Promise<ServiceResult<StockSummary>> => {
-    if (!nombreProducto.trim()) {
-      return {
-        success: true,
-        data: {
-          total_disponible: 0,
-          depositos: [],
-          producto_encontrado: false
-        }
-      };
+    const nombre = parseOptionalTextValue(nombreProducto, {
+      name: 'nombreProducto',
+      maxLength: 150,
+    });
+
+    if (!nombre.success) {
+      return { success: false, error: nombre.error };
+    }
+
+    if (!nombre.value) {
+      return { success: true, data: emptySummary() };
     }
 
     try {
-      logger.info(`Consultando stock para producto: "${nombreProducto}"`);
-      
-      // Obtener conversiones disponibles
       const conversiones = await obtenerConversiones();
-      
-      const { data, error } = await supabaseClient
-        .from('inventario')
-        .select(`
-          id_inventario,
-          cantidad_disponible,
-          fecha_actualizacion,
-          productos_donados!inner(
-            nombre_producto,
-            unidades!inner(
-              id,
-              nombre,
-              simbolo
-            )
-          ),
-          depositos!inner(
-            nombre
-          )
-        `)
-        .ilike('productos_donados.nombre_producto', `%${nombreProducto}%`)
-        .gt('cantidad_disponible', 0)
-        .order('cantidad_disponible', { ascending: false });
+      const { data, error } = await supabaseClient.rpc('obtener_stock_por_producto', {
+        p_nombre_producto: nombre.value,
+      });
 
       if (error) {
         logger.error('Error consultando stock disponible', error);
-        logger.error('Detalles del error:', {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint
-        });
-        return {
-          success: false,
-          error: 'No fue posible consultar el inventario'
-        };
+        return { success: false, error: 'No fue posible consultar el inventario' };
       }
 
-      logger.info(`Resultados de consulta de stock:`, {
-        cantidadResultados: data?.length ?? 0,
-        datos: data
-      });
-
       if (!data || data.length === 0) {
+        return { success: true, data: emptySummary() };
+      }
+
+      const stockPorDepositoYUnidad = new Map<string, StockInfo>();
+
+      for (const row of data as StockRpcRow[]) {
+        const cantidad = Number(row.cantidad_disponible ?? 0);
+        if (!Number.isFinite(cantidad) || cantidad <= 0 || !row.unidad_id) {
+          continue;
+        }
+
+        const key = `${row.id_deposito}:${row.unidad_id}`;
+        const existente = stockPorDepositoYUnidad.get(key);
+        if (existente) {
+          existente.cantidad_disponible += cantidad;
+          existente.cantidad_formateada = crearCantidadFormateada(
+            existente.cantidad_disponible,
+            existente.unidad_simbolo ?? '',
+            existente.unidad_nombre ?? '',
+          );
+          if (
+            row.fecha_ingreso &&
+            (!existente.fecha_actualizacion || row.fecha_ingreso > existente.fecha_actualizacion)
+          ) {
+            existente.fecha_actualizacion = row.fecha_ingreso;
+          }
+          continue;
+        }
+
+        stockPorDepositoYUnidad.set(key, {
+          id_entrada: row.id_entrada,
+          id_deposito: row.id_deposito,
+          cantidad_disponible: cantidad,
+          deposito: row.deposito ?? 'Sin depósito',
+          fecha_actualizacion: row.fecha_ingreso,
+          unidad_id: row.unidad_id,
+          unidad_nombre: row.unidad_nombre ?? undefined,
+          unidad_simbolo: row.unidad_simbolo ?? undefined,
+          cantidad_formateada: crearCantidadFormateada(
+            cantidad,
+            row.unidad_simbolo ?? '',
+            row.unidad_nombre ?? '',
+          ),
+        });
+      }
+
+      const depositos = [...stockPorDepositoYUnidad.values()];
+      if (depositos.length === 0) {
         return {
           success: true,
           data: {
-            total_disponible: 0,
-            depositos: [],
-            producto_encontrado: false
-          }
+            ...emptySummary(),
+            producto_encontrado: true,
+          },
         };
       }
 
-      // Procesar los datos
-      const stockInfoRaw: StockInfo[] = data.map(row => {
-        const unidad = (row.productos_donados as any)?.unidades;
-        const cantidad = row.cantidad_disponible ?? 0;
-        
-        // Convertir cantidad a unidad más legible
-        const cantidadFormateada = convertirCantidad(
-          cantidad,
-          unidad?.simbolo || '',
-          unidad?.nombre || '',
-          conversiones
-        );
+      const unidadObjetivo = depositos[0];
+      const unidadesDisponibles = agruparStockPorUnidad(depositos);
+      const total = calcularTotalPorUnidades(depositos, conversiones);
 
-        return {
-          id_inventario: row.id_inventario,
-          cantidad_disponible: cantidad,
-          deposito: (row.depositos as any)?.nombre ?? 'Sin depósito',
-          fecha_actualizacion: row.fecha_actualizacion,
-          unidad_nombre: unidad?.nombre,
-          unidad_simbolo: unidad?.simbolo,
-          cantidad_formateada: cantidadFormateada
-        };
-      });
-
-      // Agrupar por depósito para evitar duplicados
-      const depositosAgrupados = new Map<string, StockInfo>();
-      
-      for (const item of stockInfoRaw) {
-        const depositoKey = item.deposito;
-        const existing = depositosAgrupados.get(depositoKey);
-        
-        if (existing) {
-          // Si ya existe una entrada para este depósito, sumar las cantidades
-          const nuevaCantidad = existing.cantidad_disponible + item.cantidad_disponible;
-          
-          // Reconvertir con la nueva cantidad sumada
-          const cantidadFormateada = convertirCantidad(
-            nuevaCantidad,
-            item.unidad_simbolo || '',
-            item.unidad_nombre || '',
-            conversiones
-          );
-          
-          existing.cantidad_disponible = nuevaCantidad;
-          existing.cantidad_formateada = cantidadFormateada;
-          
-          // Mantener la fecha más reciente
-          if (item.fecha_actualizacion && (!existing.fecha_actualizacion || 
-              item.fecha_actualizacion > existing.fecha_actualizacion)) {
-            existing.fecha_actualizacion = item.fecha_actualizacion;
-          }
-        } else {
-          // Primera entrada para este depósito
-          depositosAgrupados.set(depositoKey, { ...item });
-        }
-      }
-
-      const stockInfo = Array.from(depositosAgrupados.values());
-      const totalDisponible = stockInfo.reduce((sum, item) => sum + item.cantidad_disponible, 0);
-      
-      // Obtener la unidad del primer registro (todos deberían tener la misma)
-      const primeraUnidad = stockInfo[0];
-
-      // Convertir el total a unidad más legible
-      const totalFormateado = convertirCantidad(
-        totalDisponible,
-        primeraUnidad?.unidad_simbolo || '',
-        primeraUnidad?.unidad_nombre || '',
-        conversiones
-      );
-
-      return {
-        success: true,
-        data: {
-          total_disponible: totalDisponible,
-          depositos: stockInfo,
-          producto_encontrado: true,
-          unidad_nombre: primeraUnidad?.unidad_nombre,
-          unidad_simbolo: primeraUnidad?.unidad_simbolo,
-          total_formateado: totalFormateado
-        }
+      const summary: StockSummary = {
+        total_disponible: total.calculable ? total.cantidad : 0,
+        total_calculable: total.calculable,
+        depositos,
+        unidades_disponibles: unidadesDisponibles,
+        producto_encontrado: true,
+        estado_stock: total.calculable ? 'disponible' : 'unidades_no_convertibles',
+        unidad_id: unidadObjetivo.unidad_id,
+        unidad_nombre: unidadObjetivo.unidad_nombre,
+        unidad_simbolo: unidadObjetivo.unidad_simbolo,
+        total_formateado: total.calculable
+          ? crearCantidadFormateada(
+              total.cantidad,
+              unidadObjetivo.unidad_simbolo ?? '',
+              unidadObjetivo.unidad_nombre ?? '',
+            )
+          : undefined,
       };
 
-    } catch (err) {
-      logger.error('Excepción consultando stock', err);
-      return {
-        success: false,
-        error: 'Error inesperado al consultar inventario'
-      };
+      return { success: true, data: summary };
+    } catch (error) {
+      logger.error('Excepción consultando stock', error);
+      return { success: false, error: 'Error inesperado al consultar inventario' };
     }
   };
 
-  /**
-   * Verifica si hay stock suficiente para una cantidad solicitada
-   */
   const checkStockSufficiency = async (
-    nombreProducto: string, 
-    cantidadSolicitada: number
-  ): Promise<ServiceResult<{ 
-    sufficient: boolean; 
-    available: number; 
-    missing: number;
-  }>> => {
-    const stockResult = await getStockByProductName(nombreProducto);
-    
-    if (!stockResult.success || !stockResult.data) {
+    nombreProducto: string,
+    cantidadSolicitada: number,
+  ): Promise<ServiceResult<{ sufficient: boolean; available: number; missing: number }>> => {
+    const cantidad = parseFiniteNumberValue(cantidadSolicitada, {
+      name: 'cantidadSolicitada',
+      min: 0,
+    });
+    if (!cantidad.success || cantidad.value <= 0) {
       return {
         success: false,
-        error: stockResult.error || 'Error verificando stock'
+        error: cantidad.success ? 'cantidadSolicitada debe ser mayor a 0.' : cantidad.error,
       };
+    }
+
+    const stockResult = await getStockByProductName(nombreProducto);
+    if (!stockResult.success || !stockResult.data) {
+      return { success: false, error: stockResult.error || 'Error verificando stock' };
+    }
+
+    if (!stockResult.data.total_calculable) {
+      return { success: false, error: 'El stock está separado en unidades no convertibles' };
     }
 
     const available = stockResult.data.total_disponible;
-    const sufficient = available >= cantidadSolicitada;
-    const missing = sufficient ? 0 : cantidadSolicitada - available;
-
     return {
       success: true,
       data: {
-        sufficient,
+        sufficient: available >= cantidad.value,
         available,
-        missing
-      }
+        missing: available >= cantidad.value ? 0 : cantidad.value - available,
+      },
     };
   };
 
-  /**
-   * Verifica si hay stock suficiente considerando la conversión de unidades
-   * @param nombreProducto - Nombre del producto a verificar
-   * @param cantidadSolicitada - Cantidad solicitada por el usuario
-   * @param simboloUnidadSolicitada - Símbolo de la unidad solicitada (ej: "lb", "kg")
-   * @returns Resultado con información de suficiencia y conversiones aplicadas
-   */
   const checkStockSufficiencyWithConversion = async (
     nombreProducto: string,
     cantidadSolicitada: number,
-    simboloUnidadSolicitada: string
+    simboloUnidadSolicitada: string,
   ): Promise<ServiceResult<{
     sufficient: boolean;
     available: number;
     availableSymbol: string;
     requested: number;
     requestedSymbol: string;
-    requestedInBaseUnit: number | null;
+    requestedInBaseUnit: number;
     missing: number;
   }>> => {
-    const stockResult = await getStockByProductName(nombreProducto);
-
-    if (!stockResult.success || !stockResult.data) {
+    const cantidad = parseFiniteNumberValue(cantidadSolicitada, {
+      name: 'cantidadSolicitada',
+      min: 0,
+    });
+    if (!cantidad.success || cantidad.value <= 0) {
       return {
         success: false,
-        error: stockResult.error || 'Error verificando stock'
+        error: cantidad.success ? 'cantidadSolicitada debe ser mayor a 0.' : cantidad.error,
       };
+    }
+
+    const stockResult = await getStockByProductName(nombreProducto);
+    if (!stockResult.success || !stockResult.data) {
+      return { success: false, error: stockResult.error || 'Error verificando stock' };
     }
 
     const stockData = stockResult.data;
-    const available = stockData.total_disponible;
-    const stockSymbol = stockData.unidad_simbolo || '';
-
-    // Si las unidades son iguales, comparación directa
-    if (simboloUnidadSolicitada === stockSymbol) {
-      const sufficient = available >= cantidadSolicitada;
-      const missing = sufficient ? 0 : cantidadSolicitada - available;
-
-      return {
-        success: true,
-        data: {
-          sufficient,
-          available,
-          availableSymbol: stockSymbol,
-          requested: cantidadSolicitada,
-          requestedSymbol: simboloUnidadSolicitada,
-          requestedInBaseUnit: cantidadSolicitada,
-          missing
-        }
-      };
+    if (!stockData.total_calculable) {
+      return { success: false, error: 'El stock está separado en unidades no convertibles' };
     }
 
-    // Necesitamos convertir - obtener conversiones
     const conversiones = await obtenerConversiones();
-    
-    // Importar la función de conversión
-    const { convertirEntreUnidades } = await import('@/lib/unidadConversion');
-    
-    // Convertir la cantidad solicitada a la unidad base del inventario
-    const cantidadConvertida = convertirEntreUnidades(
-      cantidadSolicitada,
-      simboloUnidadSolicitada,
-      stockSymbol,
-      conversiones
-    );
-
-    if (cantidadConvertida === null) {
-      // No se pudo convertir - no hay conversión disponible
-      logger.error(`No se encontró conversión de ${simboloUnidadSolicitada} a ${stockSymbol}`);
+    const unidadOrigenId = obtenerUnidadIdPorSimbolo(simboloUnidadSolicitada, conversiones);
+    const unidadDestinoId = stockData.unidad_id;
+    if (!unidadOrigenId || !unidadDestinoId) {
       return {
         success: false,
-        error: `No se puede convertir de ${simboloUnidadSolicitada} a ${stockSymbol}`
+        error: `No se puede resolver la unidad ${simboloUnidadSolicitada}`,
       };
     }
 
-    const sufficient = available >= cantidadConvertida;
-    const missing = sufficient ? 0 : cantidadConvertida - available;
+    const conversion = aplicarConversion(
+      cantidad.value,
+      resolverConversionLocal(unidadOrigenId, unidadDestinoId, conversiones),
+    );
+    if (!conversion.success) {
+      return {
+        success: false,
+        error: `No se puede convertir de ${simboloUnidadSolicitada} a ${stockData.unidad_simbolo ?? ''}`,
+      };
+    }
 
+    const sufficient = stockData.total_disponible >= conversion.cantidad;
     return {
       success: true,
       data: {
         sufficient,
-        available,
-        availableSymbol: stockSymbol,
-        requested: cantidadSolicitada,
+        available: stockData.total_disponible,
+        availableSymbol: stockData.unidad_simbolo ?? '',
+        requested: cantidad.value,
         requestedSymbol: simboloUnidadSolicitada,
-        requestedInBaseUnit: cantidadConvertida,
-        missing
-      }
+        requestedInBaseUnit: conversion.cantidad,
+        missing: sufficient ? 0 : conversion.cantidad - stockData.total_disponible,
+      },
     };
   };
 
   return {
     getStockByProductName,
     checkStockSufficiency,
-    checkStockSufficiencyWithConversion
+    checkStockSufficiencyWithConversion,
   };
 };

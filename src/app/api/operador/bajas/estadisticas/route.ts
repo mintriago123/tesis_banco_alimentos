@@ -4,6 +4,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createAdminSupabaseClient } from '@/lib/supabase-admin';
+import { parsePositiveIntParam } from '@/lib/api-validation';
+import { requireActiveUserRole } from '@/lib/server-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,42 +17,31 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
-    
-    // Verificar autenticación
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      );
-    }
+    const authResult = await requireActiveUserRole(supabase, ['ADMINISTRADOR', 'OPERADOR']);
 
-    // Verificar rol
-    const { data: usuario, error: usuarioError } = await supabase
-      .from('usuarios')
-      .select('rol, estado')
-      .eq('id', user.id)
-      .single();
-
-    if (usuarioError || !usuario || usuario.estado !== 'activo') {
-      return NextResponse.json(
-        { error: 'Acceso denegado' },
-        { status: 403 }
-      );
+    if (authResult.response) {
+      return authResult.response;
     }
 
     // Obtener parámetros
     const searchParams = request.nextUrl.searchParams;
-    const periodo = searchParams.get('periodo') || '30'; // días
+    const periodo = parsePositiveIntParam(searchParams.get('periodo'), {
+      name: 'periodo',
+      fallback: 30,
+      min: 1,
+      max: 365,
+    });
+    if (!periodo.success) return periodo.response;
     
     // Calcular fechas
     const fecha_fin = new Date();
     const fecha_inicio = new Date();
-    fecha_inicio.setDate(fecha_inicio.getDate() - parseInt(periodo));
+    fecha_inicio.setDate(fecha_inicio.getDate() - periodo.value);
 
-    // Llamar función de estadísticas
-    const { data, error } = await supabase
+    const adminSupabase = createAdminSupabaseClient();
+
+    // Llamar función de estadísticas desde el servidor tras validar rol.
+    const { data, error } = await adminSupabase
       .rpc('obtener_estadisticas_bajas', {
         p_fecha_inicio: fecha_inicio.toISOString(),
         p_fecha_fin: fecha_fin.toISOString()
@@ -81,7 +73,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       periodo: {
-        dias: parseInt(periodo),
+        dias: periodo.value,
         fecha_inicio: fecha_inicio.toISOString(),
         fecha_fin: fecha_fin.toISOString()
       },

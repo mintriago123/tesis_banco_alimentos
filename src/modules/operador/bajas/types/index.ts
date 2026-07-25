@@ -9,7 +9,7 @@ export type PrioridadAlerta = 'vencido' | 'alta' | 'media' | 'baja';
 export interface BajaProducto {
   id_baja: string;
   id_producto: string;
-  id_inventario: string;
+  id_entrada: string;
   cantidad_baja: number;
   motivo_baja: MotivoBaja;
   usuario_responsable_id: string;
@@ -31,14 +31,13 @@ export interface BajaProductoDetalle extends BajaProducto {
   deposito_nombre?: string;
   deposito_descripcion?: string;
   producto_descripcion?: string;
-  unidad_medida?: string;
   fecha_caducidad?: string;
   unidad_nombre?: string;
   unidad_simbolo?: string;
 }
 
 export interface BajaProductoRequest {
-  id_inventario: string;
+  id_entrada: string;
   cantidad: number;
   motivo: MotivoBaja;
   observaciones?: string;
@@ -59,7 +58,7 @@ export interface EstadisticasBajas {
 }
 
 export interface AlertaVencimiento {
-  id_inventario: string;
+  id_entrada: string;
   id_producto: string;
   nombre_producto: string;
   cantidad_disponible: number;

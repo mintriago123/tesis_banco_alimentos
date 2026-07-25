@@ -7,7 +7,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
-import { useSupabase } from '@/app/components/SupabaseProvider';
 import Toast from '@/app/components/ui/Toast';
 import { useToast } from '@/modules/shared';
 import { 
@@ -18,8 +17,7 @@ import {
   RefreshCw, 
   TrendingDown, 
   User,
-  Filter,
-  Download
+  Filter
 } from 'lucide-react';
 import type { BajaProductoDetalle, MotivoBaja } from '@/modules/operador/bajas/types';
 
@@ -40,8 +38,7 @@ const motivosColors: Record<MotivoBaja, string> = {
 };
 
 export default function HistorialBajasPage() {
-  const { supabase } = useSupabase();
-  const { toasts, showSuccess, showError, hideToast } = useToast();
+  const { toasts, showError, hideToast } = useToast();
   
   const [bajas, setBajas] = useState<BajaProductoDetalle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -94,13 +91,14 @@ export default function HistorialBajasPage() {
       } else {
         throw new Error(data.error || 'Error desconocido');
       }
-    } catch (err: any) {
-      setError(err.message);
-      showError(err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error al cargar el historial de bajas';
+      setError(errorMessage);
+      showError(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  }, [offset, limit, motivoFilter, fechaInicio, fechaFin]);
+  }, [offset, limit, motivoFilter, fechaInicio, fechaFin, showError]);
 
   useEffect(() => {
     cargarBajas();
@@ -290,10 +288,10 @@ export default function HistorialBajasPage() {
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+          <div className="table-surface">
+            <div className="table-scroll">
+              <table className="table-base">
+                <thead className="table-head">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Producto
@@ -315,7 +313,7 @@ export default function HistorialBajasPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="table-body">
                   {bajasFiltradas.map((baja) => (
                     <tr key={baja.id_baja} className="hover:bg-gray-50">
                       <td className="px-6 py-4">

@@ -70,7 +70,7 @@ export default function BajaProductoModal({
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          id_inventario: item.id_inventario,
+          id_entrada: item.id_entrada,
           cantidad: cantidadNum,
           motivo,
           observaciones: observaciones.trim() || undefined
@@ -86,8 +86,8 @@ export default function BajaProductoModal({
       // Éxito
       onSuccess();
       handleClose();
-    } catch (err: any) {
-      setError(err.message || 'Error al procesar la solicitud');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al procesar la solicitud');
     } finally {
       setIsSubmitting(false);
     }

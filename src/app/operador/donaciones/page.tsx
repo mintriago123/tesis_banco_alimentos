@@ -17,8 +17,6 @@ import {
   type Donation,
   type DonationEstado
 } from '@/modules/shared/donaciones';
-import CancelarDonacionModal from '@/modules/admin/reportes/donaciones/components/CancelarDonacionModal';
-import type { MotivoCancelacion } from '@/modules/admin/reportes/donaciones/types';
 
 const LoadingState = () => (
   <div className="text-center py-12">
@@ -33,8 +31,6 @@ export default function OperadorDonationsPage() {
   const confirm = useConfirm();
   const [selectedDonation, setSelectedDonation] = useState<Donation | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [isCancelarModalOpen, setIsCancelarModalOpen] = useState(false);
-  const [donationToCancelar, setDonationToCancelar] = useState<Donation | null>(null);
 
   const {
     donations,
@@ -58,13 +54,6 @@ export default function OperadorDonationsPage() {
   const hasError = loadingState === 'error';
 
   const handleChangeEstado = useCallback(async (donation: Donation, estado: DonationEstado) => {
-    // Si es cancelar, abrir el modal de cancelación
-    if (estado === 'Cancelada') {
-      setDonationToCancelar(donation);
-      setIsCancelarModalOpen(true);
-      return;
-    }
-
     const prompts: Record<Exclude<DonationEstado, 'Cancelada'>, {
       title: string;
       description: string;
@@ -77,16 +66,10 @@ export default function OperadorDonationsPage() {
         confirmLabel: 'Mover a pendiente',
         variant: 'warning'
       },
-      Recogida: {
-        title: `Confirmar recogida de ${donation.tipo_producto}`,
-        description: `La donación de ${donation.nombre_donante || 'el donante'} se marcará como recogida.`,
-        confirmLabel: 'Marcar como recogida',
-        variant: 'warning'
-      },
-      Entregada: {
-        title: `Confirmar entrega de ${donation.tipo_producto}`,
-        description: 'La donación se marcará como entregada y el impacto quedará registrado.',
-        confirmLabel: 'Marcar como entregada',
+      Aprobada: {
+        title: `Confirmar aprobación de ${donation.tipo_producto}`,
+        description: 'La donación se aprobará e integrará automáticamente al inventario de bodega del donante.',
+        confirmLabel: 'Marcar como aprobada',
         variant: 'default'
       }
     };
@@ -131,33 +114,6 @@ export default function OperadorDonationsPage() {
     setSelectedDonation(null);
   }, []);
 
-  const handleConfirmCancelacion = useCallback(async (
-    motivo: MotivoCancelacion,
-    observaciones?: string
-  ) => {
-    if (!donationToCancelar) return;
-
-    const result = await updateEstado(donationToCancelar, 'Cancelada', {
-      motivo,
-      observaciones
-    });
-
-    if (!result.success) {
-      showError(result.message);
-      return;
-    }
-
-    showSuccess(result.message);
-    setIsCancelarModalOpen(false);
-    setDonationToCancelar(null);
-    await refetch();
-  }, [donationToCancelar, updateEstado, showError, showSuccess, refetch]);
-
-  const handleCloseCancelarModal = useCallback(() => {
-    setIsCancelarModalOpen(false);
-    setDonationToCancelar(null);
-  }, []);
-
   const tableContent = useMemo(() => {
     if (isLoading) {
       return <LoadingState />;
@@ -170,6 +126,7 @@ export default function OperadorDonationsPage() {
         hasActiveFilters={hasFiltersApplied}
         onResetFilters={resetFilters}
         onChangeEstado={handleChangeEstado}
+        canCancel={false}
         onViewDetails={handleViewDetails}
         processingId={processingId}
         messages={{
@@ -178,7 +135,7 @@ export default function OperadorDonationsPage() {
         }}
       />
     );
-  }, [isLoading, filteredDonations, donations.length, hasFiltersApplied, resetFilters, handleChangeEstado, processingId, messages.noData, messages.noFilteredData]);
+  }, [isLoading, filteredDonations, donations.length, hasFiltersApplied, resetFilters, handleChangeEstado, handleViewDetails, processingId, messages.noData, messages.noFilteredData]);
 
   return (
     <DashboardLayout
@@ -221,21 +178,12 @@ export default function OperadorDonationsPage() {
                 Nota para Operadores
               </h3>
               <p className="mt-1 text-sm text-blue-700">
-                Puedes actualizar el estado de las donaciones (Pendiente → Recogida → Entregada) y cancelarlas cuando sea necesario. 
-                El historial de cancelaciones solo es visible para administradores.
+                Puedes actualizar el estado de las donaciones. La cancelación está reservada para donantes y administradores activos.
               </p>
             </div>
           </div>
         </div>
       </div>
-
-      <CancelarDonacionModal
-        isOpen={isCancelarModalOpen}
-        onClose={handleCloseCancelarModal}
-        onConfirm={handleConfirmCancelacion}
-        donacion={donationToCancelar}
-        isProcessing={processingId === donationToCancelar?.id}
-      />
 
       <div className="fixed top-4 right-4 z-50 space-y-2">
         {toasts.map(toast => (

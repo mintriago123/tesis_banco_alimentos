@@ -66,8 +66,10 @@ export default function Toast({ message, type, duration = 5000, onClose }: Toast
           {message}
         </div>
         <button
+          type="button"
           onClick={onClose}
-          className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+          className="flex-shrink-0 rounded-lg p-1 text-gray-400 hover:bg-black/5 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
+          aria-label="Cerrar notificación"
         >
           <X className="h-4 w-4" />
         </button>

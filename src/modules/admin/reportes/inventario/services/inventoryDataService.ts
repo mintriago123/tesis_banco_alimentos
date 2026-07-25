@@ -9,9 +9,14 @@ import type {
   ServiceResult,
   SupabaseInventarioRow,
 } from '../types';
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 const logger = {
-  info: (message: string, details?: unknown) => console.info(`[InventoryDataService] ${message}`, details),
+  info: (message: string, details?: unknown) => {
+    if (isDevelopment) {
+      console.info(`[InventoryDataService] ${message}`, details);
+    }
+  },
   error: (message: string, error?: unknown) => console.error(`[InventoryDataService] ${message}`, error)
 };
 
@@ -19,26 +24,27 @@ export const createInventoryDataService = (supabaseClient: SupabaseClient) => {
   const fetchInventario = async (): Promise<ServiceResult<InventarioItem[]>> => {
     try {
       const { data, error } = await supabaseClient
-        .from('inventario')
+        .from('entradas_inventario')
         .select(`
-          id_inventario,
+          id_entrada,
           id_deposito,
           id_producto,
+          unidad_id,
           cantidad_disponible,
-          fecha_actualizacion,
-          depositos:depositos!inventario_id_deposito_fkey(
+          fecha_ingreso,
+          fecha_vencimiento,
+          updated_at,
+          depositos!inner(
             id_deposito,
             nombre,
             descripcion
           ),
-          productos:productos_donados!inventario_id_producto_fkey(
+          productos:productos_donados!inner(
             id_producto,
+            id_usuario,
             nombre_producto,
             descripcion,
-            unidad_medida,
             unidad_id,
-            fecha_caducidad,
-            fecha_donacion,
             alimento_id,
             unidades:unidades(
               id,
@@ -52,7 +58,9 @@ export const createInventoryDataService = (supabaseClient: SupabaseClient) => {
             )
           )
         `)
-        .order('fecha_actualizacion', { ascending: false });
+        .eq('estado', 'disponible')
+        .gt('cantidad_disponible', 0)
+        .order('updated_at', { ascending: false });
 
       if (error) {
         logger.error('Error consultando inventario', error);
@@ -63,7 +71,8 @@ export const createInventoryDataService = (supabaseClient: SupabaseClient) => {
         };
       }
 
-      const inventario = ((data ?? []) as SupabaseInventarioRow[]).map(mapInventarioRowToDomain);
+      const inventarioRows = (data ?? []) as SupabaseInventarioRow[];
+      const inventario = inventarioRows.map(row => mapInventarioRowToDomain(row));
 
       return {
         success: true,
@@ -84,6 +93,7 @@ export const createInventoryDataService = (supabaseClient: SupabaseClient) => {
       const { data, error } = await supabaseClient
         .from('depositos')
         .select('id_deposito, nombre, descripcion')
+        .eq('activo', true)
         .order('nombre', { ascending: true });
 
       if (error) {
@@ -123,7 +133,9 @@ const normalizeRelation = <T>(value: T | T[] | null | undefined): T | null => {
   return (value ?? null) as T | null;
 };
 
-const mapInventarioRowToDomain = (row: SupabaseInventarioRow): InventarioItem => {
+const mapInventarioRowToDomain = (
+  row: SupabaseInventarioRow
+): InventarioItem => {
   const deposito = normalizeRelation(row.depositos);
   const producto = normalizeRelation(row.productos);
 
@@ -140,11 +152,11 @@ const mapInventarioRowToDomain = (row: SupabaseInventarioRow): InventarioItem =>
     : null;
 
   return {
-    id_inventario: row.id_inventario,
-    id_deposito: row.id_deposito,
+    id_entrada: row.id_entrada,
+    id_deposito: deposito?.id_deposito ?? row.id_deposito,
     id_producto: row.id_producto,
     cantidad_disponible: row.cantidad_disponible ?? 0,
-    fecha_actualizacion: row.fecha_actualizacion ?? null,
+    fecha_actualizacion: row.updated_at ?? row.fecha_ingreso ?? null,
     deposito: {
       id_deposito: deposito?.id_deposito ?? row.id_deposito,
       nombre: deposito?.nombre ?? 'Sin depósito',
@@ -155,12 +167,11 @@ const mapInventarioRowToDomain = (row: SupabaseInventarioRow): InventarioItem =>
       nombre_producto: producto?.nombre_producto ?? 'Sin nombre',
       descripcion: producto?.descripcion ?? null,
       categoria: alimentoNormalizado?.categoria ?? null,
-      unidad_medida: producto?.unidad_medida ?? null,
-      unidad_id: producto?.unidad_id ?? null,
+      unidad_id: row.unidad_id ?? producto?.unidad_id ?? null,
       unidad_nombre: unidadNormalizada?.nombre ?? null,
       unidad_simbolo: unidadNormalizada?.simbolo ?? null,
-      fecha_caducidad: producto?.fecha_caducidad ?? null,
-      fecha_donacion: producto?.fecha_donacion ?? null
+      fecha_caducidad: row.fecha_vencimiento ?? null,
+      fecha_donacion: row.fecha_ingreso ?? null
     }
   };
 };

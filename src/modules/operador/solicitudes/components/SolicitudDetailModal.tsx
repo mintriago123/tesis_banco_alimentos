@@ -16,7 +16,6 @@ import {
   QrCode,
   ExternalLink,
   Package,
-  TrendingUp,
   History
 } from 'lucide-react';
 import type { JSX } from 'react';
@@ -26,7 +25,6 @@ import type {
   Solicitud,
   SolicitudEstado
 } from '../types';
-import { MOTIVOS_RECHAZO } from '../constants';
 import type { HistorialDonacion } from '../services/historialDonacionesService';
 import { obtenerHistorialDonaciones } from '../services/historialDonacionesService';
 import { useSupabase } from '@/app/components/SupabaseProvider';
@@ -59,11 +57,14 @@ interface SolicitudDetailModalProps {
   onMotivoRechazoChange?: (value: string) => void;
   onDonar?: (cantidad: number, porcentaje: number, comentario: string) => void;
   abrirEnModoDonacion?: boolean;
+  depositoSeleccionado: string;
+  onDepositoSeleccionadoChange: (value: string) => void;
+  cantidadAprobar: number;
+  onCantidadAprobarChange: (value: number) => void;
 }
 
 const SolicitudDetailModal = ({
   solicitud,
-  comentarioAdmin,
   inventario,
   inventarioLoading,
   inventarioError,
@@ -71,14 +72,12 @@ const SolicitudDetailModal = ({
   badgeStyles,
   estadoIcons,
   onClose,
-  onComentarioChange,
-  onAprobar,
   onRechazar,
   isProcessing,
-  motivoRechazo = '',
-  onMotivoRechazoChange,
   onDonar,
-  abrirEnModoDonacion = false
+  abrirEnModoDonacion = false,
+  depositoSeleccionado,
+  onDepositoSeleccionadoChange
 }: SolicitudDetailModalProps) => {
   const { supabase } = useSupabase();
   const [cantidadDonar, setCantidadDonar] = useState<number>(0);
@@ -105,20 +104,33 @@ const SolicitudDetailModal = ({
     0
   );
 
+  const depositoActual = inventario.find(item => item.id_deposito === depositoSeleccionado);
+  const stockDepositoSeleccionado = depositoActual?.cantidad_disponible ?? 0;
+  const maxDisponibleDeposito = Math.max(0, Math.min(solicitud.cantidad, stockDepositoSeleccionado));
+  const permiteFraccion = solicitud.unidades?.permite_fraccion !== false;
+  const cantidadUnidadValida = permiteFraccion || Number.isInteger(cantidadDonar);
+
   // Actualizar cantidad a donar cuando cambie el inventario disponible
   useEffect(() => {
     // Calcular la cantidad máxima que se puede donar
-    const maxDisponible = Math.min(solicitud.cantidad, totalDisponible);
-    const cantidadInicial = Math.floor(maxDisponible);
+    const maxDisponible = maxDisponibleDeposito;
+    const cantidadInicial = maxDisponible;
     
     // Solo actualizar si es diferente de 0 o si el inventario ha sido cargado
     if (!inventarioLoading && cantidadInicial >= 0) {
       setCantidadDonar(cantidadInicial);
     }
-  }, [totalDisponible, solicitud.cantidad, inventarioLoading]);
+  }, [maxDisponibleDeposito, inventarioLoading]);
 
   const handleDonacionSubmit = () => {
-    if (onDonar && cantidadDonar > 0 && cantidadDonar <= solicitud.cantidad) {
+    if (
+      onDonar &&
+      Number.isFinite(cantidadDonar) &&
+      cantidadDonar > 0 &&
+      cantidadDonar <= solicitud.cantidad &&
+      cantidadDonar <= maxDisponibleDeposito &&
+      cantidadUnidadValida
+    ) {
       // Calcular porcentaje automáticamente para el backend
       const porcentaje = Math.round((cantidadDonar / solicitud.cantidad) * 100);
       onDonar(cantidadDonar, porcentaje, comentarioDonacion);
@@ -126,15 +138,13 @@ const SolicitudDetailModal = ({
   };
 
   const handleCantidadChange = (value: string) => {
-    // Solo aceptar números enteros
-    const cantidad = parseInt(value) || 0;
-    const maxDisponible = Math.min(solicitud.cantidad, totalDisponible);
-    setCantidadDonar(Math.min(Math.max(0, cantidad), maxDisponible));
-  };
-
-  const setearMaximo = () => {
-    const maxDisponible = Math.min(solicitud.cantidad, totalDisponible);
-    setCantidadDonar(Math.floor(maxDisponible)); // Redondear hacia abajo para asegurar entero
+    const cantidad = Number(value);
+    const maxDisponible = maxDisponibleDeposito;
+    setCantidadDonar(
+      value.trim() === '' || !Number.isFinite(cantidad)
+        ? 0
+        : Math.min(Math.max(0, cantidad), maxDisponible),
+    );
   };
 
   return (
@@ -305,7 +315,7 @@ const SolicitudDetailModal = ({
                         Comentario del Operador
                       </p>
                       <p className="text-sm text-gray-800 italic">
-                        "{solicitud.comentario_admin}"
+                        &quot;{solicitud.comentario_admin}&quot;
                       </p>
                     </div>
                   )}
@@ -336,7 +346,7 @@ const SolicitudDetailModal = ({
             {solicitud.estado === 'pendiente' && (
             <div className="bg-white p-4 rounded-lg border">
               <h4 className="font-semibold text-gray-900 mb-3">
-                Inventario disponible para "{solicitud.tipo_alimento}"
+                Inventario disponible para &quot;{solicitud.tipo_alimento}&quot;
               </h4>
 
               {inventarioLoading && (
@@ -356,6 +366,7 @@ const SolicitudDetailModal = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {inventario.map(item => {
                       const unidad = item.unidad_simbolo || item.unidad_nombre || 'unidades';
+                      const unidadOriginal = item.unidad_simbolo_original || item.unidad_nombre_original || unidad;
                       return (
                         <div key={item.id} className="border rounded-lg p-3">
                           <div className="font-semibold text-gray-900">
@@ -367,6 +378,11 @@ const SolicitudDetailModal = ({
                           <div className="text-sm text-gray-600">
                             Disponible: <span className="font-medium">{formatQuantity(item.cantidad_disponible)} {unidad}</span>
                           </div>
+                          {item.fue_convertido && (
+                            <div className="text-xs text-gray-500">
+                              Equivale a {formatQuantity(item.cantidad_disponible_original)} {unidadOriginal} en inventario
+                            </div>
+                          )}
                           {item.fecha_vencimiento && (
                             <div className="text-xs text-gray-500">
                               Actualizado: {formatDate(item.fecha_vencimiento)}
@@ -391,6 +407,30 @@ const SolicitudDetailModal = ({
                         </span>
                       </div>
                       <div className="mt-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Bodega para aprobación
+                        </label>
+                        <select
+                          value={depositoSeleccionado}
+                          onChange={(event) => onDepositoSeleccionadoChange(event.target.value)}
+                          className="w-full p-2 border border-gray-300 rounded-lg"
+                          disabled={isProcessing}
+                        >
+                          <option value="">Selecciona una bodega</option>
+                          {inventario.map(item => (
+                            <option key={item.id} value={item.id_deposito}>
+                              {item.deposito} - {formatQuantity(item.cantidad_disponible)} {item.unidad_simbolo || item.unidad_nombre || solicitud.unidades?.simbolo || 'unidades'}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Disponible en bodega seleccionada: </span>
+                        <span className={`font-semibold ${stockDepositoSeleccionado > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatQuantity(stockDepositoSeleccionado)} {solicitud.unidades?.simbolo ?? 'unidades'}
+                        </span>
+                      </div>
+                      <div className="mt-2">
                         {totalDisponible >= solicitud.cantidad ? (
                           <div className="flex items-center text-green-600 text-sm">
                             <CheckCircle className="w-4 h-4 mr-1" />
@@ -412,7 +452,7 @@ const SolicitudDetailModal = ({
                 <div className="text-center py-4">
                   <XCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
                   <p className="text-sm text-gray-600">
-                    No hay stock disponible de "{solicitud.tipo_alimento}" en el inventario
+                    No hay stock disponible de &quot;{solicitud.tipo_alimento}&quot; en el inventario
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
                     La solicitud no puede ser satisfecha en este momento
@@ -536,14 +576,14 @@ const SolicitudDetailModal = ({
               </h3>
 
               {/* Alerta de sin stock */}
-              {!inventarioLoading && totalDisponible === 0 && (
+              {!inventarioLoading && depositoSeleccionado !== '' && stockDepositoSeleccionado === 0 && (
                 <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4">
                   <div className="flex items-start gap-3">
                     <XCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-1" />
                     <div className="flex-1">
                       <h4 className="font-bold text-red-900 mb-2">Sin Stock Disponible</h4>
                       <p className="text-sm text-red-800 mb-3">
-                        No hay inventario disponible de "{solicitud.tipo_alimento}". No se puede procesar ninguna donación para esta solicitud.
+                        La bodega seleccionada no tiene inventario disponible de &quot;{solicitud.tipo_alimento}&quot;. Selecciona otra bodega o rechaza la solicitud.
                       </p>
                       <button
                         type="button"
@@ -554,7 +594,7 @@ const SolicitudDetailModal = ({
                         Rechazar Solicitud por Falta de Stock
                       </button>
                       <p className="text-xs text-red-700 italic mt-2">
-                        Al rechazar, se notificará automáticamente al solicitante con el motivo "Sin stock disponible"
+                        Al rechazar, se notificará automáticamente al solicitante con el motivo &quot;Sin stock disponible&quot;
                       </p>
                     </div>
                   </div>
@@ -566,9 +606,11 @@ const SolicitudDetailModal = ({
                   type="button"
                   onClick={() => setModoDonacion(true)}
                   className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                  disabled={totalDisponible === 0}
+                  disabled={!depositoSeleccionado || stockDepositoSeleccionado === 0}
                 >
-                  {totalDisponible === 0 ? 'Sin Stock Disponible - No se puede procesar' : 'Procesar Donación'}
+                  {!depositoSeleccionado
+                    ? 'Selecciona una bodega para procesar'
+                    : (stockDepositoSeleccionado === 0 ? 'Sin Stock en esta bodega' : 'Procesar Donación')}
                 </button>
               ) : (
                 <div className="space-y-4">
@@ -582,8 +624,8 @@ const SolicitudDetailModal = ({
                       </div>
                       <div>
                         <span className="text-gray-600">Disponible en stock:</span>
-                        <p className={`font-semibold text-lg ${totalDisponible >= solicitud.cantidad ? 'text-green-600' : 'text-orange-600'}`}>
-                          {Math.floor(totalDisponible)} {solicitud.unidades?.simbolo ?? 'unidades'}
+                        <p className={`font-semibold text-lg ${maxDisponibleDeposito >= solicitud.cantidad ? 'text-green-600' : 'text-orange-600'}`}>
+                          {formatQuantity(maxDisponibleDeposito)} {solicitud.unidades?.simbolo ?? 'unidades'}
                         </p>
                       </div>
                       {(solicitud.cantidad_entregada && solicitud.cantidad_entregada > 0) && (
@@ -605,23 +647,31 @@ const SolicitudDetailModal = ({
 
                   {/* Cantidad a donar */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Cantidad a donar (unidades enteras)
+                    <label htmlFor="cantidad-donar" className="block text-sm font-medium text-gray-700 mb-2">
+                      Cantidad a donar
                     </label>
                     <div className="flex items-center space-x-2">
                       <input
+                        id="cantidad-donar"
                         type="number"
-                        min="1"
-                        max={Math.floor(Math.min(solicitud.cantidad, totalDisponible))}
-                        step="1"
+                        min="0"
+                        max={maxDisponibleDeposito}
+                        step={permiteFraccion ? '0.01' : '1'}
                         value={cantidadDonar}
                         onChange={(e) => handleCantidadChange(e.target.value)}
+                        aria-invalid={!cantidadUnidadValida}
+                        aria-describedby={!cantidadUnidadValida ? 'cantidad-donar-error' : undefined}
                         className="flex-1 px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-lg font-semibold"
                         disabled={isProcessing}
                         placeholder="Ingrese cantidad"
                       />
                       <span className="text-gray-600 font-medium">{solicitud.unidades?.simbolo ?? 'unidades'}</span>
                     </div>
+                    {!cantidadUnidadValida && (
+                      <p id="cantidad-donar-error" role="alert" className="mt-1 text-xs text-red-700">
+                        La unidad {solicitud.unidades?.nombre ?? solicitud.unidades?.simbolo ?? 'seleccionada'} no permite cantidades decimales. Ingresa una cantidad entera.
+                      </p>
+                    )}
                   </div>
 
                   {/* Comentario de donación */}
@@ -644,7 +694,7 @@ const SolicitudDetailModal = ({
                     <button
                       type="button"
                       onClick={handleDonacionSubmit}
-                      disabled={isProcessing || cantidadDonar <= 0 || cantidadDonar > Math.min(solicitud.cantidad, totalDisponible)}
+                      disabled={isProcessing || !cantidadUnidadValida || cantidadDonar <= 0 || cantidadDonar > maxDisponibleDeposito}
                       className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
                     >
                       {isProcessing ? 'Procesando...' : `Confirmar Donación de ${cantidadDonar} ${solicitud.unidades?.simbolo ?? 'unidades'}`}
@@ -653,7 +703,7 @@ const SolicitudDetailModal = ({
                       type="button"
                       onClick={() => {
                         setModoDonacion(false);
-                        setCantidadDonar(solicitud.cantidad);
+                        setCantidadDonar(Math.min(Math.max(0, solicitud.cantidad), maxDisponibleDeposito));
                         setComentarioDonacion('');
                       }}
                       disabled={isProcessing}

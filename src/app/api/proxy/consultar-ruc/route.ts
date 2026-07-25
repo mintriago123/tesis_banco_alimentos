@@ -1,4 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validarRucEcuatoriano } from '@/lib/validaciones';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createAdminSupabaseClient } from '@/lib/supabase-admin';
+import { getAuthenticatedUser } from '@/lib/server-auth';
+import {
+  enforceDocumentLookupRateLimit,
+  resolveServerServiceUrl,
+} from '@/lib/document-lookup-security';
 
 /**
  * Proxy para consultas de RUC
@@ -6,6 +14,13 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function GET(request: NextRequest) {
   try {
+    const supabase = await createServerSupabaseClient();
+    const authResult = await getAuthenticatedUser(supabase);
+
+    if (authResult.response) {
+      return authResult.response;
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const ruc = searchParams.get('ruc');
 
@@ -16,21 +31,37 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Obtener la URL del servicio externo desde variables de entorno del servidor
-    const servicioUrl = process.env.SERVICIO_CONSULTAS_RUC || process.env.NEXT_PUBLIC_SERVICIO_CONSULTAS_RUC;
-    
-    if (!servicioUrl) {
-      console.error('❌ Variable de entorno SERVICIO_CONSULTAS_RUC no configurada');
+    const rucLimpio = ruc.trim();
+
+    if (!/^\d{13}$/.test(rucLimpio) || !validarRucEcuatoriano(rucLimpio)) {
       return NextResponse.json(
-        { error: 'Servicio de consultas no configurado' },
-        { status: 500 }
+        { error: 'Formato de RUC inválido' },
+        { status: 400 }
       );
     }
 
-    const url = `${servicioUrl}?ruc=${ruc}`;
+    const serviceUrl = resolveServerServiceUrl('SERVICIO_CONSULTAS_RUC');
+
+    if (!serviceUrl.success) {
+      return serviceUrl.response;
+    }
+
+    const adminSupabase = createAdminSupabaseClient();
+    const rateLimit = await enforceDocumentLookupRateLimit(adminSupabase, {
+      userId: authResult.user.id,
+      endpoint: 'consultar-ruc',
+      documentValue: rucLimpio,
+    });
+
+    if (!rateLimit.allowed) {
+      return rateLimit.response;
+    }
+
+    const url = new URL(serviceUrl.url.toString());
+    url.searchParams.set('ruc', rucLimpio);
     
     // Realizar la petición HTTP desde el servidor (permitido)
-    const response = await fetch(url, {
+    const response = await fetch(url.toString(), {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });

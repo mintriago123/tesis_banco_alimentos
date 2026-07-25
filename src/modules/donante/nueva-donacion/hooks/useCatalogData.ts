@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { useState, useEffect, useCallback } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface UnidadAlimento {
   unidad_id: number;
@@ -22,6 +22,13 @@ interface Unidad {
   id: number;
   nombre: string;
   simbolo: string;
+  tipo_magnitud_id?: number;
+  es_base?: boolean;
+  activa?: boolean;
+  es_discreta?: boolean;
+  es_presentacion?: boolean;
+  permite_fraccion?: boolean;
+  es_convertible?: boolean;
 }
 
 interface UseCatalogDataReturn {
@@ -39,7 +46,7 @@ export function useCatalogData(supabase: SupabaseClient | null, authLoading: boo
   const [cargandoAlimentos, setCargandoAlimentos] = useState(true);
   const [cargandoUnidades, setCargandoUnidades] = useState(true);
 
-  const cargarAlimentos = async () => {
+  const cargarAlimentos = useCallback(async () => {
     if (!supabase) return;
     
     try {
@@ -80,33 +87,54 @@ export function useCatalogData(supabase: SupabaseClient | null, authLoading: boo
     } finally {
       setCargandoAlimentos(false);
     }
-  };
+  }, [supabase]);
 
-  const cargarUnidades = async () => {
+  const cargarUnidades = useCallback(async () => {
     if (!supabase) return;
     
     try {
       setCargandoUnidades(true);
       const { data, error } = await supabase
         .from('unidades')
-        .select('id, nombre, simbolo')
+        .select('id, nombre, simbolo, tipo_magnitud_id, es_base, activa, es_discreta, es_presentacion, permite_fraccion')
+        .eq('activa', true)
         .order('nombre');
 
       if (error) throw error;
-      setUnidades(data || []);
+
+      const { data: conversiones, error: conversionesError } = await supabase
+        .from('conversiones')
+        .select('unidad_origen_id, unidad_destino_id')
+        .eq('activo', true);
+
+      if (conversionesError) throw conversionesError;
+
+      const unidadesConvertibles = new Set(
+        (conversiones ?? []).flatMap(conversion => [
+          conversion.unidad_origen_id,
+          conversion.unidad_destino_id,
+        ])
+      );
+
+      setUnidades(
+        (data ?? []).map(unidad => ({
+          ...unidad,
+          es_convertible: unidadesConvertibles.has(unidad.id),
+        }))
+      );
     } catch (error) {
       console.error('Error al cargar unidades:', error);
     } finally {
       setCargandoUnidades(false);
     }
-  };
+  }, [supabase]);
 
   useEffect(() => {
     if (!authLoading && supabase) {
       cargarAlimentos();
       cargarUnidades();
     }
-  }, [supabase, authLoading]);
+  }, [supabase, authLoading, cargarAlimentos, cargarUnidades]);
 
   // Obtener categorías únicas
   const categoriasUnicas = [...new Set(alimentos.map(a => a.categoria))].sort();

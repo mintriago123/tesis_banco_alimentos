@@ -3,6 +3,8 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { ConversionResolution } from '@/lib/unidadConversion';
+import { resolverConversion } from '@/lib/unidadConversion';
 import type {
   InventarioDisponible,
   ServiceResult,
@@ -12,9 +14,19 @@ import type {
   SupabaseSolicitudRow,
   SupabaseSolicitudUsuario
 } from '../types';
+import {
+  escapeLikePattern,
+  parsePositiveIntegerValue,
+} from '@/lib/validation-core';
+
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 const logger = {
-  info: (message: string, details?: unknown) => console.info(`[SolicitudesDataService] ${message}`, details),
+  info: (message: string, details?: unknown) => {
+    if (isDevelopment) {
+      console.info(`[SolicitudesDataService] ${message}`, details);
+    }
+  },
   error: (message: string, error?: unknown) => console.error(`[SolicitudesDataService] ${message}`, error)
 };
 
@@ -47,7 +59,9 @@ export const createSolicitudesDataService = (supabaseClient: SupabaseClient) => 
             nombre,
             simbolo,
             tipo_magnitud_id,
-            es_base
+            es_base,
+            es_discreta,
+            permite_fraccion
           ),
           usuarios:usuario_id (
             nombre,
@@ -85,17 +99,30 @@ export const createSolicitudesDataService = (supabaseClient: SupabaseClient) => 
     }
   };
 
-  const fetchInventarioDisponible = async (tipoAlimento: string): Promise<ServiceResult<InventarioDisponible[]>> => {
+  const fetchInventarioDisponible = async (solicitud: Pick<Solicitud, 'tipo_alimento' | 'unidad_id'>): Promise<ServiceResult<InventarioDisponible[]>> => {
     try {
+      const termino = solicitud.tipo_alimento.trim();
+      if (!termino) {
+        return {
+          success: true,
+          data: []
+        };
+      }
+
       const { data, error } = await supabaseClient
-        .from('inventario')
+        .from('entradas_inventario')
         .select(`
-          id_inventario,
+          id_entrada,
+          id_deposito,
+          unidad_id,
           cantidad_disponible,
-          fecha_actualizacion,
+          fecha_ingreso,
+          fecha_vencimiento,
           productos_donados!inner(
             nombre_producto,
+            unidad_id,
             unidades(
+              id,
               nombre,
               simbolo
             )
@@ -104,9 +131,10 @@ export const createSolicitudesDataService = (supabaseClient: SupabaseClient) => 
             nombre
           )
         `)
-        .ilike('productos_donados.nombre_producto', `%${tipoAlimento}%`)
+        .ilike('productos_donados.nombre_producto', `%${escapeLikePattern(termino)}%`)
+        .eq('estado', 'disponible')
         .gt('cantidad_disponible', 0)
-        .order('fecha_actualizacion', { ascending: true, nullsFirst: false });
+        .order('fecha_ingreso', { ascending: true, nullsFirst: false });
 
       if (error) {
         logger.error('Error al consultar inventario disponible', error);
@@ -117,8 +145,11 @@ export const createSolicitudesDataService = (supabaseClient: SupabaseClient) => 
         };
       }
 
-      const inventarioFormateado: InventarioDisponible[] = ((data ?? []) as SupabaseInventarioDisponibleRow[])
-        .map(mapInventarioDisponibleRowToDomain);
+      const inventarioFormateado = await Promise.all(
+        ((data ?? []) as SupabaseInventarioDisponibleRow[]).map(row =>
+          mapInventarioDisponibleRowToDomain(supabaseClient, row, solicitud.unidad_id)
+        )
+      );
 
       return {
         success: true,
@@ -191,6 +222,8 @@ const mapSolicitudUnidad = (unidad: unknown): import('../types').SolicitudUnidad
     simbolo?: string | null;
     tipo_magnitud_id?: number | null;
     es_base?: boolean | null;
+    es_discreta?: boolean | null;
+    permite_fraccion?: boolean | null;
   };
 
   if (!u.id || !u.nombre || !u.simbolo || u.tipo_magnitud_id === null || u.tipo_magnitud_id === undefined) {
@@ -202,7 +235,9 @@ const mapSolicitudUnidad = (unidad: unknown): import('../types').SolicitudUnidad
     nombre: u.nombre,
     simbolo: u.simbolo,
     tipo_magnitud_id: u.tipo_magnitud_id,
-    es_base: u.es_base ?? false
+    es_base: u.es_base ?? false,
+    es_discreta: u.es_discreta ?? undefined,
+    permite_fraccion: u.permite_fraccion ?? undefined,
   };
 };
 
@@ -215,19 +250,98 @@ const normalizeRelation = <T>(value: T | T[] | null | undefined): T | null => {
 };
 
 const mapInventarioDisponibleRowToDomain = (
-  row: SupabaseInventarioDisponibleRow
-): InventarioDisponible => {
+  supabaseClient: SupabaseClient,
+  row: SupabaseInventarioDisponibleRow,
+  unidadSolicitudId?: number
+): Promise<InventarioDisponible> => {
+  return mapInventarioDisponibleRowToDomainInternal(supabaseClient, row, unidadSolicitudId);
+};
+
+const mapInventarioDisponibleRowToDomainInternal = async (
+  supabaseClient: SupabaseClient,
+  row: SupabaseInventarioDisponibleRow,
+  unidadSolicitudId?: number
+): Promise<InventarioDisponible> => {
   const producto = normalizeRelation(row.productos_donados);
   const deposito = normalizeRelation(row.depositos);
   const unidad = producto?.unidades ? normalizeRelation(producto.unidades) : null;
+  const cantidadOriginal = row.cantidad_disponible ?? 0;
+  const unidadProductoId = row.unidad_id ?? producto?.unidad_id ?? undefined;
+
+  let cantidadDisponible = cantidadOriginal;
+  let unidadNombre = unidad?.nombre ?? undefined;
+  let unidadSimbolo = unidad?.simbolo ?? undefined;
+  let fueConvertido = false;
+
+  if (unidadSolicitudId && unidadProductoId && unidadSolicitudId !== unidadProductoId) {
+    const resolution = await obtenerConversion(
+      supabaseClient,
+      unidadProductoId,
+      unidadSolicitudId
+    );
+
+    if (resolution.convertible) {
+      cantidadDisponible = cantidadOriginal * resolution.factor;
+      fueConvertido = true;
+
+      const unidadSolicitud = await obtenerUnidadPorId(supabaseClient, unidadSolicitudId);
+      if (unidadSolicitud) {
+        unidadNombre = unidadSolicitud.nombre ?? undefined;
+        unidadSimbolo = unidadSolicitud.simbolo ?? undefined;
+      }
+    }
+  }
 
   return {
-    id: String(row.id_inventario),
+    id: String(row.id_entrada),
+    id_deposito: row.id_deposito,
     tipo_alimento: producto?.nombre_producto ?? 'Producto desconocido',
-    cantidad_disponible: row.cantidad_disponible ?? 0,
+    cantidad_disponible: cantidadDisponible,
+    cantidad_disponible_original: cantidadOriginal,
     deposito: deposito?.nombre ?? 'Depósito desconocido',
-    fecha_vencimiento: row.fecha_actualizacion ?? null,
-    unidad_nombre: unidad?.nombre ?? undefined,
-    unidad_simbolo: unidad?.simbolo ?? undefined
+    fecha_vencimiento: row.fecha_vencimiento ?? row.fecha_ingreso ?? null,
+    unidad_id: row.unidad_id ?? unidadProductoId,
+    unidad_nombre: unidadNombre,
+    unidad_simbolo: unidadSimbolo,
+    unidad_nombre_original: unidad?.nombre ?? undefined,
+    unidad_simbolo_original: unidad?.simbolo ?? undefined,
+    fue_convertido: fueConvertido
   };
+};
+
+const obtenerUnidadPorId = async (
+  supabaseClient: SupabaseClient,
+  unidadId: number
+): Promise<{ nombre?: string | null; simbolo?: string | null } | null> => {
+  const parsedUnidadId = parsePositiveIntegerValue(unidadId, { name: 'unidadId', min: 1 });
+  if (!parsedUnidadId.success) {
+    return null;
+  }
+
+  const { data, error } = await supabaseClient
+    .from('unidades')
+    .select('nombre, simbolo')
+    .eq('id', parsedUnidadId.value)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return data;
+};
+
+const obtenerConversion = async (
+  supabaseClient: SupabaseClient,
+  unidadOrigenId: number,
+  unidadDestinoId: number
+): Promise<ConversionResolution> => {
+  const origen = parsePositiveIntegerValue(unidadOrigenId, { name: 'unidadOrigenId', min: 1 });
+  const destino = parsePositiveIntegerValue(unidadDestinoId, { name: 'unidadDestinoId', min: 1 });
+
+  if (!origen.success || !destino.success) {
+    return { convertible: false, reason: 'no_conversion' };
+  }
+
+  return resolverConversion(supabaseClient, origen.value, destino.value);
 };

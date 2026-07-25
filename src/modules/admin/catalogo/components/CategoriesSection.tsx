@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Trash2, Package } from 'lucide-react';
 
 interface CategoryWithCount {

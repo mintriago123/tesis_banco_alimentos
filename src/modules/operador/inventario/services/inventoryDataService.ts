@@ -10,9 +10,32 @@ import type {
   ServiceResult,
   SupabaseInventarioRow,
   OperadorInventarioStats,
-  AlertaInventario,
-  MovimientoInventario
+  AlertaInventario
 } from '../types';
+import {
+  isUuid,
+  parseFiniteNumberValue,
+  parseUuidValue,
+} from '@/lib/validation-core';
+
+type OperadorStatsRow = {
+  cantidad_disponible: number | null;
+  fecha_vencimiento: string | null;
+};
+
+type AjusteInventarioRow = {
+  id_entrada: string;
+  id_deposito: string;
+  cantidad_disponible: number | null;
+  id_producto: string;
+  productos?: {
+    nombre_producto?: string | null;
+    unidad_id?: number | null;
+  } | {
+    nombre_producto?: string | null;
+    unidad_id?: number | null;
+  }[] | null;
+};
 
 // Constantes locales
 const STOCK_LEVELS = {
@@ -26,8 +49,14 @@ const DAYS_TO_EXPIRE = {
   CRITICO: 7
 } as const;
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 const logger = {
-  info: (message: string, details?: unknown) => console.info(`[OperadorInventoryService] ${message}`, details),
+  info: (message: string, details?: unknown) => {
+    if (isDevelopment) {
+      console.info(`[OperadorInventoryService] ${message}`, details);
+    }
+  },
   error: (message: string, error?: unknown) => console.error(`[OperadorInventoryService] ${message}`, error)
 };
 
@@ -41,26 +70,27 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
       logger.info('Consultando inventario para operador');
       
       const { data, error } = await supabaseClient
-        .from('inventario')
+        .from('entradas_inventario')
         .select(`
-          id_inventario,
+          id_entrada,
           id_deposito,
           id_producto,
+          unidad_id,
           cantidad_disponible,
-          fecha_actualizacion,
-          depositos:depositos!inventario_id_deposito_fkey(
+          fecha_ingreso,
+          fecha_vencimiento,
+          updated_at,
+          depositos!inner(
             id_deposito,
             nombre,
             descripcion
           ),
-          productos:productos_donados!inventario_id_producto_fkey(
+          productos:productos_donados!inner(
             id_producto,
+            id_usuario,
             nombre_producto,
             descripcion,
-            unidad_medida,
             unidad_id,
-            fecha_caducidad,
-            fecha_donacion,
             unidades:unidades(
               id,
               nombre,
@@ -68,7 +98,9 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
             )
           )
         `)
-        .order('fecha_actualizacion', { ascending: false });
+        .eq('estado', 'disponible')
+        .gt('cantidad_disponible', 0)
+        .order('updated_at', { ascending: false });
 
       if (error) {
         logger.error('Error consultando inventario', error);
@@ -88,8 +120,9 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
       }
 
       logger.info('Datos de inventario recibidos', { count: data.length });
-      
-      const mappedData = ((data ?? []) as SupabaseInventarioRow[]).map(mapInventarioRowToDomainWithOperatorInfo);
+
+      const inventarioRows = (data ?? []) as SupabaseInventarioRow[];
+      const mappedData = inventarioRows.map(row => mapInventarioRowToDomainWithOperatorInfo(row));
       logger.info('Datos mapeados correctamente', { count: mappedData.length });
       
       return {
@@ -112,26 +145,27 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
   const fetchProductosConAlertas = async (): Promise<ServiceResult<InventarioItem[]>> => {
     try {
       const { data, error } = await supabaseClient
-        .from('inventario')
+        .from('entradas_inventario')
         .select(`
-          id_inventario,
+          id_entrada,
           id_deposito,
           id_producto,
+          unidad_id,
           cantidad_disponible,
-          fecha_actualizacion,
-          depositos:depositos!inventario_id_deposito_fkey(
+          fecha_ingreso,
+          fecha_vencimiento,
+          updated_at,
+          depositos!inner(
             id_deposito,
             nombre,
             descripcion
           ),
-          productos:productos_donados!inventario_id_producto_fkey(
+          productos:productos_donados!inner(
             id_producto,
+            id_usuario,
             nombre_producto,
             descripcion,
-            unidad_medida,
             unidad_id,
-            fecha_caducidad,
-            fecha_donacion,
             unidades:unidades(
               id,
               nombre,
@@ -139,6 +173,7 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
             )
           )
         `)
+        .eq('estado', 'disponible')
         .or(`cantidad_disponible.lt.${STOCK_LEVELS.BAJO}`)
         .order('cantidad_disponible', { ascending: true });
 
@@ -151,8 +186,9 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
         };
       }
 
-      const inventario = ((data ?? []) as SupabaseInventarioRow[])
-        .map(mapInventarioRowToDomainWithOperatorInfo)
+      const inventarioRows = (data ?? []) as SupabaseInventarioRow[];
+      const inventario = inventarioRows
+        .map(row => mapInventarioRowToDomainWithOperatorInfo(row))
         .filter(item => item.necesita_atencion);
 
       return {
@@ -175,13 +211,10 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
   const fetchOperadorStats = async (): Promise<ServiceResult<OperadorInventarioStats>> => {
     try {
       const { data, error } = await supabaseClient
-        .from('inventario')
-        .select(`
-          cantidad_disponible,
-          productos:productos_donados!inventario_id_producto_fkey(
-            fecha_caducidad
-          )
-        `);
+        .from('entradas_inventario')
+        .select('cantidad_disponible, fecha_vencimiento')
+        .eq('estado', 'disponible')
+        .gt('cantidad_disponible', 0);
 
       if (error) {
         logger.error('Error consultando estadísticas', error);
@@ -192,7 +225,7 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
         };
       }
 
-      const stats = calculateOperadorStats(data as any[]);
+      const stats = calculateOperadorStats((data ?? []) as OperadorStatsRow[]);
 
       return {
         success: true,
@@ -216,6 +249,7 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
       const { data, error } = await supabaseClient
         .from('depositos')
         .select('id_deposito, nombre, descripcion')
+        .eq('activo', true)
         .order('nombre', { ascending: true });
 
       if (error) {
@@ -274,32 +308,45 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
    * Actualizar cantidad de un item de inventario
    */
   const updateCantidad = async (
-    idInventario: string,
+    idEntrada: string,
     nuevaCantidad: number
   ): Promise<ServiceResult<void>> => {
     try {
-      logger.info('Actualizando cantidad de inventario', { idInventario, nuevaCantidad });
+      logger.info('Actualizando cantidad de entrada', { idEntrada, nuevaCantidad });
 
-      if (nuevaCantidad < 0) {
+      const parsedIdEntrada = parseUuidValue(idEntrada, { name: 'idEntrada' });
+      if (!parsedIdEntrada.success) {
         return {
           success: false,
-          error: 'La cantidad no puede ser negativa'
+          error: parsedIdEntrada.error
+        };
+      }
+
+      const cantidad = parseFiniteNumberValue(nuevaCantidad, {
+        name: 'nuevaCantidad',
+        min: 0
+      });
+      if (!cantidad.success) {
+        return {
+          success: false,
+          error: cantidad.error
         };
       }
 
       // Obtener el item actual para calcular la diferencia
       const { data: itemActual, error: fetchError } = await supabaseClient
-        .from('inventario')
+        .from('entradas_inventario')
         .select(`
-          id_inventario,
+          id_entrada,
+          id_deposito,
           cantidad_disponible,
           id_producto,
-          productos:productos_donados!inventario_id_producto_fkey(
+          productos:productos_donados!inner(
             nombre_producto,
             unidad_id
           )
         `)
-        .eq('id_inventario', idInventario)
+        .eq('id_entrada', parsedIdEntrada.value)
         .single();
 
       if (fetchError || !itemActual) {
@@ -312,7 +359,7 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
       }
 
       const cantidadAnterior = itemActual.cantidad_disponible ?? 0;
-      const diferencia = nuevaCantidad - cantidadAnterior;
+      const diferencia = cantidad.value - cantidadAnterior;
 
       if (diferencia === 0) {
         return {
@@ -321,13 +368,21 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
         };
       }
 
-      const { error } = await supabaseClient
-        .from('inventario')
-        .update({
-          cantidad_disponible: nuevaCantidad,
-          fecha_actualizacion: new Date().toISOString()
-        })
-        .eq('id_inventario', idInventario);
+      const updateData: Record<string, unknown> = {
+        cantidad_disponible: cantidad.value,
+        estado: cantidad.value === 0 ? 'agotado' : 'disponible',
+        updated_at: new Date().toISOString(),
+      };
+      if (diferencia > 0) updateData.cantidad_original = cantidad.value;
+
+      let updateQuery = supabaseClient
+        .from('entradas_inventario')
+        .update(updateData)
+        .eq('id_entrada', parsedIdEntrada.value);
+      if (diferencia < 0) {
+        updateQuery = updateQuery.gte('cantidad_disponible', Math.abs(diferencia));
+      }
+      const { error } = await updateQuery;
 
       if (error) {
         logger.error('Error actualizando cantidad', error);
@@ -342,17 +397,19 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
       const movimientoResult = await registrarMovimientoOperador(
         itemActual,
         diferencia,
-        nuevaCantidad
+        cantidad.value
       );
 
       if (!movimientoResult.success) {
         // Si falla el registro del movimiento, revertir el cambio
         await supabaseClient
-          .from('inventario')
+          .from('entradas_inventario')
           .update({
-            cantidad_disponible: cantidadAnterior
+            cantidad_disponible: cantidadAnterior,
+            estado: cantidadAnterior === 0 ? 'agotado' : 'disponible',
+            updated_at: new Date().toISOString(),
           })
-          .eq('id_inventario', idInventario);
+          .eq('id_entrada', parsedIdEntrada.value);
 
         logger.error('Movimiento no registrado, cambios revertidos');
         return {
@@ -362,7 +419,7 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
         };
       }
 
-      logger.info('Cantidad actualizada exitosamente', { idInventario, nuevaCantidad });
+      logger.info('Cantidad actualizada exitosamente', { idEntrada: parsedIdEntrada.value, nuevaCantidad: cantidad.value });
 
       return {
         success: true,
@@ -382,7 +439,7 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
    * Registrar movimiento de ajuste realizado por operador
    */
   const registrarMovimientoOperador = async (
-    item: any,
+    item: AjusteInventarioRow,
     diferencia: number,
     cantidadNueva: number
   ): Promise<ServiceResult<void>> => {
@@ -398,8 +455,30 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
       }
 
       const operadorId = auth.user.id;
-      const producto = Array.isArray(item.productos) ? item.productos[0] : item.productos;
+      const parsedOperadorId = parseUuidValue(operadorId, { name: 'operadorId' });
+      if (!parsedOperadorId.success) {
+        return {
+          success: false,
+          error: parsedOperadorId.error
+        };
+      }
+
+      const producto = normalizeRelation(item.productos);
+      if (!isUuid(item.id_producto)) {
+        return {
+          success: false,
+          error: 'id_producto inválido'
+        };
+      }
+
       const nombreProducto = producto?.nombre_producto || 'Producto';
+      if (!producto?.unidad_id) {
+        return {
+          success: false,
+          error: 'El producto no tiene una unidad configurada'
+        };
+      }
+
       const tipoTransaccion = diferencia > 0 ? 'ingreso' : 'egreso';
       const cantidadMovimiento = Math.abs(diferencia);
 
@@ -408,8 +487,8 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
         .from('movimiento_inventario_cabecera')
         .insert({
           fecha_movimiento: new Date().toISOString(),
-          id_donante: operadorId,
-          id_solicitante: operadorId,
+          id_donante: parsedOperadorId.value,
+          id_solicitante: parsedOperadorId.value,
           estado_movimiento: 'completado',
           observaciones: `Ajuste manual de inventario por operador - ${nombreProducto} (${diferencia > 0 ? '+' : ''}${diferencia} unidades)`
         })
@@ -435,7 +514,10 @@ export const createOperadorInventoryDataService = (supabaseClient: SupabaseClien
           tipo_transaccion: tipoTransaccion,
           rol_usuario: 'distribuidor',
           observacion_detalle: `Ajuste manual de inventario por operador - ${tipoTransaccion === 'ingreso' ? 'Incremento' : 'Reducción'} de ${cantidadMovimiento} unidades. Stock actualizado a ${cantidadNueva}`,
-          unidad_id: producto?.unidad_id || null
+          unidad_id: producto.unidad_id,
+          unidad_convertida_id: producto.unidad_id,
+          id_entrada: item.id_entrada,
+          id_deposito: item.id_deposito,
         });
 
       if (detalleError) {
@@ -485,13 +567,15 @@ const normalizeRelation = <T>(value: T | T[] | null | undefined): T | null => {
   return (value ?? null) as T | null;
 };
 
-const mapInventarioRowToDomainWithOperatorInfo = (row: SupabaseInventarioRow): InventarioItem => {
+const mapInventarioRowToDomainWithOperatorInfo = (
+  row: SupabaseInventarioRow
+): InventarioItem => {
   const deposito = normalizeRelation(row.depositos);
   const producto = normalizeRelation(row.productos);
 
   // Calcular información específica para operador
   const cantidad = row.cantidad_disponible ?? 0;
-  const fechaCaducidad = producto?.fecha_caducidad;
+  const fechaCaducidad = row.fecha_vencimiento;
   const diasParaVencer = fechaCaducidad ? getDiasParaVencer(fechaCaducidad) : null;
   
   const stockStatus = getStockStatus(cantidad);
@@ -504,11 +588,11 @@ const mapInventarioRowToDomainWithOperatorInfo = (row: SupabaseInventarioRow): I
   const unidadSimbolo = Array.isArray(unidadInfo) ? unidadInfo[0]?.simbolo : unidadInfo?.simbolo;
 
   return {
-    id_inventario: row.id_inventario,
-    id_deposito: row.id_deposito,
+    id_entrada: row.id_entrada,
+    id_deposito: deposito?.id_deposito ?? row.id_deposito,
     id_producto: row.id_producto,
     cantidad_disponible: cantidad,
-    fecha_actualizacion: row.fecha_actualizacion ?? null,
+    fecha_actualizacion: row.updated_at ?? row.fecha_ingreso ?? null,
     deposito: {
       id_deposito: deposito?.id_deposito ?? row.id_deposito,
       nombre: deposito?.nombre ?? 'Sin depósito',
@@ -518,12 +602,11 @@ const mapInventarioRowToDomainWithOperatorInfo = (row: SupabaseInventarioRow): I
       id_producto: producto?.id_producto ?? row.id_producto,
       nombre_producto: producto?.nombre_producto ?? 'Sin nombre',
       descripcion: producto?.descripcion ?? null,
-      unidad_medida: producto?.unidad_medida ?? null,
-      unidad_id: producto?.unidad_id ?? null,
+      unidad_id: row.unidad_id ?? producto?.unidad_id ?? null,
       unidad_nombre: unidadNombre ?? null,
       unidad_simbolo: unidadSimbolo ?? null,
-      fecha_caducidad: producto?.fecha_caducidad ?? null,
-      fecha_donacion: producto?.fecha_donacion ?? null,
+      fecha_caducidad: row.fecha_vencimiento ?? null,
+      fecha_donacion: row.fecha_ingreso ?? null,
       dias_para_vencer: diasParaVencer ?? undefined,
       estado_caducidad: estadoCaducidad
     },
@@ -552,7 +635,7 @@ const getEstadoCaducidad = (diasParaVencer: number | null): 'vigente' | 'proximo
   return 'vigente';
 };
 
-const calculateOperadorStats = (data: any[]): OperadorInventarioStats => {
+const calculateOperadorStats = (data: OperadorStatsRow[]): OperadorInventarioStats => {
   const stats = {
     totalProductos: data.length,
     stockBajo: 0,
@@ -578,7 +661,7 @@ const calculateOperadorStats = (data: any[]): OperadorInventarioStats => {
     }
 
     // Productos próximos a vencer o vencidos
-    const fechaCaducidad = item.productos?.fecha_caducidad;
+    const fechaCaducidad = item.fecha_vencimiento;
     if (fechaCaducidad) {
       const diasParaVencer = getDiasParaVencer(fechaCaducidad);
       if (diasParaVencer < 0) {

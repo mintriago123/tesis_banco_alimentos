@@ -3,5 +3,5 @@
  */
 
 export { useDashboardData } from './hooks';
-export { RequestStatus } from './components';
+export { DashboardHero, DashboardQuickActions, RequestStatus } from './components';
 export type { DashboardData, RequestStatusItem } from '@/modules/admin/dashboard/types';

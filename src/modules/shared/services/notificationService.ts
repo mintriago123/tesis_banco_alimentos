@@ -1,10 +1,18 @@
 import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { sendEmail, EmailOptions } from '@/lib/email';
+import { sendEmail, type EmailOptions } from '@/lib/email';
 import { buildNotificationEmailTemplate } from '@/lib/email/templates/notificationEmail';
+import { safeInternalPath } from '@/lib/safe-internal-path';
+import { isUuid } from '@/lib/validation-core';
 
 type NotificationType = 'info' | 'success' | 'warning' | 'error';
+type NotificationEmailOptions = Partial<
+  Pick<
+    EmailOptions,
+    'to' | 'subject' | 'html' | 'text' | 'from' | 'cc' | 'bcc' | 'replyTo' | 'attachments' | 'headers'
+  >
+>;
 
 export interface CreateNotificationInput {
   titulo: string;
@@ -17,10 +25,7 @@ export interface CreateNotificationInput {
   metadatos?: Record<string, unknown>;
   expiraEn?: string;
   enviarEmail?: boolean;
-  email?: Pick<
-    EmailOptions,
-    'to' | 'subject' | 'html' | 'text' | 'from' | 'cc' | 'bcc' | 'replyTo' | 'attachments' | 'headers'
-  >;
+  email?: NotificationEmailOptions;
 }
 
 export interface NotificacionRecord {
@@ -34,8 +39,6 @@ export interface NotificacionRecord {
   url_accion: string | null;
   metadatos: Record<string, unknown> | null;
   fecha_creacion: string;
-  leida: boolean;
-  activa: boolean;
   expira_en: string | null;
 }
 
@@ -61,6 +64,7 @@ export class NotificationService {
 
   async createNotification(input: CreateNotificationInput): Promise<NotificacionRecord> {
     const categoria = input.categoria ?? DEFAULT_CATEGORY;
+    const urlAccion = safeInternalPath(input.urlAccion);
 
     const { data, error } = await this.supabase
       .from('notificaciones')
@@ -71,11 +75,9 @@ export class NotificationService {
         categoria,
         destinatario_id: input.destinatarioId ?? null,
         rol_destinatario: input.rolDestinatario ?? null,
-        url_accion: input.urlAccion ?? null,
+        url_accion: urlAccion,
         metadatos: input.metadatos ?? {},
         expira_en: input.expiraEn ?? null,
-        fecha_creacion: new Date().toISOString(),
-        activa: true,
       })
       .select()
       .single();
@@ -194,6 +196,10 @@ export class NotificationService {
   }
 
   private async obtenerUsuarioPorId(usuarioId: string): Promise<UsuarioRecord | null> {
+    if (!isUuid(usuarioId)) {
+      return null;
+    }
+
     const { data, error } = await this.supabase
       .from('usuarios')
       .select('id, email, nombre, estado, rol, recibir_notificaciones')
@@ -201,17 +207,6 @@ export class NotificationService {
       .single();
 
     if (error) {
-      if ((error as any)?.code === 'PGRST204') {
-        console.warn('columna recibir_notificaciones no disponible en usuarios, usando valor por defecto.');
-        const fallback = await this.supabase
-          .from('usuarios')
-          .select('id, email, nombre, estado, rol')
-          .eq('id', usuarioId)
-          .single();
-
-        return fallback.data as UsuarioRecord | null;
-      }
-
       console.error(`Error al obtener usuario ${usuarioId}:`, error);
       return null;
     }
@@ -232,26 +227,6 @@ export class NotificationService {
     const { data, error } = await query;
 
     if (error) {
-      if ((error as any)?.code === 'PGRST204') {
-        console.warn('columna recibir_notificaciones no disponible en usuarios, usando valor por defecto.');
-        let fallbackQuery = this.supabase
-          .from('usuarios')
-          .select('id, email, nombre, estado, rol');
-
-        if (normalizedRol !== 'TODOS') {
-          fallbackQuery = fallbackQuery.eq('rol', normalizedRol);
-        }
-
-        const { data: fallbackData, error: fallbackError } = await fallbackQuery;
-
-        if (fallbackError) {
-          console.error(`Error al obtener usuarios por rol ${rol}:`, fallbackError);
-          return [];
-        }
-
-        return (fallbackData ?? []).filter(Boolean) as UsuarioRecord[];
-      }
-
       console.error(`Error al obtener usuarios por rol ${rol}:`, error);
       return [];
     }
@@ -270,7 +245,9 @@ export class NotificationService {
       return true;
     });
 
-    const ids = activosConCorreo.map((usuario) => usuario.id);
+    const ids = activosConCorreo
+      .map((usuario) => usuario.id)
+      .filter(isUuid);
 
     const preferencias = await this.obtenerPreferencias(ids, categoria);
 
@@ -295,14 +272,16 @@ export class NotificationService {
   ): Promise<Map<string, boolean>> {
     const mapa = new Map<string, boolean>();
 
-    if (usuarioIds.length === 0) {
+    const idsValidos = usuarioIds.filter(isUuid);
+
+    if (idsValidos.length === 0) {
       return mapa;
     }
 
     const { data, error } = await this.supabase
       .from('configuracion_notificaciones')
       .select('usuario_id, email_activo')
-      .in('usuario_id', usuarioIds)
+      .in('usuario_id', idsValidos)
       .eq('categoria', categoria);
 
     if (error) {

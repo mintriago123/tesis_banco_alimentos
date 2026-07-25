@@ -10,11 +10,6 @@ export interface Unidad {
   simbolo: string;
 }
 
-export interface NuevoProducto {
-  nombre: string;
-  categoria: string;
-}
-
 export interface ImpactoCalculado {
   personasAlimentadas: number;
   comidaEquivalente: string;

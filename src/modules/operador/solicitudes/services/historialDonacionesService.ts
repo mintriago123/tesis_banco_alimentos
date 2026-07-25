@@ -3,6 +3,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { parseUuidValue } from '@/lib/validation-core';
 
 export interface HistorialDonacion {
   id: string;
@@ -24,13 +25,18 @@ export const obtenerHistorialDonaciones = async (
   solicitudId: string
 ): Promise<HistorialDonacion[]> => {
   try {
+    const parsedSolicitudId = parseUuidValue(solicitudId, { name: 'solicitudId' });
+    if (!parsedSolicitudId.success) {
+      return [];
+    }
+
     const { data, error } = await supabase
       .from('historial_donaciones')
       .select(`
         *,
         operador:usuarios!operador_id(nombre, rol)
       `)
-      .eq('solicitud_id', solicitudId)
+      .eq('solicitud_id', parsedSolicitudId.value)
       .order('created_at', { ascending: false });
 
     if (error) {

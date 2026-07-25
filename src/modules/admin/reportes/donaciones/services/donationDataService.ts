@@ -10,8 +10,14 @@ import type {
   SupabaseAlimentoRow
 } from '../types';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 const logger = {
-  info: (message: string, details?: unknown) => console.info(`[DonationDataService] ${message}`, details),
+  info: (message: string, details?: unknown) => {
+    if (isDevelopment) {
+      console.info(`[DonationDataService] ${message}`, details);
+    }
+  },
   error: (message: string, error?: unknown) => console.error(`[DonationDataService] ${message}`, error)
 };
 
@@ -68,6 +74,7 @@ type SupabaseDonationWithAlimento = SupabaseDonationRow & {
 const mapDonationRowToDomain = (row: SupabaseDonationWithAlimento): Donation => ({
   id: row.id,
   user_id: row.user_id,
+  id_deposito: row.id_deposito ?? null,
   nombre_donante: row.nombre_donante,
   ruc_donante: row.ruc_donante ?? undefined,
   cedula_donante: row.cedula_donante ?? undefined,
@@ -94,6 +101,10 @@ const mapDonationRowToDomain = (row: SupabaseDonationWithAlimento): Donation => 
   estado: row.estado,
   creado_en: row.creado_en,
   actualizado_en: row.actualizado_en,
+  motivo_cancelacion: row.motivo_cancelacion ?? null,
+  observaciones_cancelacion: row.observaciones_cancelacion ?? null,
+  usuario_cancelacion_id: row.usuario_cancelacion_id ?? null,
+  fecha_cancelacion: row.fecha_cancelacion ?? null,
   alimento: row.alimento
     ? {
         nombre: row.alimento.nombre ?? 'Producto',

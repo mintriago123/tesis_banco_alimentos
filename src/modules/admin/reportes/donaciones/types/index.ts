@@ -2,20 +2,15 @@
  * @fileoverview Tipos compartidos para el módulo de reportes de donaciones.
  */
 
-export type DonationEstado = 'Pendiente' | 'Recogida' | 'Entregada' | 'Cancelada';
+import type { MotivoCancelacion } from '@/modules/shared/donaciones/types';
+
+export type DonationEstado = 'Pendiente' | 'Aprobada' | 'Cancelada';
 
 export type DonationPersonType = 'Natural' | 'Juridica';
 
 export type LoadingState = 'idle' | 'loading' | 'success' | 'error';
 
-export type MotivoCancelacion = 
-  | 'error_donante'
-  | 'no_disponible'
-  | 'calidad_inadecuada'
-  | 'logistica_imposible'
-  | 'duplicado'
-  | 'solicitud_donante'
-  | 'otro';
+export type { MotivoCancelacion } from '@/modules/shared/donaciones/types';
 
 export interface DonationAlimento {
   nombre: string;
@@ -25,6 +20,7 @@ export interface DonationAlimento {
 export interface Donation {
   id: number;
   user_id: string;
+  id_deposito?: string | null;
   nombre_donante: string;
   ruc_donante?: string;
   cedula_donante?: string;
@@ -62,8 +58,7 @@ export interface Donation {
 export interface DonationEstadoFilter {
   todos: boolean;
   Pendiente: boolean;
-  Recogida: boolean;
-  Entregada: boolean;
+  Aprobada: boolean;
   Cancelada: boolean;
 }
 
@@ -82,8 +77,7 @@ export interface DonationFilters {
 export interface DonationCounters {
   total: number;
   pendientes: number;
-  recogidas: number;
-  entregadas: number;
+  aprobadas: number;
   canceladas: number;
 }
 
@@ -94,15 +88,10 @@ export interface ServiceResult<T> {
   errorDetails?: unknown;
 }
 
-export interface DonationInventoryIntegrationResult {
-  productoId?: number;
-  depositoId?: string;
-  error?: string;
-}
-
 export interface SupabaseDonationRow {
   id: number;
   user_id: string;
+  id_deposito?: string | null;
   nombre_donante: string;
   ruc_donante?: string | null;
   cedula_donante?: string | null;
@@ -130,16 +119,14 @@ export interface SupabaseDonationRow {
   creado_en: string;
   actualizado_en: string;
   codigo_comprobante?: string | null;
+  motivo_cancelacion?: MotivoCancelacion | null;
+  observaciones_cancelacion?: string | null;
+  usuario_cancelacion_id?: string | null;
+  fecha_cancelacion?: string | null;
 }
 
 export interface SupabaseAlimentoRow {
   id: number;
   nombre?: string | null;
   categoria?: string | null;
-}
-
-export interface CancelarDonacionRequest {
-  donacionId: number;
-  motivo: MotivoCancelacion;
-  observaciones?: string;
 }

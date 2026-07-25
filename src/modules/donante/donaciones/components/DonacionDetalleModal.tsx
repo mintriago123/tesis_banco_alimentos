@@ -18,9 +18,7 @@ export function DonacionDetalleModal({ donacion, isOpen, onClose }: DonacionDeta
     switch (estado) {
       case 'Pendiente':
         return base + 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'Recogida':
-        return base + 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'Entregada':
+      case 'Aprobada':
         return base + 'bg-green-100 text-green-800 border-green-300';
       case 'Cancelada':
         return base + 'bg-red-100 text-red-800 border-red-300';
@@ -108,6 +106,32 @@ export function DonacionDetalleModal({ donacion, isOpen, onClose }: DonacionDeta
                 </p>
               </div>
             </div>
+
+            {donacion.estado === 'Cancelada' && (
+              <div>
+                <h4 className="font-semibold text-gray-700 mb-2">Información de cancelación</h4>
+                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-gray-700 space-y-2">
+                  {donacion.fecha_cancelacion && (
+                    <p>
+                      <span className="font-medium">Fecha:</span>{' '}
+                      {formatDate(donacion.fecha_cancelacion)}
+                    </p>
+                  )}
+                  {donacion.motivo_cancelacion && (
+                    <p>
+                      <span className="font-medium">Motivo:</span>{' '}
+                      {donacion.motivo_cancelacion}
+                    </p>
+                  )}
+                  {donacion.observaciones_cancelacion && (
+                    <p>
+                      <span className="font-medium">Observaciones:</span>{' '}
+                      {donacion.observaciones_cancelacion}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {donacion.observaciones && (

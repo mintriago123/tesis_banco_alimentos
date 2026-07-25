@@ -5,15 +5,23 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createAdminSupabaseClient } from '@/lib/supabase-admin';
+import { requireActiveUserRole } from '@/lib/server-auth';
+import {
+  parseEnumParam,
+  parseIsoDateParam,
+  parseOptionalText,
+  parsePaginationParams,
+  parsePositiveNumber,
+  parseUuid,
+  readJsonObject,
+} from '@/lib/api-validation';
+import { validateCsrfRequest } from '@/lib/csrf';
 
 export const dynamic = 'force-dynamic';
 
-interface BajaProductoRequest {
-  id_inventario: string;
-  cantidad: number;
-  motivo: 'vencido' | 'dañado' | 'contaminado' | 'rechazado' | 'otro';
-  observaciones?: string;
-}
+const MOTIVOS_BAJA = ['vencido', 'dañado', 'contaminado', 'rechazado', 'otro'] as const;
+const MOTIVOS_BAJA_FILTRO = ['todos', ...MOTIVOS_BAJA] as const;
 
 /**
  * POST /api/operador/bajas
@@ -21,81 +29,51 @@ interface BajaProductoRequest {
  */
 export async function POST(request: NextRequest) {
   try {
+    const csrfResponse = validateCsrfRequest(request);
+    if (csrfResponse) {
+      return csrfResponse;
+    }
+
     const supabase = await createServerSupabaseClient();
-    
-    // Verificar autenticación
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      );
+    const authResult = await requireActiveUserRole(supabase, ['ADMINISTRADOR', 'OPERADOR']);
+
+    if (authResult.response) {
+      return authResult.response;
     }
 
-    // Verificar rol
-    const { data: usuario, error: usuarioError } = await supabase
-      .from('usuarios')
-      .select('rol, estado')
-      .eq('id', user.id)
-      .single();
+    // Obtener y validar datos del request
+    const jsonBody = await readJsonObject(request);
+    if (!jsonBody.success) return jsonBody.response;
 
-    if (usuarioError || !usuario) {
-      return NextResponse.json(
-        { error: 'Usuario no encontrado' },
-        { status: 404 }
-      );
-    }
+    const idEntrada = parseUuid(jsonBody.value.id_entrada, { name: 'id_entrada' });
+    if (!idEntrada.success) return idEntrada.response;
 
-    if (!['ADMINISTRADOR', 'OPERADOR'].includes(usuario.rol)) {
-      return NextResponse.json(
-        { error: 'No tienes permisos para realizar esta operación' },
-        { status: 403 }
-      );
-    }
+    const cantidad = parsePositiveNumber(jsonBody.value.cantidad, { name: 'cantidad' });
+    if (!cantidad.success) return cantidad.response;
 
-    if (usuario.estado !== 'activo') {
-      return NextResponse.json(
-        { error: 'Usuario inactivo' },
-        { status: 403 }
-      );
-    }
+    const motivo = parseEnumParam(jsonBody.value.motivo, MOTIVOS_BAJA, { name: 'motivo' });
+    if (!motivo.success) return motivo.response;
 
-    // Obtener datos del request
-    const body: BajaProductoRequest = await request.json();
-    const { id_inventario, cantidad, motivo, observaciones } = body;
+    const observaciones = parseOptionalText(jsonBody.value.observaciones, {
+      name: 'observaciones',
+      maxLength: 500,
+    });
+    if (!observaciones.success) return observaciones.response;
 
-    // Validaciones
-    if (!id_inventario || !cantidad || !motivo) {
-      return NextResponse.json(
-        { error: 'Datos incompletos. Se requiere id_inventario, cantidad y motivo' },
-        { status: 400 }
-      );
-    }
+    const adminSupabase = createAdminSupabaseClient();
 
-    if (cantidad <= 0) {
-      return NextResponse.json(
-        { error: 'La cantidad debe ser mayor a 0' },
-        { status: 400 }
-      );
-    }
+    // Llamar a la función de base de datos desde el servidor tras validar rol.
+    const rpcParams = {
+      p_id_entrada: idEntrada.value,
+      p_cantidad: cantidad.value,
+      p_motivo: motivo.value,
+      p_usuario_id: authResult.user.id,
+      p_observaciones: observaciones.value,
+    };
 
-    const motivosValidos = ['vencido', 'dañado', 'contaminado', 'rechazado', 'otro'];
-    if (!motivosValidos.includes(motivo)) {
-      return NextResponse.json(
-        { error: `Motivo inválido. Opciones: ${motivosValidos.join(', ')}` },
-        { status: 400 }
-      );
-    }
-
-    // Llamar a la función de base de datos
-    const { data, error } = await supabase
+    const { data, error } = await adminSupabase
       .rpc('dar_baja_producto', {
-        p_id_inventario: id_inventario,
-        p_cantidad: cantidad,
-        p_motivo: motivo,
-        p_usuario_id: user.id,
-        p_observaciones: observaciones || null
+        ...rpcParams,
       });
 
     if (error) {
@@ -141,38 +119,40 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
-    
-    // Verificar autenticación
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      );
-    }
+    const authResult = await requireActiveUserRole(supabase, ['ADMINISTRADOR', 'OPERADOR']);
 
-    // Verificar rol y estado
-    const { data: usuario, error: usuarioError } = await supabase
-      .from('usuarios')
-      .select('rol, estado')
-      .eq('id', user.id)
-      .single();
-
-    if (usuarioError || !usuario || usuario.estado !== 'activo') {
-      return NextResponse.json(
-        { error: 'Acceso denegado' },
-        { status: 403 }
-      );
+    if (authResult.response) {
+      return authResult.response;
     }
 
     // Obtener parámetros de búsqueda
     const searchParams = request.nextUrl.searchParams;
-    const motivo = searchParams.get('motivo');
-    const fecha_inicio = searchParams.get('fecha_inicio');
-    const fecha_fin = searchParams.get('fecha_fin');
-    const limit = parseInt(searchParams.get('limit') || '100');
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const motivo = parseEnumParam(searchParams.get('motivo'), MOTIVOS_BAJA_FILTRO, {
+      name: 'motivo',
+      fallback: 'todos',
+    });
+    if (!motivo.success) return motivo.response;
+
+    const fechaInicio = parseIsoDateParam(searchParams.get('fecha_inicio'), { name: 'fecha_inicio' });
+    if (!fechaInicio.success) return fechaInicio.response;
+
+    const fechaFin = parseIsoDateParam(searchParams.get('fecha_fin'), { name: 'fecha_fin' });
+    if (!fechaFin.success) return fechaFin.response;
+
+    if (fechaInicio.value && fechaFin.value && new Date(fechaInicio.value) > new Date(fechaFin.value)) {
+      return NextResponse.json(
+        { error: 'fecha_inicio no puede ser posterior a fecha_fin.' },
+        { status: 400 }
+      );
+    }
+
+    const pagination = parsePaginationParams(searchParams, {
+      defaultLimit: 100,
+      maxLimit: 200,
+    });
+    if (!pagination.success) return pagination.response;
+
+    const { limit, offset } = pagination.value;
 
     // Construir query
     let query = supabase
@@ -182,16 +162,16 @@ export async function GET(request: NextRequest) {
       .range(offset, offset + limit - 1);
 
     // Aplicar filtros
-    if (motivo && motivo !== 'todos') {
-      query = query.eq('motivo_baja', motivo);
+    if (motivo.value !== 'todos') {
+      query = query.eq('motivo_baja', motivo.value);
     }
 
-    if (fecha_inicio) {
-      query = query.gte('fecha_baja', fecha_inicio);
+    if (fechaInicio.value) {
+      query = query.gte('fecha_baja', fechaInicio.value);
     }
 
-    if (fecha_fin) {
-      query = query.lte('fecha_baja', fecha_fin);
+    if (fechaFin.value) {
+      query = query.lte('fecha_baja', fechaFin.value);
     }
 
     const { data, error, count } = await query;

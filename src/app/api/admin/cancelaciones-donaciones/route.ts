@@ -6,8 +6,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import type { DonacionCanceladaDetalle, EstadisticasCancelaciones } from '@/modules/admin/reportes/cancelaciones/types';
+import {
+  parseBooleanParam,
+  parseEnumParam,
+  parseIsoDateParam,
+  parsePaginationParams,
+} from '@/lib/api-validation';
+import { isUuid } from '@/lib/validation-core';
+import { requireActiveUserRole } from '@/lib/server-auth';
 
 export const dynamic = 'force-dynamic';
+
+const MOTIVOS_CANCELACION_FILTRO = [
+  'todos',
+  'error_donante',
+  'no_disponible',
+  'calidad_inadecuada',
+  'logistica_imposible',
+  'duplicado',
+  'solicitud_donante',
+  'otro',
+] as const;
 
 /**
  * GET /api/admin/cancelaciones-donaciones
@@ -16,46 +35,46 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
-    
-    // Verificar autenticación
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      );
-    }
+    const authResult = await requireActiveUserRole(supabase, ['ADMINISTRADOR']);
 
-    // Verificar rol de administrador
-    const { data: usuario, error: usuarioError } = await supabase
-      .from('usuarios')
-      .select('rol, estado')
-      .eq('id', user.id)
-      .single();
-
-    if (usuarioError || !usuario) {
-      return NextResponse.json(
-        { error: 'Usuario no encontrado' },
-        { status: 404 }
-      );
-    }
-
-    if (usuario.rol !== 'ADMINISTRADOR') {
-      return NextResponse.json(
-        { error: 'No tienes permisos para acceder a este recurso' },
-        { status: 403 }
-      );
+    if (authResult.response) {
+      return authResult.response;
     }
 
     // Obtener parámetros de consulta
     const searchParams = request.nextUrl.searchParams;
-    const motivo = searchParams.get('motivo');
-    const fechaInicio = searchParams.get('fecha_inicio');
-    const fechaFin = searchParams.get('fecha_fin');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const offset = parseInt(searchParams.get('offset') || '0');
-    const incluirEstadisticas = searchParams.get('estadisticas') === 'true';
+    const motivo = parseEnumParam(searchParams.get('motivo'), MOTIVOS_CANCELACION_FILTRO, {
+      name: 'motivo',
+      fallback: 'todos',
+    });
+    if (!motivo.success) return motivo.response;
+
+    const fechaInicio = parseIsoDateParam(searchParams.get('fecha_inicio'), { name: 'fecha_inicio' });
+    if (!fechaInicio.success) return fechaInicio.response;
+
+    const fechaFin = parseIsoDateParam(searchParams.get('fecha_fin'), { name: 'fecha_fin' });
+    if (!fechaFin.success) return fechaFin.response;
+
+    if (fechaInicio.value && fechaFin.value && new Date(fechaInicio.value) > new Date(fechaFin.value)) {
+      return NextResponse.json(
+        { error: 'fecha_inicio no puede ser posterior a fecha_fin.' },
+        { status: 400 }
+      );
+    }
+
+    const pagination = parsePaginationParams(searchParams, {
+      defaultLimit: 50,
+      maxLimit: 200,
+    });
+    if (!pagination.success) return pagination.response;
+
+    const incluirEstadisticas = parseBooleanParam(searchParams.get('estadisticas'), {
+      name: 'estadisticas',
+      fallback: false,
+    });
+    if (!incluirEstadisticas.success) return incluirEstadisticas.response;
+
+    const { limit, offset } = pagination.value;
 
     // Construir consulta base
     let query = supabase
@@ -86,17 +105,17 @@ export async function GET(request: NextRequest) {
 
     // Solo filtrar por motivo si existe y no es null
     // Esto permite que funcione incluso si los campos nuevos no existen aún
-    if (motivo && motivo !== 'todos') {
-      query = query.eq('motivo_cancelacion', motivo);
+    if (motivo.value !== 'todos') {
+      query = query.eq('motivo_cancelacion', motivo.value);
     }
 
-    if (fechaInicio) {
-      query = query.gte('fecha_cancelacion', fechaInicio);
+    if (fechaInicio.value) {
+      query = query.gte('fecha_cancelacion', fechaInicio.value);
     }
 
-    if (fechaFin) {
+    if (fechaFin.value) {
       // Agregar un día para incluir todo el día final
-      const fechaFinAjustada = new Date(fechaFin);
+      const fechaFinAjustada = new Date(fechaFin.value);
       fechaFinAjustada.setDate(fechaFinAjustada.getDate() + 1);
       query = query.lt('fecha_cancelacion', fechaFinAjustada.toISOString());
     }
@@ -116,7 +135,7 @@ export async function GET(request: NextRequest) {
       if (cancelacionesError.message?.includes('column') || cancelacionesError.code === '42703') {
         return NextResponse.json(
           { 
-            error: 'Los campos de cancelación no existen en la base de datos. Por favor, ejecuta el script SQL: database/agregar-campos-cancelacion-donaciones.sql',
+            error: 'La base de datos no está actualizada. Ejecuta las migraciones de supabase/migrations/ en orden ascendente.',
             details: cancelacionesError.message
           },
           { status: 500 }
@@ -146,7 +165,7 @@ export async function GET(request: NextRequest) {
     const usuariosCancelacionIds = [...new Set(
       cancelaciones
         .map(c => c.usuario_cancelacion_id)
-        .filter((id): id is string => id !== null && id !== undefined)
+        .filter((id): id is string => id !== null && id !== undefined && isUuid(id))
     )];
     
     let usuariosCancelacion: Array<{ id: string; nombre: string; email: string; rol: string }> = [];
@@ -186,7 +205,7 @@ export async function GET(request: NextRequest) {
     // Calcular estadísticas si se solicitan
     let estadisticas: EstadisticasCancelaciones | undefined;
 
-    if (incluirEstadisticas) {
+    if (incluirEstadisticas.value) {
       const { data: statsData, error: statsError } = await supabase
         .from('donaciones')
         .select('motivo_cancelacion, cantidad')

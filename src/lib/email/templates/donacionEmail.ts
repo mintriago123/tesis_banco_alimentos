@@ -3,10 +3,10 @@
  */
 
 import type { DatosComprobante } from '@/lib/comprobante/types';
-import { formatearFecha, formatearFechaSolo } from '@/lib/comprobante/comprobanteService';
+import { formatearFecha } from '@/lib/comprobante/comprobanteService';
 
 interface DonacionEmailTemplateInput {
-  estado: 'Recogida' | 'Entregada' | 'Cancelada';
+  estado: 'Aprobada' | 'Cancelada';
   comprobante: DatosComprobante;
   qrImageBase64?: string;
   baseUrl: string;
@@ -26,7 +26,7 @@ export function buildDonacionAprobadaEmailTemplate({
   qrImageBase64,
   baseUrl
 }: Omit<DonacionEmailTemplateInput, 'estado'>): { subject: string; html: string; text: string } {
-  const { usuario, pedido, codigoComprobante, fechaEmision, instrucciones, descripcionProyecto } = comprobante;
+  const { usuario, pedido, codigoComprobante, instrucciones, descripcionProyecto } = comprobante;
 
   const subject = `Donación Confirmada - Código: ${codigoComprobante}`;
 

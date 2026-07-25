@@ -12,9 +12,9 @@ interface AuthMessageProps {
 
 export const AuthMessage: React.FC<AuthMessageProps> = ({ mensaje, onClose }) => {
   const estilosPorTipo = {
-    error: 'bg-red-100 border-red-400 text-red-700',
-    exito: 'bg-green-100 border-green-400 text-green-700',
-    info: 'bg-blue-100 border-blue-400 text-blue-700',
+    error: 'border-rose-200 bg-rose-50 text-rose-800',
+    exito: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    info: 'border-blue-200 bg-blue-50 text-blue-800',
   };
 
   const iconosPorTipo = {
@@ -61,8 +61,8 @@ export const AuthMessage: React.FC<AuthMessageProps> = ({ mensaje, onClose }) =>
 
   return (
     <div
-      className={`p-4 border rounded-lg flex items-start gap-3 ${estilosPorTipo[mensaje.tipo]}`}
-      role="alert"
+      className={`flex items-start gap-3 rounded-xl border p-4 ${estilosPorTipo[mensaje.tipo]}`}
+      role={mensaje.tipo === 'error' ? 'alert' : 'status'}
     >
       <div className="flex-shrink-0">{iconosPorTipo[mensaje.tipo]}</div>
       <div className="flex-1 text-sm">{mensaje.texto}</div>

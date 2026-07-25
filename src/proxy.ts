@@ -1,6 +1,157 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { RUTAS_PUBLICAS } from '@/lib/constantes';
 import { NextResponse, type NextRequest } from 'next/server';
+import type { User } from '@supabase/supabase-js';
+
+type ServerSupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;
+
+const getErrorCode = (error: unknown): string | undefined => {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    return (error as { code?: string }).code;
+  }
+  return undefined;
+};
+
+type ProxyUserProfile = {
+  estado?: string | null;
+  rol?: string | null;
+  nombre?: string | null;
+  cedula?: string | null;
+  ruc?: string | null;
+};
+
+const SHARED_PRIVATE_ROUTES = [
+  '/perfil/actualizar',
+  '/notificaciones',
+  '/configuracion-notificaciones',
+  '/comprobante',
+] as const;
+
+const ROLE_PROTECTED_ROUTES = [
+  { route: '/admin', role: 'ADMINISTRADOR' },
+  { route: '/operador', role: 'OPERADOR' },
+  { route: '/donante', role: 'DONANTE' },
+  { route: '/user', role: 'SOLICITANTE' },
+] as const;
+
+const hasText = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+const isProfileComplete = (perfil: ProxyUserProfile) =>
+  hasText(perfil.rol) && hasText(perfil.nombre) && (hasText(perfil.cedula) || hasText(perfil.ruc));
+
+const isCompletarPerfilPath = (pathname: string) =>
+  pathname === '/perfil/completar' || pathname.startsWith('/perfil/completar/');
+
+const isRouteMatch = (pathname: string, route: string) =>
+  route === '/' ? pathname === '/' : pathname === route || pathname.startsWith(`${route}/`);
+
+const isAnyRouteMatch = (pathname: string, routes: readonly string[]) =>
+  routes.some((route) => isRouteMatch(pathname, route));
+
+const getRoleAccessForPath = (pathname: string) =>
+  ROLE_PROTECTED_ROUTES.find(({ route }) => isRouteMatch(pathname, route));
+
+const isInactiveStatus = (estado: string | null | undefined) =>
+  estado === 'bloqueado' || estado === 'desactivado';
+
+const requestedPath = (request: NextRequest) =>
+  `${request.nextUrl.pathname}${request.nextUrl.search}`;
+
+const redirectToLogin = (
+  request: NextRequest,
+  options: { callbackUrl?: string; error?: string } = {}
+) => {
+  const url = new URL('/auth/iniciar-sesion', request.url);
+
+  if (options.callbackUrl) {
+    url.searchParams.set('callbackUrl', options.callbackUrl);
+  }
+
+  if (options.error) {
+    url.searchParams.set('error', options.error);
+  }
+
+  return NextResponse.redirect(url);
+};
+
+const redirectAfterInactiveProfile = async (
+  supabase: ServerSupabaseClient,
+  request: NextRequest,
+  estado: string
+) => {
+  await supabase.auth.signOut();
+  return redirectToLogin(request, {
+    error: estado === 'bloqueado' ? 'blocked' : 'deactivated',
+  });
+};
+
+const dashboardUrlForRole = (rol: string, requestUrl: string) => {
+  if (rol === 'ADMINISTRADOR') return new URL('/admin/dashboard', requestUrl);
+  if (rol === 'OPERADOR') return new URL('/operador/dashboard', requestUrl);
+  if (rol === 'DONANTE') return new URL('/donante/dashboard', requestUrl);
+  return new URL('/user/dashboard', requestUrl);
+};
+
+const getCurrentProfile = async (supabase: ServerSupabaseClient, userId: string) => {
+  const { data: perfil, error } = await supabase
+    .from('usuarios')
+    .select('estado, rol, nombre, cedula, ruc')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return perfil as ProxyUserProfile | null;
+};
+
+const protectPrivateRoute = async (
+  request: NextRequest,
+  supabase: ServerSupabaseClient,
+  user: User | null,
+  supabaseResponse: NextResponse,
+  requiredRole?: string
+) => {
+  if (!user) {
+    return redirectToLogin(request, {
+      callbackUrl: requestedPath(request),
+      error: 'unauthorized',
+    });
+  }
+
+  try {
+    const perfil = await getCurrentProfile(supabase, user.id);
+
+    if (!perfil) {
+      return NextResponse.redirect(new URL('/perfil/completar', request.url));
+    }
+
+    const estadoUsuario = perfil.estado || 'activo';
+
+    if (isInactiveStatus(estadoUsuario)) {
+      return redirectAfterInactiveProfile(supabase, request, estadoUsuario);
+    }
+
+    if (!isProfileComplete(perfil)) {
+      return NextResponse.redirect(new URL('/perfil/completar', request.url));
+    }
+
+    if (requiredRole && perfil.rol !== requiredRole) {
+      return redirectToLogin(request, { error: 'forbidden' });
+    }
+
+    if (request.nextUrl.pathname === '/dashboard') {
+      return NextResponse.redirect(dashboardUrlForRole(perfil.rol ?? '', request.url));
+    }
+
+    return supabaseResponse;
+  } catch (error) {
+    console.error('Error en middleware al verificar perfil:', error);
+    return redirectToLogin(request);
+  }
+};
 
 export async function proxy(request: NextRequest) {
   const supabaseResponse = NextResponse.next({
@@ -10,214 +161,126 @@ export async function proxy(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
 
-    // Obtener usuario y suprimir errores esperados de refresh token
-    let user = null;
-    let error = null;
-    
+    let user: User | null = null;
+    let authError: unknown = null;
+
     try {
       const result = await supabase.auth.getUser();
       user = result.data.user;
-      error = result.error;
-    } catch (err: any) {
-      // Suprimir logs de errores esperados (refresh token no encontrado)
-      if (err?.code !== 'refresh_token_not_found') {
-        console.error('Error de autenticación en middleware:', err);
+      authError = result.error;
+    } catch (error: unknown) {
+      if (getErrorCode(error) !== 'refresh_token_not_found') {
+        console.error('Error de autenticacion en middleware:', error);
       }
-      error = err;
+      authError = error;
     }
 
-    // Si hay error al obtener el usuario, asumir que no está autenticado
-    const isAuthenticated = !!(user && !error);
-
+    const isAuthenticated = !!(user && !authError);
     const { pathname } = request.nextUrl;
 
-    // Si el usuario ya está logueado y trata de acceder a iniciar sesión o registrarse, redirigir al dashboard
-    // PERO: Permitir acceso si hay parámetros de timeout, error, etc. (para mostrar mensajes)
-    const tieneParametrosMensaje = request.nextUrl.searchParams.has('timeout') || 
-                                    request.nextUrl.searchParams.has('error') ||
-                                    request.nextUrl.searchParams.has('registro') ||
-                                    request.nextUrl.searchParams.has('verificacion');
-    
+    const tieneParametrosMensaje = request.nextUrl.searchParams.has('timeout') ||
+      request.nextUrl.searchParams.has('error') ||
+      request.nextUrl.searchParams.has('registro') ||
+      request.nextUrl.searchParams.has('verificacion');
+
     if ((pathname === '/auth/iniciar-sesion' || pathname === '/auth/registrar') && isAuthenticated && user && !tieneParametrosMensaje) {
       try {
-        const { data: perfil } = await supabase
-          .from('usuarios')
-          .select('estado, rol')
-          .eq('id', user.id)
-          .single();
+        const perfil = await getCurrentProfile(supabase, user.id);
 
-        if (perfil) {
-          const estadoUsuario = perfil.estado || 'activo';
-          
-          // Si el usuario está bloqueado o desactivado, cerrar sesión y permitir acceso a auth
-          if (estadoUsuario === 'bloqueado' || estadoUsuario === 'desactivado') {
-            await supabase.auth.signOut();
-            return supabaseResponse;
-          }
-
-          // Redirigir al dashboard según el rol
-          if (perfil.rol === 'ADMINISTRADOR') {
-            return NextResponse.redirect(new URL('/admin/dashboard', request.url));
-          } else if (perfil.rol === 'OPERADOR') {
-            return NextResponse.redirect(new URL('/operador/dashboard', request.url));
-          } else if (perfil.rol === 'DONANTE') {
-            return NextResponse.redirect(new URL('/donante/dashboard', request.url));
-          } else {
-            return NextResponse.redirect(new URL('/user/dashboard', request.url));
-          }
+        if (!perfil) {
+          return NextResponse.redirect(new URL('/perfil/completar', request.url));
         }
+
+        const estadoUsuario = perfil.estado || 'activo';
+
+        if (isInactiveStatus(estadoUsuario)) {
+          return redirectAfterInactiveProfile(supabase, request, estadoUsuario);
+        }
+
+        if (!isProfileComplete(perfil)) {
+          return NextResponse.redirect(new URL('/perfil/completar', request.url));
+        }
+
+        return NextResponse.redirect(dashboardUrlForRole(perfil.rol ?? '', request.url));
       } catch (error) {
-        // Si hay error obteniendo el perfil, permitir acceso a auth
         console.error('Error obteniendo perfil en middleware:', error);
         return supabaseResponse;
       }
     }
 
-    // Verificar si la ruta actual es pública
-    const esRutaPublica = RUTAS_PUBLICAS.some(ruta => pathname.startsWith(ruta));
-
-    // Si es una ruta pública, permitir acceso
-    if (esRutaPublica) {
-      return supabaseResponse;
-    }
-
-    // Para rutas protegidas, verificar autenticación y autorización
-    if (pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/operador') || pathname.startsWith('/donante') || pathname.startsWith('/user')) {
+    if (isCompletarPerfilPath(pathname)) {
       if (!isAuthenticated || !user) {
-        const url = new URL('/auth/iniciar-sesion', request.url);
-        url.searchParams.set('callbackUrl', pathname);
-        return NextResponse.redirect(url);
+        return redirectToLogin(request, {
+          callbackUrl: requestedPath(request),
+          error: 'unauthorized',
+        });
       }
 
-      // Si está autenticado, verificar el estado del usuario y autorización
       try {
-        const { data: perfil } = await supabase
-          .from('usuarios')
-          .select('estado, rol')
-          .eq('id', user.id)
-          .single();
+        const perfil = await getCurrentProfile(supabase, user.id);
 
-        if (perfil) {
-          const estadoUsuario = perfil.estado || 'activo';
-          const rolUsuario = perfil.rol;
-          
-          // Si el usuario está bloqueado o desactivado, cerrar sesión y redirigir
-          if (estadoUsuario === 'bloqueado' || estadoUsuario === 'desactivado') {
-            await supabase.auth.signOut();
-            const url = new URL('/auth/iniciar-sesion', request.url);
-            url.searchParams.set('error', estadoUsuario === 'bloqueado' ? 'blocked' : 'deactivated');
-            return NextResponse.redirect(url);
-          }
-
-          // Verificar autorización por rol
-          if (pathname.startsWith('/admin') && rolUsuario !== 'ADMINISTRADOR') {
-            // Redirigir al dashboard correspondiente según el rol
-            if (rolUsuario === 'OPERADOR') {
-              return NextResponse.redirect(new URL('/operador/dashboard', request.url));
-            } else if (rolUsuario === 'DONANTE') {
-              return NextResponse.redirect(new URL('/donante/dashboard', request.url));
-            } else {
-              return NextResponse.redirect(new URL('/user/dashboard', request.url));
-            }
-          }
-
-          if (pathname.startsWith('/operador') && rolUsuario !== 'OPERADOR') {
-            // Redirigir al dashboard correspondiente según el rol
-            if (rolUsuario === 'ADMINISTRADOR') {
-              return NextResponse.redirect(new URL('/admin/dashboard', request.url));
-            } else if (rolUsuario === 'DONANTE') {
-              return NextResponse.redirect(new URL('/donante/dashboard', request.url));
-            } else {
-              return NextResponse.redirect(new URL('/user/dashboard', request.url));
-            }
-          }
-
-          if (pathname.startsWith('/donante') && rolUsuario !== 'DONANTE') {
-            // Redirigir al dashboard correspondiente según el rol
-            if (rolUsuario === 'ADMINISTRADOR') {
-              return NextResponse.redirect(new URL('/admin/dashboard', request.url));
-            } else if (rolUsuario === 'OPERADOR') {
-              return NextResponse.redirect(new URL('/operador/dashboard', request.url));
-            } else {
-              return NextResponse.redirect(new URL('/user/dashboard', request.url));
-            }
-          }
-
-          if (pathname.startsWith('/user') && rolUsuario !== 'SOLICITANTE') {
-            // Redirigir al dashboard correspondiente según el rol
-            if (rolUsuario === 'ADMINISTRADOR') {
-              return NextResponse.redirect(new URL('/admin/dashboard', request.url));
-            } else if (rolUsuario === 'OPERADOR') {
-              return NextResponse.redirect(new URL('/operador/dashboard', request.url));
-            } else if (rolUsuario === 'DONANTE') {
-              return NextResponse.redirect(new URL('/donante/dashboard', request.url));
-            }
-          }
-
-          // Verificar acceso a /dashboard genérico - redirigir al dashboard específico del rol
-          if (pathname === '/dashboard') {
-            if (rolUsuario === 'ADMINISTRADOR') {
-              return NextResponse.redirect(new URL('/admin/dashboard', request.url));
-            } else if (rolUsuario === 'OPERADOR') {
-              return NextResponse.redirect(new URL('/operador/dashboard', request.url));
-            } else if (rolUsuario === 'DONANTE') {
-              return NextResponse.redirect(new URL('/donante/dashboard', request.url));
-            } else {
-              return NextResponse.redirect(new URL('/user/dashboard', request.url));
-            }
-          }
-        } else {
-          // Si no hay perfil, redirigir a login
-          const url = new URL('/auth/iniciar-sesion', request.url);
-          return NextResponse.redirect(url);
+        if (!perfil) {
+          return supabaseResponse;
         }
+
+        const estadoUsuario = perfil.estado || 'activo';
+
+        if (isInactiveStatus(estadoUsuario)) {
+          return redirectAfterInactiveProfile(supabase, request, estadoUsuario);
+        }
+
+        if (isProfileComplete(perfil)) {
+          return NextResponse.redirect(dashboardUrlForRole(perfil.rol ?? '', request.url));
+        }
+
+        return supabaseResponse;
       } catch (error) {
-        // Si hay error obteniendo el perfil, redirigir a login
-        console.error('Error en middleware al verificar perfil:', error);
-        const url = new URL('/auth/iniciar-sesion', request.url);
-        return NextResponse.redirect(url);
+        console.error('Error en middleware al verificar perfil completo:', error);
+        return redirectToLogin(request);
       }
     }
 
-    // Permitir acceso a la página principal de bienvenida
-    // Los usuarios logueados pueden acceder tanto a la página principal como a sus dashboards
-    if (pathname === '/') {
-      // Si está autenticado, verificar el estado del usuario pero permitir acceso a la página de bienvenida
-      if (isAuthenticated && user) {
-        try {
-          const { data: perfil } = await supabase
-            .from('usuarios')
-            .select('estado, rol')
-            .eq('id', user.id)
-            .single();
-
-          if (perfil) {
-            const estadoUsuario = perfil.estado || 'activo';
-            
-            // Si el usuario está bloqueado o desactivado, cerrar sesión y redirigir
-            if (estadoUsuario === 'bloqueado' || estadoUsuario === 'desactivado') {
-              await supabase.auth.signOut();
-              const url = new URL('/auth/iniciar-sesion', request.url);
-              url.searchParams.set('error', estadoUsuario === 'bloqueado' ? 'blocked' : 'deactivated');
-              return NextResponse.redirect(url);
-            }
-          }
-        } catch (error) {
-          console.error('Error verificando perfil en página principal:', error);
-        }
-      }
-      
-      // Permitir acceso a la página de bienvenida sin redirecciones automáticas
+    if (isAnyRouteMatch(pathname, RUTAS_PUBLICAS)) {
       return supabaseResponse;
+    }
+
+    const roleAccess = getRoleAccessForPath(pathname);
+
+    if (
+      pathname === '/dashboard' ||
+      isAnyRouteMatch(pathname, SHARED_PRIVATE_ROUTES) ||
+      roleAccess
+    ) {
+      return protectPrivateRoute(
+        request,
+        supabase,
+        isAuthenticated ? user : null,
+        supabaseResponse,
+        roleAccess?.role
+      );
     }
 
     return supabaseResponse;
-  } catch (error: any) {
-    // Suprimir logs de errores esperados
-    if (error?.code !== 'refresh_token_not_found' && error?.code !== 'ECONNRESET') {
+  } catch (error: unknown) {
+    const errorCode = getErrorCode(error);
+    if (errorCode !== 'refresh_token_not_found' && errorCode !== 'ECONNRESET') {
       console.error('Error inesperado en middleware:', error);
     }
-    // Si hay error, permitir el acceso y manejar la autenticación en el cliente
+
+    const pathname = request.nextUrl.pathname;
+    const isProtectedRoute =
+      isCompletarPerfilPath(pathname) ||
+      pathname === '/dashboard' ||
+      isAnyRouteMatch(pathname, SHARED_PRIVATE_ROUTES) ||
+      !!getRoleAccessForPath(pathname);
+
+    if (isProtectedRoute) {
+      return redirectToLogin(request, {
+        callbackUrl: requestedPath(request),
+        error: 'unauthorized',
+      });
+    }
+
     return supabaseResponse;
   }
 }
@@ -229,8 +292,7 @@ export const config = {
      * - _next/static (archivos estáticos)
      * - _next/image (archivos de optimización de imagen)
      * - favicon.ico (archivo favicon)
-     * Siéntete libre de modificar este patrón para incluir más rutas.
      */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
-}; 
+};

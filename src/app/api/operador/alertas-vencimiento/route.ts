@@ -4,8 +4,31 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createAdminSupabaseClient } from '@/lib/supabase-admin';
+import { requireActiveUserRole } from '@/lib/server-auth';
+import {
+  parseBooleanParam,
+  parseEnumParam,
+  parsePositiveIntParam,
+} from '@/lib/api-validation';
 
 export const dynamic = 'force-dynamic';
+
+type PrioridadAlerta = 'vencido' | 'alta' | 'media' | 'baja';
+const PRIORIDADES_ALERTA_FILTRO = ['todos', 'vencido', 'alta', 'media', 'baja'] as const;
+
+type AlertaVencimientoRpcRow = {
+  id_entrada: string;
+  id_producto: string;
+  nombre_producto: string;
+  cantidad_disponible: number | string;
+  fecha_caducidad: string;
+  dias_para_vencer: number;
+  id_deposito: string;
+  nombre_deposito: string;
+  unidad_simbolo: string | null;
+  prioridad: PrioridadAlerta;
+};
 
 /**
  * GET /api/operador/alertas-vencimiento
@@ -14,41 +37,40 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
-    
-    // Verificar autenticación
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      );
-    }
+    const authResult = await requireActiveUserRole(supabase, ['ADMINISTRADOR', 'OPERADOR']);
 
-    // Verificar rol y estado
-    const { data: usuario, error: usuarioError } = await supabase
-      .from('usuarios')
-      .select('rol, estado')
-      .eq('id', user.id)
-      .single();
-
-    if (usuarioError || !usuario || usuario.estado !== 'activo') {
-      return NextResponse.json(
-        { error: 'Acceso denegado' },
-        { status: 403 }
-      );
+    if (authResult.response) {
+      return authResult.response;
     }
 
     // Obtener parámetros
     const searchParams = request.nextUrl.searchParams;
-    const dias_umbral = parseInt(searchParams.get('dias') || '7');
-    const solo_vencidos = searchParams.get('solo_vencidos') === 'true';
-    const prioridad = searchParams.get('prioridad'); // alta, media, baja, vencido
+    const diasUmbral = parsePositiveIntParam(searchParams.get('dias'), {
+      name: 'dias',
+      fallback: 7,
+      min: 1,
+      max: 365,
+    });
+    if (!diasUmbral.success) return diasUmbral.response;
 
-    // Llamar función de base de datos
-    const { data, error } = await supabase
+    const soloVencidos = parseBooleanParam(searchParams.get('solo_vencidos'), {
+      name: 'solo_vencidos',
+      fallback: false,
+    });
+    if (!soloVencidos.success) return soloVencidos.response;
+
+    const prioridad = parseEnumParam(searchParams.get('prioridad'), PRIORIDADES_ALERTA_FILTRO, {
+      name: 'prioridad',
+      fallback: 'todos',
+    });
+    if (!prioridad.success) return prioridad.response;
+
+    const adminSupabase = createAdminSupabaseClient();
+
+    // Llamar función de base de datos desde el servidor tras validar rol.
+    const { data, error } = await adminSupabase
       .rpc('obtener_productos_proximos_vencer', {
-        p_dias_umbral: dias_umbral
+        p_dias_umbral: diasUmbral.value
       });
 
     if (error) {
@@ -59,23 +81,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    let alertas = data || [];
+    let alertas = (data || []) as AlertaVencimientoRpcRow[];
 
     // Aplicar filtros adicionales
-    if (solo_vencidos) {
-      alertas = alertas.filter((alerta: any) => alerta.prioridad === 'vencido');
+    if (soloVencidos.value) {
+      alertas = alertas.filter((alerta) => alerta.prioridad === 'vencido');
     }
 
-    if (prioridad && prioridad !== 'todos') {
-      alertas = alertas.filter((alerta: any) => alerta.prioridad === prioridad);
+    if (prioridad.value !== 'todos') {
+      alertas = alertas.filter((alerta) => alerta.prioridad === prioridad.value);
     }
 
     // Clasificar alertas por prioridad
     const clasificadas = {
-      vencidos: alertas.filter((a: any) => a.prioridad === 'vencido'),
-      alta: alertas.filter((a: any) => a.prioridad === 'alta'),
-      media: alertas.filter((a: any) => a.prioridad === 'media'),
-      baja: alertas.filter((a: any) => a.prioridad === 'baja')
+      vencidos: alertas.filter((a) => a.prioridad === 'vencido'),
+      alta: alertas.filter((a) => a.prioridad === 'alta'),
+      media: alertas.filter((a) => a.prioridad === 'media'),
+      baja: alertas.filter((a) => a.prioridad === 'baja')
     };
 
     // Calcular estadísticas
@@ -84,11 +106,11 @@ export async function GET(request: NextRequest) {
       total_vencidos: clasificadas.vencidos.length,
       total_proximos: alertas.length - clasificadas.vencidos.length,
       cantidad_total_vencidos: clasificadas.vencidos.reduce(
-        (sum: number, a: any) => sum + Number(a.cantidad_disponible), 
+        (sum, a) => sum + Number(a.cantidad_disponible), 
         0
       ),
       cantidad_total_proximos: clasificadas.alta.concat(clasificadas.media, clasificadas.baja).reduce(
-        (sum: number, a: any) => sum + Number(a.cantidad_disponible), 
+        (sum, a) => sum + Number(a.cantidad_disponible), 
         0
       ),
       por_prioridad: {
@@ -102,12 +124,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       configuracion: {
-        dias_umbral,
-        solo_vencidos
+        dias_umbral: diasUmbral.value,
+        solo_vencidos: soloVencidos.value
       },
       estadisticas,
-      alertas: alertas.map((alerta: any) => ({
-        id_inventario: alerta.id_inventario,
+      alertas: alertas.map((alerta) => ({
+        id_entrada: alerta.id_entrada,
         id_producto: alerta.id_producto,
         nombre_producto: alerta.nombre_producto,
         cantidad_disponible: Number(alerta.cantidad_disponible),

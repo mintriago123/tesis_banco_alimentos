@@ -95,8 +95,9 @@ export const useInventoryData = (supabaseClient: SupabaseClient): UseInventoryDa
 
   const loadDepositos = useCallback(async () => {
     const result = await dataService.fetchDepositos();
-    if (result.success && result.data) {
-      setDepositos(result.data);
+
+    if (result.success) {
+      setDepositos(result.data ?? []);
     }
   }, [dataService]);
 
@@ -145,8 +146,8 @@ export const useInventoryData = (supabaseClient: SupabaseClient): UseInventoryDa
   }, []);
 
   const refetch = useCallback(async () => {
-    await loadInventario();
-  }, [loadInventario]);
+    await Promise.all([loadInventario(), loadDepositos()]);
+  }, [loadInventario, loadDepositos]);
 
   return {
     inventario,

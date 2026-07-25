@@ -179,7 +179,7 @@ const OperadorInventoryFilters = ({
             
             {filters.search.trim() && (
               <span className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                Búsqueda: "{filters.search.trim()}"
+                Búsqueda: &quot;{filters.search.trim()}&quot;
               </span>
             )}
             

@@ -1,7 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ServiceResult, UserRecord, UserRole, UserStatus } from '../types';
 
-const mapUserRow = (row: any): UserRecord => ({
+type UserRow = UserRecord & {
+  motivo_bloqueo?: string | null;
+};
+
+const mapUserRow = (row: UserRow): UserRecord => ({
   id: row.id,
   nombre: row.nombre,
   cedula: row.cedula ?? undefined,

@@ -12,24 +12,8 @@ import {
   AccionesNotificaciones,
   EmptyStateNotificaciones
 } from '@/modules/shared/components/notificaciones';
+import { safeInternalPath } from '@/lib/safe-internal-path';
 import { useRouter } from 'next/navigation';
-
-const TIPOS_FILTRO = [
-  { value: 'todos', label: 'Todos' },
-  { value: 'info', label: 'Información' },
-  { value: 'success', label: 'Éxito' },
-  { value: 'warning', label: 'Advertencia' },
-  { value: 'error', label: 'Error' }
-];
-
-const CATEGORIAS_FILTRO = [
-  { value: 'todas', label: 'Todas' },
-  { value: 'donacion', label: 'Donaciones' },
-  { value: 'solicitud', label: 'Solicitudes' },
-  { value: 'sistema', label: 'Sistema' },
-  { value: 'usuario', label: 'Usuario' },
-  { value: 'inventario', label: 'Inventario' }
-];
 
 export default function NotificacionesPage() {
   const router = useRouter();
@@ -73,8 +57,9 @@ export default function NotificacionesPage() {
     }
 
     // Redireccionar si tiene URL de acción
-    if (notificacion.url_accion) {
-      router.push(notificacion.url_accion);
+    const urlAccion = safeInternalPath(notificacion.url_accion);
+    if (urlAccion) {
+      router.push(urlAccion);
     }
   };
 

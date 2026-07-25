@@ -4,7 +4,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { InventarioDisponible, LoadingState } from '../types';
+import type { InventarioDisponible, LoadingState, Solicitud } from '../types';
 import { createSolicitudesActionService } from '../services/solicitudesActionService';
 import { SYSTEM_MESSAGES } from '../constants';
 
@@ -12,7 +12,7 @@ interface UseInventarioDisponibleResult {
   inventario: InventarioDisponible[];
   loadingState: LoadingState;
   errorMessage?: string;
-  loadInventario: (tipoAlimento: string) => Promise<void>;
+  loadInventario: (solicitud: Pick<Solicitud, 'tipo_alimento' | 'unidad_id'>) => Promise<void>;
   resetInventario: () => void;
 }
 
@@ -26,8 +26,8 @@ export const useInventarioDisponible = (supabaseClient: SupabaseClient): UseInve
     [supabaseClient]
   );
 
-  const loadInventario = useCallback(async (tipoAlimento: string) => {
-    if (!tipoAlimento) {
+  const loadInventario = useCallback(async (solicitud: Pick<Solicitud, 'tipo_alimento' | 'unidad_id'>) => {
+    if (!solicitud?.tipo_alimento) {
       setInventario([]);
       return;
     }
@@ -35,7 +35,7 @@ export const useInventarioDisponible = (supabaseClient: SupabaseClient): UseInve
     setLoadingState('loading');
     setErrorMessage(undefined);
 
-    const result = await service.fetchInventarioDisponible(tipoAlimento);
+    const result = await service.fetchInventarioDisponible(solicitud);
 
     if (result.success && result.data) {
       setInventario(result.data);

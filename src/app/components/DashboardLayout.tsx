@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import Sidebar from '@/app/components/Sidebar';
 import { Bars3Icon } from '@heroicons/react/24/outline';
+import { LoadingState } from '@/app/components/ui/LoadingState';
+import { PageHeader } from '@/app/components/ui/PageHeader';
+import { accentForRole } from '@/app/components/ui/theme';
 
 interface DashboardLayoutProps {
   readonly children: React.ReactNode;
@@ -15,9 +18,9 @@ interface DashboardLayoutProps {
 
 interface UserProfile {
   rol: string;
-  nombre: string;
-  cedula?: string;
-  ruc?: string;
+  nombre: string | null;
+  cedula?: string | null;
+  ruc?: string | null;
 }
 
 // Context para manejar el estado del sidebar
@@ -31,19 +34,13 @@ const SidebarContext = createContext<{
 
 export const useSidebar = () => useContext(SidebarContext);
 
-interface DashboardLayoutProps {
-  readonly children: React.ReactNode;
-  readonly requiredRole?: 'ADMINISTRADOR' | 'OPERADOR' | 'DONANTE' | 'SOLICITANTE' | 'ANY';
-  readonly title?: string;
-  readonly description?: string;
-}
+const hasText = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
 
-interface UserProfile {
-  rol: string;
-  nombre: string;
-  cedula?: string;
-  ruc?: string;
-}
+const isProfileComplete = (profile: UserProfile) =>
+  hasText(profile.rol) &&
+  hasText(profile.nombre) &&
+  (hasText(profile.cedula) || hasText(profile.ruc));
 
 export default function DashboardLayout({ 
   children, 
@@ -56,6 +53,10 @@ export default function DashboardLayout({
   const [perfil, setPerfil] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  useEffect(() => {
+    setIsCollapsed(window.innerWidth < 768);
+  }, []);
 
   const sidebarContextValue = useMemo(() => ({
     isCollapsed,
@@ -103,13 +104,25 @@ export default function DashboardLayout({
           return;
         }
 
-        // Verificar acceso según rol
-        if (!checkRoleAccess(data.rol, requiredRole)) {
-          router.push(getRedirectUrl(data.rol));
+        const profile: UserProfile = {
+          rol: data.rol,
+          nombre: data.nombre ?? null,
+          cedula: data.cedula ?? null,
+          ruc: data.ruc ?? null,
+        };
+
+        if (!isProfileComplete(profile)) {
+          router.replace('/perfil/completar');
           return;
         }
 
-        setPerfil(data);
+        // Verificar acceso según rol
+        if (!checkRoleAccess(profile.rol, requiredRole)) {
+          router.push(getRedirectUrl(profile.rol));
+          return;
+        }
+
+        setPerfil(profile);
       } catch (error) {
         console.error('Error:', error);
         await supabase.auth.signOut();
@@ -124,12 +137,7 @@ export default function DashboardLayout({
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando...</p>
-        </div>
-      </div>
+      <div className="min-h-screen bg-slate-50"><LoadingState /></div>
     );
   }
 
@@ -139,7 +147,7 @@ export default function DashboardLayout({
 
   return (
     <SidebarContext.Provider value={sidebarContextValue}>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-slate-50" data-role={accentForRole(perfil.rol)}>
         {/* Sidebar fijo */}
         <Sidebar 
           userRole={perfil.rol} 
@@ -152,30 +160,27 @@ export default function DashboardLayout({
         <div className={`min-h-screen transition-all duration-300 ${isCollapsed ? 'ml-0 md:ml-16' : 'ml-0 md:ml-64'}`}>
           {/* Header opcional */}
           {(title || description) && (
-            <header className="bg-white shadow-sm border-b border-gray-200 px-3 sm:px-4 lg:px-6 py-3 sm:py-4 sticky top-0 z-20">
-              <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+            <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:px-4 sm:py-4 lg:px-6">
+              <div className="mx-auto flex max-w-7xl items-center gap-3">
                 {/* Botón para mostrar sidebar en móvil */}
                 <button
                   onClick={() => setIsCollapsed(!isCollapsed)}
-                  className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
-                  aria-label="Toggle sidebar"
+                  type="button"
+                  className="flex-shrink-0 rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden"
+                  aria-label={isCollapsed ? 'Abrir menú lateral' : 'Cerrar menú lateral'}
+                  aria-expanded={!isCollapsed}
                 >
-                  <Bars3Icon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
+                  <Bars3Icon className="h-5 w-5 sm:h-6 sm:w-6" />
                 </button>
                 
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-900 truncate">{title}</h1>
-                  {description && (
-                    <p className="mt-1 text-xs sm:text-sm text-gray-600 line-clamp-1 sm:line-clamp-2">{description}</p>
-                  )}
-                </div>
+                <div className="min-w-0 flex-1"><PageHeader title={title} description={description} /></div>
               </div>
             </header>
           )}
           
           {/* Contenido */}
-          <main className="p-3 sm:p-4 md:p-5 lg:p-6">
-            <div className="max-w-7xl mx-auto">
+          <main id="main-content" className="p-3 sm:p-4 md:p-5 lg:p-6">
+            <div className="mx-auto max-w-7xl">
               {children}
             </div>
           </main>

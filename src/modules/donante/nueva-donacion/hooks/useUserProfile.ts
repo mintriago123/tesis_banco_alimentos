@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
-import { SupabaseClient, User } from '@supabase/supabase-js';
+import { useState, useEffect, useCallback } from 'react';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
+
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 interface UserProfile {
   id: string;
@@ -27,7 +29,7 @@ export function useUserProfile(
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
-  const cargarPerfilUsuario = async (user: User) => {
+  const cargarPerfilUsuario = useCallback(async (user: User) => {
     if (!supabase) return;
     
     setLoadingUser(true);
@@ -39,7 +41,9 @@ export function useUserProfile(
         .single();
 
       if (error && error.details?.includes('0 rows')) {
-        console.log('Usuario no encontrado en la tabla usuarios');
+        if (isDevelopment) {
+          console.log('Usuario no encontrado en la tabla usuarios');
+        }
         setUserProfile(null);
       } else if (error) {
         console.error('Error al cargar perfil:', error);
@@ -53,7 +57,7 @@ export function useUserProfile(
     } finally {
       setLoadingUser(false);
     }
-  };
+  }, [supabase]);
 
   useEffect(() => {
     if (!authLoading && currentUser !== undefined) {
@@ -64,7 +68,7 @@ export function useUserProfile(
         setLoadingUser(false);
       }
     }
-  }, [currentUser, authLoading, supabase]);
+  }, [currentUser, authLoading, supabase, cargarPerfilUsuario]);
 
   return {
     userProfile,

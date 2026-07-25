@@ -2,8 +2,8 @@
 // Service: Perfil de Usuario
 // ============================================================================
 
-import { SupabaseClient } from '@supabase/supabase-js';
-import { UserProfile, UserProfileFormData } from '../types';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { UserProfile, UserProfileFormData } from '../types';
 
 export class PerfilService {
   constructor(private supabase: SupabaseClient) {}
@@ -13,7 +13,7 @@ export class PerfilService {
    */
   async getPerfilUsuario(
     usuarioId: string
-  ): Promise<{ data: UserProfile | null; error: any }> {
+  ): Promise<{ data: UserProfile | null; error: unknown }> {
     try {
       const { data: authUser, error: authError } =
         await this.supabase.auth.getUser();
@@ -46,7 +46,7 @@ export class PerfilService {
   async updatePerfilUsuario(
     usuarioId: string,
     profileData: UserProfileFormData
-  ): Promise<{ data: UserProfile | null; error: any }> {
+  ): Promise<{ data: UserProfile | null; error: unknown }> {
     try {
       const updateData = {
         nombre: profileData.nombre.trim(),
@@ -77,7 +77,7 @@ export class PerfilService {
     usuarioId: string
   ): Promise<{
     data: Pick<UserProfile, 'id' | 'nombre' | 'cedula' | 'telefono'> | null;
-    error: any;
+    error: unknown;
   }> {
     try {
       const { data, error } = await this.supabase

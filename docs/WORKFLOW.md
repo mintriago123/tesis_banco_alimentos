@@ -156,21 +156,21 @@ graph LR
    - Marca donación como "Recogida"
    - Coordina logística de recogida
    - Marca como "Entregada" cuando llega al depósito
-   - El sistema actualiza inventario automáticamente
+   - El trigger crea una entrada independiente en `entradas_inventario`
 
 2. **Aprobación de Solicitudes**
    - Ve solicitudes pendientes en `/operador/solicitudes`
    - Revisa detalles de la solicitud
-   - Verifica disponibilidad en inventario
+   - Verifica disponibilidad sumando entradas compatibles
    - Aprueba o rechaza con motivo
-   - Sistema descuenta inventario automáticamente si aprueba
+   - La RPC descuenta entradas con FEFO y devuelve sus `id_entrada`
    - Se genera comprobante con código único
 
 3. **Control de Inventario**
    - Ve stock en tiempo real por depósito
    - Puede ajustar cantidades manualmente
    - Registra bajas de productos (vencidos, dañados)
-   - Todos los movimientos se registran para trazabilidad
+   - Todos los movimientos conservan `id_entrada` para trazabilidad
 
 ---
 
@@ -233,7 +233,7 @@ sequenceDiagram
         
         ServerComponent->>Browser: HTML renderizado (SSR)
     else Usuario no autorizado
-        Middleware->>Browser: Redirect a dashboard correcto
+        Middleware->>Browser: Redirect a login con error=forbidden
     end
 ```
 
@@ -248,38 +248,68 @@ sequenceDiagram
 export async function proxy(request: NextRequest) {
   // 1. Crear cliente Supabase con cookies
   const supabase = await createServerSupabaseClient();
-  
+
   // 2. Verificar sesión
   const { data: { user } } = await supabase.auth.getUser();
-  
-  // 3. Validar ruta pública
-  if (RUTAS_PUBLICAS.includes(pathname)) {
+
+  // 3. Regla especial para completar perfil
+  if (isCompletarPerfilPath(pathname)) {
+    return handleProfileCompletionRoute(request, supabase, user);
+  }
+
+  // 4. Validar ruta pública con match exacto o por segmento
+  if (isAnyRouteMatch(pathname, RUTAS_PUBLICAS)) {
     return NextResponse.next();
   }
-  
-  // 4. Verificar autenticación
-  if (!user) {
-    return NextResponse.redirect('/auth/iniciar-sesion');
+
+  // 5. Identificar rutas privadas compartidas o por rol
+  const roleAccess = getRoleAccessForPath(pathname);
+  const isPrivatePage =
+    pathname === '/dashboard' ||
+    isAnyRouteMatch(pathname, SHARED_PRIVATE_ROUTES) ||
+    roleAccess;
+
+  if (!isPrivatePage) {
+    return NextResponse.next();
   }
-  
-  // 5. Obtener perfil y validar rol
-  const perfil = await obtenerPerfil(user.id);
-  
-  // 6. Validar autorización por rol
-  if (pathname.startsWith('/admin') && perfil.rol !== 'ADMINISTRADOR') {
-    return NextResponse.redirect(`/${perfil.rol.toLowerCase()}/dashboard`);
-  }
-  
-  // 7. Permitir acceso
-  return NextResponse.next();
+
+  // 6. Rutas privadas: sesión, usuario activo, perfil completo y rol si aplica
+  return protectPrivateRoute(request, supabase, user, roleAccess?.role);
 }
 ```
 
+**Mapa de rutas protegidas por `proxy.ts`:**
+
+```typescript
+const SHARED_PRIVATE_ROUTES = [
+  '/perfil/actualizar',
+  '/notificaciones',
+  '/configuracion-notificaciones',
+  '/comprobante',
+];
+
+const ROLE_PROTECTED_ROUTES = [
+  { route: '/admin', role: 'ADMINISTRADOR' },
+  { route: '/operador', role: 'OPERADOR' },
+  { route: '/donante', role: 'DONANTE' },
+  { route: '/user', role: 'SOLICITANTE' },
+];
+```
+
+**Reglas de redirección:**
+
+- Sin sesión en ruta privada: `/auth/iniciar-sesion?error=unauthorized&callbackUrl=...`.
+- Perfil incompleto: `/perfil/completar`.
+- Perfil completo intentando `/perfil/completar`: dashboard según rol.
+- Usuario `bloqueado` o `desactivado`: cierre de sesión y login con error.
+- Rol incorrecto en prefijo por rol: login con `error=forbidden`.
+
 **Puntos clave**:
-- Se ejecuta ANTES de cualquier página o API route
+- Se ejecuta ANTES de cualquier página o API route no estática
 - Tiene acceso a cookies de sesión
 - Puede leer y modificar la request/response
 - Realiza queries a la base de datos para validar roles
+- Las API routes sensibles no dependen solo del proxy; validan sesión, perfil activo y rol dentro del handler
 
 ---
 
@@ -310,10 +340,11 @@ export default async function DonanteDashboard() {
 ```
 
 **Características**:
-- **Server Components por defecto**: Renderizado en servidor
-- **Acceso directo a servicios**: Sin necesidad de API routes
-- **Caching automático**: Next.js cachea resultados
-- **Streaming**: Puede hacer streaming de UI mientras carga datos
+- **Capacidad de Server Components**: Next.js permite renderizado en servidor para páginas de lectura
+- **Estado actual**: 35 de 43 páginas del proyecto usan `'use client'`
+- **Acceso a servicios**: Las páginas cliente consumen hooks, servicios y API routes; las páginas servidor pueden usar clientes server-side
+- **Patrón aplicado**: Perfil y configuración común usan wrappers Server Component con islas cliente para carga/interacción
+- **Oportunidad de mejora**: Migrar dashboards y vistas de solo lectura restantes a Server Components para aprovechar caching, streaming y menor JavaScript en cliente
 
 ---
 
@@ -370,7 +401,7 @@ export class DonacionService {
 **Características**:
 - **Encapsulamiento**: Toda la lógica de negocio en un lugar
 - **Reutilizable**: Se usa desde páginas, API routes, y otros servicios
-- **Testeable**: Fácil de testear unitariamente
+- **Testabilidad incremental**: Solicitudes ya separa casos de uso y servicios internos con tests sobre mocks de Supabase/inventario/movimientos
 - **Type-safe**: TypeScript garantiza tipos correctos
 
 ---
@@ -414,7 +445,7 @@ SELECT * FROM donaciones;
 
 ### 🛡️ Middleware de Autenticación y Autorización
 
-El archivo `proxy.ts` es un **Middleware de Next.js** que intercepta TODAS las peticiones antes de que lleguen a su destino.
+El archivo `proxy.ts` es un **Middleware de Next.js** que intercepta las peticiones no estáticas antes de que lleguen a su destino.
 
 #### ¿Por qué se llama "proxy"?
 
@@ -427,16 +458,20 @@ graph TD
     A[Request entrante] --> B{Middleware proxy.ts}
     B --> C{¿Ruta pública?}
     C -->|Sí| D[Permitir acceso]
-    C -->|No| E{¿Usuario autenticado?}
-    E -->|No| F[Redirect a /auth/iniciar-sesion]
-    E -->|Sí| G{¿Estado activo?}
+    C -->|No| E{¿Ruta privada?}
+    E -->|No| D
+    E -->|Sí| F{¿Usuario autenticado?}
+    F -->|No| R[Redirect a /auth/iniciar-sesion]
+    F -->|Sí| G{¿Estado activo?}
     G -->|No| H[Cerrar sesión + Redirect]
-    G -->|Sí| I{¿Rol autorizado?}
-    I -->|No| J[Redirect a dashboard correcto]
-    I -->|Sí| K[Permitir acceso]
+    G -->|Sí| I{¿Perfil completo?}
+    I -->|No| M[Redirect a /perfil/completar]
+    I -->|Sí| J{¿Rol autorizado?}
+    J -->|No| N[Redirect a login con forbidden]
+    J -->|Sí| K[Permitir acceso]
     
-    D --> L[Página/API Route]
-    K --> L
+    D --> P[Página/API Route]
+    K --> P
 ```
 
 #### Código Explicado:
@@ -493,74 +528,22 @@ export async function proxy(request: NextRequest) {
     }
 
     // 5. Verificar si la ruta es pública
-    const esRutaPublica = RUTAS_PUBLICAS.some(ruta => pathname.startsWith(ruta));
-    if (esRutaPublica) {
+    if (isAnyRouteMatch(pathname, RUTAS_PUBLICAS)) {
       return supabaseResponse;
     }
 
-    // 6. Para rutas protegidas, verificar autenticación
-    if (pathname.startsWith('/dashboard') || 
-        pathname.startsWith('/admin') || 
-        pathname.startsWith('/operador') || 
-        pathname.startsWith('/donante') || 
-        pathname.startsWith('/user')) {
-      
-      if (!isAuthenticated || !user) {
-        // No autenticado, redirigir a login
-        const url = new URL('/auth/iniciar-sesion', request.url);
-        url.searchParams.set('callbackUrl', pathname);
-        return NextResponse.redirect(url);
-      }
-
-      // 7. Verificar el estado del usuario y autorización
-      const { data: perfil } = await supabase
-        .from('usuarios')
-        .select('estado, rol')
-        .eq('id', user.id)
-        .single();
-
-      if (perfil) {
-        const { estado, rol } = perfil;
-        
-        // Validar estado
-        if (estado === 'bloqueado' || estado === 'desactivado') {
-          await supabase.auth.signOut();
-          const url = new URL('/auth/iniciar-sesion', request.url);
-          url.searchParams.set('error', estado === 'bloqueado' ? 'blocked' : 'deactivated');
-          return NextResponse.redirect(url);
-        }
-
-        // 8. Verificar autorización por rol
-        if (pathname.startsWith('/admin') && rol !== 'ADMINISTRADOR') {
-          // Usuario no autorizado para /admin
-          return NextResponse.redirect(
-            new URL(`/${rol.toLowerCase()}/dashboard`, request.url)
-          );
-        }
-
-        if (pathname.startsWith('/operador') && rol !== 'OPERADOR') {
-          return NextResponse.redirect(
-            new URL(`/${rol.toLowerCase()}/dashboard`, request.url)
-          );
-        }
-
-        if (pathname.startsWith('/donante') && rol !== 'DONANTE') {
-          return NextResponse.redirect(
-            new URL(`/${rol.toLowerCase()}/dashboard`, request.url)
-          );
-        }
-
-        if (pathname.startsWith('/user') && rol !== 'SOLICITANTE') {
-          return NextResponse.redirect(
-            new URL(`/${rol.toLowerCase()}/dashboard`, request.url)
-          );
-        }
-      }
+    // 6. Para rutas privadas, verificar sesión, perfil, estado y rol.
+    const roleAccess = getRoleAccessForPath(pathname);
+    if (pathname === '/dashboard' ||
+        isAnyRouteMatch(pathname, SHARED_PRIVATE_ROUTES) ||
+        roleAccess) {
+      return protectPrivateRoute(request, supabase, user, roleAccess?.role);
     }
 
     return supabaseResponse;
   } catch (error) {
     console.error('Error inesperado en middleware:', error);
+    // Las rutas protegidas fallan cerradas y redirigen a login.
     return supabaseResponse;
   }
 }
@@ -582,15 +565,153 @@ export const config = {
 
 #### Puntos Clave:
 
-1. **Se ejecuta en TODAS las peticiones** (excepto archivos estáticos)
+1. **Se ejecuta en las peticiones no estáticas** (excepto assets e imágenes)
 2. **Tiene acceso a cookies** (donde Supabase guarda el token)
 3. **Puede hacer queries a la BD** para obtener perfil del usuario
 4. **Puede redirigir** antes de que la petición llegue a la página
-5. **Centraliza la lógica de autenticación** (no se repite en cada página)
+5. **Centraliza la protección de páginas privadas** (no se repite en cada página)
+6. **Falla cerrado en rutas privadas** si ocurre un error de validación del proxy
+
+#### Rutas por Categoría
+
+| Categoría | Rutas | Regla |
+|-----------|-------|-------|
+| Públicas | `/`, `/contribuyentes`, `/auth/iniciar-sesion`, `/auth/registrar`, `/auth/olvide-contrasena`, `/auth/restablecer-contrasena`, `/auth/verificar-email` | Sin sesión |
+| Completar perfil | `/perfil/completar` | Sesión requerida; permite perfil incompleto |
+| Compartidas privadas | `/perfil/actualizar`, `/notificaciones`, `/configuracion-notificaciones`, `/comprobante/*` | Sesión, perfil activo y perfil completo |
+| Por rol | `/admin/*`, `/operador/*`, `/donante/*`, `/user/*` | Sesión, perfil activo, perfil completo y rol correspondiente |
+| Dashboard genérico | `/dashboard` | Redirige al dashboard del rol |
+
+Las rutas `/api/*` pasan por el matcher del proxy, pero las APIs sensibles validan autorización dentro del handler. No se debe asumir que el proxy reemplaza la autorización server-side de una API.
 
 ---
 
 ## Flujos de Negocio Principales
+
+### 🔐 Flujo: Crear o Actualizar Usuarios desde Admin
+
+`/api/admin/usuarios` usa `SUPABASE_SERVICE_ROLE_KEY`, por lo que valida autorización dentro del handler aunque la ruta de página ya esté protegida por `proxy.ts`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Admin Browser
+    participant API as /api/admin/usuarios
+    participant Auth as Supabase Auth Client
+    participant Admin as Supabase Admin Client
+    participant DB as usuarios
+
+    A->>API: POST/PATCH
+    API->>Auth: getUser()
+    Auth-->>API: user o null
+
+    alt Sin sesión
+        API-->>A: 401 Usuario no autenticado
+    else Sesión válida
+        API->>DB: SELECT perfil por user.id
+        DB-->>API: rol, estado
+
+        alt Perfil inactivo o rol no admin
+            API-->>A: 403 Rol no permitido
+        else ADMINISTRADOR activo
+            API->>API: Validar payload y whitelist
+            API->>Admin: Crear/actualizar usuario con service role
+            Admin-->>API: Resultado
+            API-->>A: 200 o error controlado
+        end
+    end
+```
+
+Reglas:
+
+- `POST`: solo `ADMINISTRADOR` activo puede crear usuarios.
+- `PATCH`: solo `ADMINISTRADOR` activo puede modificar usuarios.
+- `PATCH` rechaza campos fuera de whitelist.
+- `rol` solo acepta `ADMINISTRADOR`, `OPERADOR`, `DONANTE`, `SOLICITANTE`.
+- `estado` solo acepta `activo`, `bloqueado`, `desactivado`.
+
+### 🔒 Flujo: APIs Operativas Protegidas
+
+Las APIs con datos operativos usan `requireActiveUserRole(supabase, roles)` para unificar sesión, perfil activo y rol permitido.
+
+| API | Roles permitidos |
+|-----|------------------|
+| `/api/admin/cancelaciones-donaciones` | `ADMINISTRADOR` |
+| `/api/operador/bajas` | `ADMINISTRADOR`, `OPERADOR` |
+| `/api/operador/bajas/estadisticas` | `ADMINISTRADOR`, `OPERADOR` |
+| `/api/operador/alertas-vencimiento` | `ADMINISTRADOR`, `OPERADOR` |
+| `/api/comprobante/[codigo]` | Usuario activo; admin/operador o dueño del comprobante |
+| `/api/proxy/consultar-cedula` | Usuario autenticado |
+| `/api/proxy/consultar-ruc` | Usuario autenticado |
+
+Las APIs de cédula/RUC no exigen perfil completo porque se usan durante el flujo de completar perfil. Sí exigen sesión para evitar uso anónimo del proxy externo.
+
+### 🔔 Flujo: Crear Notificaciones Seguras
+
+`/api/notificaciones` usa `SUPABASE_SERVICE_ROLE_KEY`, pero el cliente solo puede enviar eventos controlados:
+
+```json
+{
+  "event": "catalog_food_request_created",
+  "entityId": "55555555-5555-4555-8555-555555555555"
+}
+```
+
+Reglas:
+
+- La ruta valida sesión con el cliente normal de Supabase.
+- La ruta valida perfil activo con el cliente admin.
+- `notificationEventDispatcher` valida el rol permitido y el ownership/contexto de `entityId`.
+- El servidor construye `titulo`, `mensaje`, destinatario, URL, metadata y email.
+- La ruta rechaza campos sensibles enviados desde cliente, como `destinatarioId`, `rolDestinatario`, `email`, `titulo` o `mensaje`.
+
+Eventos permitidos:
+
+| Evento | Roles que pueden dispararlo | Destinatario |
+|--------|-----------------------------|--------------|
+| `catalog_food_request_created` | `DONANTE` | `ADMINISTRADOR` |
+| `catalog_food_request_reviewed` | `ADMINISTRADOR` | Donante dueño de la solicitud |
+| `food_request_status_changed` | `ADMINISTRADOR`, `OPERADOR` | Solicitante dueño |
+| `donation_status_changed` | `ADMINISTRADOR`, `OPERADOR` | Donante dueño |
+
+### 📦 Flujo: Aprobar Solicitud con Inventario
+
+La fachada `createSolicitudesActionService()` conserva la API pública usada por hooks y páginas, pero delega en casos de uso internos.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant O as Operador/Admin
+    participant F as useSolicitudActions
+    participant UC as approveSolicitud
+    participant INV as solicitudesInventoryService
+    participant MOV as solicitudesMovementService
+    participant DB as Supabase
+    participant NOT as solicitudesNotificationService
+
+    O->>F: Aprobar solicitud
+    F->>UC: solicitud, operador, depósito
+    UC->>INV: validarStockDisponible()
+
+    alt Stock insuficiente
+        UC-->>F: error sin modificar estado
+    else Stock suficiente
+        UC->>INV: descontarDelInventario()
+        UC->>DB: UPDATE solicitudes estado=aprobada
+        UC->>MOV: registrarMovimientoSolicitud()
+
+        alt Falla update o movimiento
+            UC->>INV: restaurarInventario()
+            UC->>DB: rollback estado anterior
+            UC-->>F: error controlado
+        else Todo OK
+            UC->>NOT: notificarCambioEstado()
+            UC-->>F: success
+        end
+    end
+```
+
+Este flujo evita que una solicitud quede aprobada sin descuento efectivo o sin movimiento esperado.
 
 ### 📦 Flujo Completo: Crear una Donación
 
@@ -604,7 +725,6 @@ sequenceDiagram
     participant S as DonacionService
     participant SB as Supabase
     participant DB as PostgreSQL
-    participant NS as NotificationService
     
     D->>M: GET /donante/nueva-donacion
     M->>SB: Verificar sesión
@@ -629,8 +749,7 @@ sequenceDiagram
     DB-->>SB: Donación creada
     SB-->>S: {id, estado: 'Pendiente'}
     
-    S->>NS: Crear notificación para OPERADOR
-    NS->>DB: INSERT INTO notificaciones
+    Note over S: La creación queda en Pendiente. Las notificaciones de donación se emiten cuando admin/operador cambia el estado.
     
     S-->>API: {success: true, data}
     API-->>P: Response 200
@@ -652,6 +771,7 @@ sequenceDiagram
     participant S as SolicitudService
     participant IS as InventarioService
     participant DB as PostgreSQL (con Triggers)
+    participant NAPI as /api/notificaciones
     participant NS as NotificationService
     
     O->>P: Ver solicitud pendiente
@@ -661,24 +781,25 @@ sequenceDiagram
     API->>S: solicitudService.aprobar(solicitudId, operadorId)
     
     S->>IS: Verificar stock disponible
-    IS->>DB: SELECT inventario WHERE producto = ?
-    DB-->>IS: {cantidad_disponible: 50}
+    IS->>DB: SELECT entradas_inventario disponibles WHERE producto = ?
+    DB-->>IS: Suma de entradas compatibles: 50
     IS-->>S: Stock suficiente
     
-    S->>DB: BEGIN TRANSACTION
+    S->>DB: RPC descontar_stock_por_lote(...)
+    DB->>DB: Bloquear entradas y aplicar FEFO
+    DB-->>S: idEntrada y cantidad descontada por lote
     
     S->>DB: UPDATE solicitudes SET estado = 'aprobada'
-    
-    Note over DB: Trigger automático se ejecuta
-    DB->>DB: Descontar inventario
-    DB->>DB: Registrar movimiento_inventario
+    S->>DB: INSERT movimiento con id_entrada
     
     S->>DB: Generar código comprobante único
     S->>DB: UPDATE solicitudes SET codigo_comprobante = ?
     
-    S->>DB: COMMIT TRANSACTION
+    Note over S: Si falla un paso posterior, restaura cada id_entrada afectado
     
-    S->>NS: Crear notificación para beneficiario
+    S->>NAPI: POST {event: food_request_status_changed, entityId}
+    NAPI->>NAPI: Validar sesión, perfil activo y rol permitido
+    NAPI->>NS: Construir notificación server-side
     NS->>DB: INSERT INTO notificaciones
     
     S-->>API: {success: true, comprobante}
@@ -688,14 +809,14 @@ sequenceDiagram
 
 **Aspectos importantes:**
 1. Todo ocurre en una **transacción** para garantizar consistencia
-2. Los **triggers de la BD** se ejecutan automáticamente
-3. El inventario se **descuenta automáticamente**
+2. La RPC de inventario bloquea entradas y aplica FEFO
+3. El stock se **descuenta directamente en entradas_inventario**
 4. Se **genera un comprobante** con código único
 5. Se envía **notificación** al beneficiario
 
 ---
 
-### 📊 Flujo: Actualizar Inventario desde Donación Entregada
+### 📊 Flujo: Actualizar Inventario desde Donación Aprobada
 
 ```mermaid
 sequenceDiagram
@@ -706,28 +827,22 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant T as Database Trigger
     
-    O->>API: PATCH /api/donaciones/456 {estado: 'Entregada'}
-    API->>S: donacionService.marcarComoEntregada(id)
+    O->>API: PATCH /api/donaciones/456 {estado: 'Aprobada'}
+    API->>S: donationActionService.updateDonationEstado(id, 'Aprobada')
     
-    S->>DB: UPDATE donaciones SET estado = 'Entregada'
+    S->>DB: UPDATE donaciones SET estado = 'Aprobada'
     
     Note over T: Trigger "trigger_crear_producto" se ejecuta
     
-    T->>DB: Buscar producto existente con mismo nombre + unidad
+    T->>DB: Buscar o crear identidad en productos_donados
     
     alt Producto existe
-        T->>DB: UPDATE productos_donados SET cantidad += nueva_cantidad
+        T->>DB: Reutilizar producto de catálogo sin modificar saldos
     else Producto no existe
         T->>DB: INSERT INTO productos_donados
     end
     
-    T->>DB: Buscar en inventario (producto + depósito)
-    
-    alt Ya existe en inventario
-        T->>DB: UPDATE inventario SET cantidad_disponible += cantidad
-    else No existe en inventario
-        T->>DB: INSERT INTO inventario
-    end
+    T->>DB: INSERT entradas_inventario con donacion_id
     
     DB-->>S: Donación actualizada
     S-->>API: {success: true}
@@ -736,8 +851,8 @@ sequenceDiagram
 
 **Puntos clave:**
 - El **trigger de PostgreSQL** hace todo el trabajo pesado
-- **Previene duplicados** de productos con normalización de nombres
-- **Actualiza inventario automáticamente**
+- **Previene duplicados** de entradas con `donacion_id`
+- **Crea un lote independiente** aunque el producto de catálogo se repita
 - **Garantiza consistencia** de datos
 
 ---
@@ -797,33 +912,33 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant E as Evento (ej: Nueva donación)
-    participant T as Database Trigger
-    participant F as Function crear_notificacion()
-    participant DB as notificaciones table
+    participant E as Evento de negocio
     participant API as /api/notificaciones
+    participant D as notificationEventDispatcher
+    participant NS as NotificationService
+    participant DB as notificaciones table
     participant U as Usuario (Frontend)
     
-    E->>T: INSERT INTO donaciones
-    T->>F: Ejecutar trigger_notificacion_donacion()
+    E->>API: POST {event, entityId}
+    API->>API: Validar sesión y perfil activo
+    API->>D: Autorizar evento y consultar entidad
+    D-->>API: titulo, mensaje, destinatario, metadata
     
-    F->>F: Determinar destinatarios (rol: OPERADOR)
+    API->>NS: createNotification(input seguro)
+    NS->>DB: INSERT INTO notificaciones
+    NS->>DB: SELECT usuarios/preferencias para email
     
-    F->>DB: INSERT INTO notificaciones (para cada operador)
-    
-    Note over U: Frontend hace polling cada 30s
-    U->>API: GET /api/notificaciones
-    API->>DB: SELECT notificaciones WHERE destinatario_id = ? AND leida = false
-    DB-->>API: Lista de notificaciones
-    API-->>U: Notificaciones no leídas
+    Note over U: Frontend usa RPC y escucha realtime por contenido y estado del usuario
+    U->>DB: RPC obtener_notificaciones_usuario(50)
+    DB-->>U: Notificaciones visibles + leida calculada
     
     U->>U: Mostrar badge con contador
     U->>U: Usuario hace clic en notificación
-    U->>API: PATCH /api/notificaciones/[id] {leida: true}
-    API->>DB: UPDATE notificaciones SET leida = true
-    DB-->>API: Updated
-    API-->>U: Success
+    U->>DB: RPC marcar_notificacion_leida(id)
+    DB-->>U: Success
 ```
+
+`/api/notificaciones` no acepta `titulo`, `mensaje`, `destinatarioId`, `rolDestinatario`, `email`, `metadatos` ni `urlAccion` desde el cliente. El contrato público es `{ event, entityId }`. El hook de notificaciones carga mediante `obtener_notificaciones_usuario(50)`, que aplica la visibilidad y combina el estado desde `notificaciones_usuario`. Realtime escucha tres filtros de `notificaciones` (`destinatario_id`, rol y `TODOS`) y un filtro de `notificaciones_usuario` por `usuario_id`; el handler deduplica por `id` y actualiza el contador individual.
 
 ---
 
@@ -842,7 +957,7 @@ sequenceDiagram
    - Coordinan operaciones entre entidades
 
 3. **Database Triggers** automatizan operaciones
-   - Actualizan inventario automáticamente
+   - Crean entradas de inventario automáticamente para donaciones
    - Crean notificaciones en tiempo real
    - Garantizan integridad de datos
 
@@ -853,7 +968,7 @@ sequenceDiagram
 
 Esta arquitectura garantiza:
 - ✅ **Seguridad** en múltiples capas
-- ✅ **Consistencia** de datos con transacciones
+- ✅ **Consistencia** de datos con triggers/RPC y compensación explícita en solicitudes
 - ✅ **Trazabilidad** de todas las operaciones
 - ✅ **Escalabilidad** con lógica modular
 - ✅ **Mantenibilidad** con código organizado

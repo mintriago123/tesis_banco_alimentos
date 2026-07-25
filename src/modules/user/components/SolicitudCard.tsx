@@ -3,7 +3,7 @@
 // Tarjeta individual de solicitud con opciones de edición y eliminación
 // ============================================================================
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Clock,
   CheckCircle,
@@ -20,11 +20,16 @@ import {
   Package,
   Eye,
   AlertCircle,
+  FileText,
+  ChevronDown,
 } from 'lucide-react';
 import { Solicitud, SolicitudEditData } from '../types';
 import { useDateFormatter } from '@/modules/shared/hooks/useDateFormatter';
 import { createClient } from '@/lib/supabase';
 import { SolicitudDetalleModal } from './SolicitudDetalleModal';
+import { Badge, Button, TextareaInput } from '@/app/components';
+
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 interface SolicitudCardProps {
   solicitud: Solicitud;
@@ -76,6 +81,21 @@ export function SolicitudCard({
     }
   };
 
+  const getEstadoBadgeVariant = (estado: string): 'default' | 'success' | 'error' | 'warning' | 'info' => {
+    switch (estado.toLowerCase()) {
+      case 'pendiente':
+        return 'warning';
+      case 'aprobada':
+        return 'success';
+      case 'rechazada':
+        return 'error';
+      case 'entregada':
+        return 'info';
+      default:
+        return 'default';
+    }
+  };
+
   const handleEditar = () => {
     setEditandoId(solicitud.id);
     setFormEdit({
@@ -111,7 +131,7 @@ export function SolicitudCard({
 
   // Log de depuración para solicitudes rechazadas
   useEffect(() => {
-    if (esRechazada) {
+    if (isDevelopment && esRechazada) {
       console.log('🔍 Datos de solicitud rechazada:', {
         id: solicitud.id,
         motivo_rechazo: solicitud.motivo_rechazo,
@@ -154,7 +174,7 @@ export function SolicitudCard({
               rolOperador: 'STAFF',
             });
           }
-        } catch (error) {
+        } catch {
           console.warn('⚠️ Excepción al cargar datos del operador');
           setDatosRechazo({
             nombreOperador: 'Personal Administrativo',
@@ -200,7 +220,7 @@ export function SolicitudCard({
               rolOperador: 'STAFF',
             });
           }
-        } catch (error) {
+        } catch {
           console.warn('⚠️ Excepción al cargar datos del aprobador');
           setDatosAprobacion({
             nombreOperador: 'Personal Administrativo',
@@ -229,7 +249,7 @@ export function SolicitudCard({
   };
 
   return (
-    <div className="border p-4 rounded-lg shadow-sm space-y-2 relative bg-white">
+    <article className="w-full min-w-0 max-w-full rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:border-slate-300 hover:shadow-md">
       {/* Modal de Detalle */}
       <SolicitudDetalleModal
         solicitud={solicitud}
@@ -237,59 +257,83 @@ export function SolicitudCard({
         onClose={() => setShowDetalle(false)}
       />
 
-      {/* Botones de acción */}
-      <div className="absolute top-2 right-2 flex items-center gap-2">
+      {/* Encabezado */}
+      <div className="flex min-w-0 flex-col gap-4 border-b border-slate-200 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-700" aria-hidden="true">
+            <FileText className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={getEstadoBadgeVariant(solicitud.estado)}>
+                {getEstadoIcono(solicitud.estado)}
+                <span>{solicitud.estado.charAt(0).toUpperCase() + solicitud.estado.slice(1)}</span>
+              </Badge>
+              <span className="text-xs font-medium text-slate-400">Solicitud registrada</span>
+            </div>
+            <h2 className="mt-3 break-words text-lg font-bold text-slate-950 sm:text-xl">
+              {solicitud.tipo_alimento}
+            </h2>
+            <p className="mt-1 break-all text-xs text-slate-500">ID: {solicitud.id}</p>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1 self-end sm:self-start">
         {/* Botón Ver Detalles */}
         <button
+          type="button"
           onClick={() => setShowDetalle(true)}
-          className="text-blue-500 hover:text-blue-700 transition"
+          className="min-h-10 min-w-10 rounded-xl p-2 text-blue-700 transition-colors hover:bg-blue-50 hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
           title="Ver detalles"
+          aria-label="Ver detalles de la solicitud"
         >
-          <Eye className="w-4 h-4" />
+          <Eye className="mx-auto h-4 w-4" aria-hidden="true" />
+          <span className="hidden text-xs font-semibold sm:inline">Ver</span>
         </button>
 
         {puedeEliminar && (
           <button
+            type="button"
             onClick={() => onDelete(solicitud)}
-            className="text-red-500 hover:text-red-700 transition"
+            className="min-h-10 min-w-10 rounded-xl p-2 text-rose-700 transition-colors hover:bg-rose-50 hover:text-rose-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
             title="Eliminar solicitud"
-          >
-            <Trash2 className="w-4 h-4" />
+            aria-label="Eliminar solicitud"
+        >
+          <Trash2 className="mx-auto h-4 w-4" aria-hidden="true" />
+          <span className="hidden text-xs font-semibold sm:inline">Eliminar</span>
           </button>
         )}
 
         {puedeEditar && editandoId !== solicitud.id && (
           <button
+            type="button"
             onClick={handleEditar}
-            className="text-blue-500 hover:text-blue-700 transition"
+            className="min-h-10 min-w-10 rounded-xl p-2 text-blue-700 transition-colors hover:bg-blue-50 hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
             title="Editar solicitud"
-          >
-            <Edit className="w-4 h-4" />
+            aria-label="Editar solicitud"
+        >
+          <Edit className="mx-auto h-4 w-4" aria-hidden="true" />
+          <span className="hidden text-xs font-semibold sm:inline">Editar</span>
           </button>
         )}
       </div>
-
-      {/* Estado */}
-      <div className="flex items-center gap-2 text-sm text-gray-700">
-        {getEstadoIcono(solicitud.estado)}
-        <p>
-          <strong>Estado:</strong> {solicitud.estado}
-        </p>
       </div>
 
+      <div className="space-y-5 p-5 sm:p-6">
       {/* Código de Comprobante - Solo si está aprobada */}
       {solicitud.codigo_comprobante && (
-        <div className="bg-green-50 border border-green-200 p-2 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-green-600 font-medium">Código:</span>
-              <span className="font-mono font-bold text-green-700">
+        <div className="min-w-0 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2 text-sm">
+              <span className="font-semibold text-emerald-700">Código:</span>
+              <span className="break-all font-mono font-bold text-emerald-800">
                 {solicitud.codigo_comprobante}
               </span>
             </div>
             <button
+              type="button"
               onClick={() => setShowDetalle(true)}
-              className="text-xs text-green-600 hover:text-green-800 underline"
+              className="rounded-lg px-2 py-1 text-xs font-semibold text-emerald-700 underline decoration-emerald-300 underline-offset-2 hover:bg-emerald-100 hover:text-emerald-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
             >
               Ver comprobante
             </button>
@@ -297,77 +341,87 @@ export function SolicitudCard({
         </div>
       )}
 
-      {/* Alimento */}
-      <div className="flex items-center gap-2 text-sm text-gray-700">
-        <ShoppingBasket className="w-4 h-4" />
-        <p>
-          <strong>Alimento:</strong> {solicitud.tipo_alimento}
-        </p>
-      </div>
+      <dl className="grid min-w-0 gap-3 sm:grid-cols-2">
+        {/* Alimento */}
+        <div className="flex min-w-0 items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+          <ShoppingBasket className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" aria-hidden="true" />
+          <div className="min-w-0">
+            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Alimento solicitado</dt>
+            <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{solicitud.tipo_alimento}</dd>
+          </div>
+        </div>
 
-      {/* Cantidad */}
-      <div className="flex items-center gap-2 text-sm text-gray-700">
-        <Hash className="w-4 h-4" />
-        <p>
-          <strong>Cantidad:</strong> {solicitud.cantidad} {solicitud.unidad_simbolo || 'unidades'}
-        </p>
-      </div>
+        {/* Cantidad */}
+        <div className="flex min-w-0 items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+          <Hash className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" aria-hidden="true" />
+          <div className="min-w-0">
+            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cantidad solicitada</dt>
+            <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{solicitud.cantidad} {solicitud.unidad_simbolo || 'unidades'}</dd>
+          </div>
+        </div>
 
-      {/* Comentarios */}
-      <div className="flex items-center gap-2 text-sm text-gray-700">
-        <MessageCircle className="w-4 h-4" />
-        {editandoId === solicitud.id ? (
-          <textarea
-            value={formEdit.comentarios}
-            onChange={(e) =>
-              setFormEdit((f) => ({ ...f, comentarios: e.target.value }))
-            }
-            rows={2}
-            className="w-full p-1 border rounded resize-none"
-            placeholder="Comentarios"
-          />
-        ) : (
-          <p>
-            <strong>Comentarios:</strong>{' '}
-            {solicitud.comentarios || 'Sin comentarios'}
-          </p>
-        )}
-      </div>
+        {/* Fecha */}
+        <div className="flex min-w-0 items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+          <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" aria-hidden="true" />
+          <div className="min-w-0">
+            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Fecha de solicitud</dt>
+            <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{formatDateTime(solicitud.created_at)}</dd>
+          </div>
+        </div>
 
-      {/* Fecha */}
-      <div className="flex items-center gap-2 text-sm text-gray-700">
-        <Calendar className="w-4 h-4" />
-        <p>
-          <strong>Fecha:</strong> {formatDateTime(solicitud.created_at)}
-        </p>
-      </div>
+        {/* Comentarios */}
+        <div className="flex min-w-0 items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4 sm:col-span-2">
+          <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Comentarios</dt>
+            {editandoId === solicitud.id ? (
+              <TextareaInput
+                id={`comentarios-${solicitud.id}`}
+                value={formEdit.comentarios}
+                onChange={(e) => setFormEdit((f) => ({ ...f, comentarios: e.target.value }))}
+                rows={2}
+                className="mt-2 min-h-20 min-w-0 resize-none"
+                placeholder="Añade un comentario"
+                aria-label="Comentarios de la solicitud"
+              />
+            ) : (
+              <dd className="mt-1 break-words text-sm text-slate-700">{solicitud.comentarios || 'Sin comentarios'}</dd>
+            )}
+          </div>
+        </div>
+      </dl>
 
       {/* Ubicación */}
       {solicitud.latitud && solicitud.longitud && (
-        <div className="text-sm text-gray-600">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-4 h-4" />
-            <p>
-              <strong>Ubicación:</strong> Lat {solicitud.latitud.toFixed(5)},
-              Lng {solicitud.longitud.toFixed(5)}
-            </p>
+        <details className="group min-w-0 rounded-xl border border-blue-200 bg-blue-50">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm font-semibold text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-inset">
+            <span className="flex min-w-0 items-center gap-2">
+              <MapPin className="h-4 w-4 shrink-0 text-blue-700" aria-hidden="true" />
+              <span className="truncate">Ubicación registrada</span>
+            </span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-blue-700 transition-transform group-open:rotate-180" aria-hidden="true" />
+          </summary>
+          <div className="border-t border-blue-200 p-4 text-sm text-blue-900">
+            <p className="break-words">Lat {solicitud.latitud.toFixed(5)}, Lng {solicitud.longitud.toFixed(5)}</p>
+            <iframe
+              className="mt-3 block h-48 max-w-full rounded-xl border border-blue-200"
+              src={`https://maps.google.com/maps?q=${solicitud.latitud},${solicitud.longitud}&z=15&output=embed`}
+              title="Ubicación de la solicitud"
+            ></iframe>
           </div>
-          <iframe
-            className="w-full h-48 mt-2 rounded-md border"
-            src={`https://maps.google.com/maps?q=${solicitud.latitud},${solicitud.longitud}&z=15&output=embed`}
-            title="Ubicación"
-          ></iframe>
-        </div>
+        </details>
       )}
 
       {/* Botón Ver Más para solicitudes rechazadas */}
       {esRechazada && (
-        <div className="mt-3">
+        <div className="rounded-xl border border-rose-200 bg-rose-50/70 p-2">
           <button
+            type="button"
             onClick={() => setMostrarDetallesRechazo(!mostrarDetallesRechazo)}
-            className="flex items-center gap-2 text-red-600 hover:text-red-700 font-medium text-sm transition"
+            aria-expanded={mostrarDetallesRechazo}
+            className="flex min-h-10 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100 hover:text-rose-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
           >
-            <AlertCircle className="w-4 h-4" />
+            <AlertCircle className="h-4 w-4" aria-hidden="true" />
             {mostrarDetallesRechazo ? 'Ocultar detalles del rechazo' : 'Ver detalles del rechazo'}
           </button>
         </div>
@@ -375,12 +429,14 @@ export function SolicitudCard({
 
       {/* Botón Ver Más para solicitudes aprobadas */}
       {esAprobada && solicitud.operador_aprobacion_id && (
-        <div className="mt-3">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-2">
           <button
+            type="button"
             onClick={() => setMostrarDetallesAprobacion(!mostrarDetallesAprobacion)}
-            className="flex items-center gap-2 text-green-600 hover:text-green-700 font-medium text-sm transition"
+            aria-expanded={mostrarDetallesAprobacion}
+            className="flex min-h-10 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 hover:text-emerald-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
           >
-            <CheckCircle className="w-4 h-4" />
+            <CheckCircle className="h-4 w-4" aria-hidden="true" />
             {mostrarDetallesAprobacion ? 'Ocultar detalles de aprobación' : 'Ver detalles de aprobación'}
           </button>
         </div>
@@ -388,83 +444,90 @@ export function SolicitudCard({
 
       {/* Botones de edición */}
       {editandoId === solicitud.id && (
-        <div className="flex gap-2 mt-2">
-          <button
+        <div className="flex flex-wrap gap-2 border-t border-slate-200 pt-4">
+          <Button
+            type="button"
             onClick={handleGuardar}
             disabled={loadingEdit}
-            className="flex items-center gap-1 bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 disabled:bg-green-400 transition"
+            loading={loadingEdit}
+            accent="solicitante"
           >
-            <Send className="w-4 h-4" />
+            <Send className="h-4 w-4" aria-hidden="true" />
             Guardar
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
             onClick={handleCancelarEdicion}
             disabled={loadingEdit}
-            className="flex items-center gap-1 bg-gray-300 text-gray-800 px-3 py-1 rounded hover:bg-gray-400 transition"
+            variant="secondary"
+            accent="solicitante"
           >
-            <X className="w-4 h-4" />
+            <X className="h-4 w-4" aria-hidden="true" />
             Cancelar
-          </button>
+          </Button>
         </div>
       )}
+      </div>
 
       {/* Modal de Detalles de Rechazo */}
       {mostrarDetallesRechazo && esRechazada && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-red-600 flex items-center gap-2">
-                <AlertCircle className="w-5 h-5" />
+              <h3 className="flex items-center gap-2 text-lg font-bold text-rose-700">
+                <AlertCircle className="h-5 w-5" aria-hidden="true" />
                 Detalles del Rechazo
               </h3>
               <button
+                type="button"
                 onClick={() => setMostrarDetallesRechazo(false)}
-                className="text-gray-500 hover:text-gray-700 transition"
+                className="min-h-10 min-w-10 rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                aria-label="Cerrar detalles del rechazo"
               >
-                <X className="w-5 h-5" />
+                <X className="mx-auto h-5 w-5" aria-hidden="true" />
               </button>
             </div>
 
             <div className="space-y-4">
               {/* Motivo del Rechazo */}
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-sm font-semibold text-red-800 mb-1">Motivo del Rechazo</p>
-                <p className="text-sm text-red-700">
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                <p className="mb-1 text-sm font-semibold text-rose-900">Motivo del Rechazo</p>
+                <p className="text-sm text-rose-800">
                   {getMotivoRechazoLabel(solicitud.motivo_rechazo)}
                 </p>
               </div>
 
               {/* Comentario del Administrador/Operador */}
               {solicitud.comentario_admin && (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <p className="text-sm font-semibold text-gray-800 mb-1">Comentario</p>
-                  <p className="text-sm text-gray-700">{solicitud.comentario_admin}</p>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="mb-1 text-sm font-semibold text-slate-800">Comentario</p>
+                  <p className="text-sm text-slate-700">{solicitud.comentario_admin}</p>
                 </div>
               )}
 
               {/* Fecha y Hora del Rechazo */}
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <p className="text-sm font-semibold text-gray-800 mb-1">Fecha y Hora del Rechazo</p>
-                <p className="text-sm text-gray-700">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="mb-1 text-sm font-semibold text-slate-800">Fecha y Hora del Rechazo</p>
+                <p className="text-sm text-slate-700">
                   {solicitud.fecha_rechazo ? formatDateTime(solicitud.fecha_rechazo) : 'No registrada'}
                 </p>
               </div>
 
               {/* Quién rechazó */}
               {solicitud.operador_rechazo_id && (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <p className="text-sm font-semibold text-gray-800 mb-1">Rechazado por</p>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="mb-1 text-sm font-semibold text-slate-800">Rechazado por</p>
                   {cargandoRechazo ? (
-                    <p className="text-sm text-gray-600">Cargando...</p>
+                    <p className="text-sm text-slate-600">Cargando...</p>
                   ) : datosRechazo ? (
-                    <div className="text-sm text-gray-700">
+                    <div className="text-sm text-slate-700">
                       <span
-                        className={`inline-block px-3 py-1.5 rounded text-sm font-semibold ${
+                          className={`inline-flex rounded-full border px-3 py-1.5 text-sm font-semibold ${
                           datosRechazo.rolOperador === 'ADMINISTRADOR' || datosRechazo.rolOperador === 'ADMIN'
-                            ? 'bg-purple-100 text-purple-800'
+                            ? 'border-violet-200 bg-violet-50 text-violet-800'
                             : datosRechazo.rolOperador === 'OPERADOR'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-green-100 text-green-800'
+                            ? 'border-blue-200 bg-blue-50 text-blue-800'
+                            : 'border-emerald-200 bg-emerald-50 text-emerald-800'
                         }`}
                       >
                         {datosRechazo.rolOperador === 'ADMINISTRADOR' || datosRechazo.rolOperador === 'ADMIN'
@@ -477,7 +540,7 @@ export function SolicitudCard({
                       </span>
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-600">No disponible</p>
+                    <p className="text-sm text-slate-600">No disponible</p>
                   )}
                 </div>
               )}
@@ -485,12 +548,13 @@ export function SolicitudCard({
 
             {/* Botón Cerrar */}
             <div className="mt-6">
-              <button
+              <Button
+                type="button"
                 onClick={() => setMostrarDetallesRechazo(false)}
-                className="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
+                className="w-full"
               >
                 Cerrar
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -498,53 +562,55 @@ export function SolicitudCard({
 
       {/* Modal de Detalles de Aprobación */}
       {mostrarDetallesAprobacion && esAprobada && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-green-600 flex items-center gap-2">
-                <CheckCircle className="w-5 h-5" />
+              <h3 className="flex items-center gap-2 text-lg font-bold text-emerald-700">
+                <CheckCircle className="h-5 w-5" aria-hidden="true" />
                 Detalles de la Aprobación
               </h3>
               <button
+                type="button"
                 onClick={() => setMostrarDetallesAprobacion(false)}
-                className="text-gray-500 hover:text-gray-700 transition"
+                className="min-h-10 min-w-10 rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                aria-label="Cerrar detalles de la aprobación"
               >
-                <X className="w-5 h-5" />
+                <X className="mx-auto h-5 w-5" aria-hidden="true" />
               </button>
             </div>
 
             <div className="space-y-4">
               {/* Comentario del Administrador/Operador */}
               {solicitud.comentario_admin && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <p className="text-sm font-semibold text-green-800 mb-1">Comentario</p>
-                  <p className="text-sm text-green-700">{solicitud.comentario_admin}</p>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="mb-1 text-sm font-semibold text-emerald-900">Comentario</p>
+                  <p className="text-sm text-emerald-800">{solicitud.comentario_admin}</p>
                 </div>
               )}
 
               {/* Fecha y Hora de Aprobación */}
               {solicitud.fecha_aprobacion && (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <p className="text-sm font-semibold text-gray-800 mb-1">Fecha y Hora de Aprobación</p>
-                  <p className="text-sm text-gray-700">{formatDateTime(solicitud.fecha_aprobacion)}</p>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="mb-1 text-sm font-semibold text-slate-800">Fecha y Hora de Aprobación</p>
+                  <p className="text-sm text-slate-700">{formatDateTime(solicitud.fecha_aprobacion)}</p>
                 </div>
               )}
 
               {/* Quién aprobó */}
               {solicitud.operador_aprobacion_id && (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <p className="text-sm font-semibold text-gray-800 mb-1">Aprobado por</p>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="mb-1 text-sm font-semibold text-slate-800">Aprobado por</p>
                   {cargandoAprobacion ? (
-                    <p className="text-sm text-gray-600">Cargando...</p>
+                    <p className="text-sm text-slate-600">Cargando...</p>
                   ) : datosAprobacion ? (
-                    <div className="text-sm text-gray-700">
+                    <div className="text-sm text-slate-700">
                       <span
-                        className={`inline-block px-3 py-1.5 rounded text-sm font-semibold ${
+                          className={`inline-flex rounded-full border px-3 py-1.5 text-sm font-semibold ${
                           datosAprobacion.rolOperador === 'ADMINISTRADOR' || datosAprobacion.rolOperador === 'ADMIN'
-                            ? 'bg-purple-100 text-purple-800'
+                            ? 'border-violet-200 bg-violet-50 text-violet-800'
                             : datosAprobacion.rolOperador === 'OPERADOR'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-green-100 text-green-800'
+                            ? 'border-blue-200 bg-blue-50 text-blue-800'
+                            : 'border-emerald-200 bg-emerald-50 text-emerald-800'
                         }`}
                       >
                         {datosAprobacion.rolOperador === 'ADMINISTRADOR' || datosAprobacion.rolOperador === 'ADMIN'
@@ -557,7 +623,7 @@ export function SolicitudCard({
                       </span>
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-600">No disponible</p>
+                    <p className="text-sm text-slate-600">No disponible</p>
                   )}
                 </div>
               )}
@@ -565,16 +631,17 @@ export function SolicitudCard({
 
             {/* Botón Cerrar */}
             <div className="mt-6">
-              <button
+              <Button
+                type="button"
                 onClick={() => setMostrarDetallesAprobacion(false)}
-                className="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
+                className="w-full"
               >
                 Cerrar
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </article>
   );
 }

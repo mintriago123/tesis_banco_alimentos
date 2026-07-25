@@ -71,23 +71,53 @@ export const useCatalogData = (supabaseClient: SupabaseClient) => {
           simbolo, 
           tipo_magnitud_id, 
           es_base,
+          activa,
+          es_discreta,
+          es_presentacion,
+          permite_fraccion,
           tipos_magnitud!inner(nombre)
         `)
+        .eq('activa', true)
         .order('tipo_magnitud_id', { ascending: true })
         .order('nombre', { ascending: true });
 
       if (error) {
         console.error('Error al cargar unidades:', error);
       } else {
-        // Mapear para incluir tipo_magnitud_nombre
-        const unidadesConTipo = (data || []).map(u => ({
+        const { data: conversiones, error: conversionesError } = await supabaseClient
+          .from('conversiones')
+          .select('unidad_origen_id, unidad_destino_id')
+          .eq('activo', true);
+
+        if (conversionesError) {
+          throw conversionesError;
+        }
+
+        const unidadesConvertibles = new Set(
+          (conversiones ?? []).flatMap(conversion => [
+            conversion.unidad_origen_id,
+            conversion.unidad_destino_id,
+          ])
+        );
+
+        // Mapear para incluir tipo_magnitud_nombre y disponibilidad real de equivalencias.
+        const unidadesConTipo = (data || []).map(u => {
+          const tipoMagnitud = u.tipos_magnitud as { nombre?: string | null } | null;
+
+          return {
           id: u.id,
           nombre: u.nombre,
           simbolo: u.simbolo,
           tipo_magnitud_id: u.tipo_magnitud_id,
-          tipo_magnitud_nombre: (u.tipos_magnitud as any)?.nombre,
-          es_base: u.es_base
-        }));
+          tipo_magnitud_nombre: tipoMagnitud?.nombre ?? undefined,
+          es_base: u.es_base,
+          activa: u.activa,
+          es_discreta: u.es_discreta,
+          es_presentacion: u.es_presentacion,
+          permite_fraccion: u.permite_fraccion,
+          es_convertible: unidadesConvertibles.has(u.id),
+          };
+        });
         setUnidades(unidadesConTipo);
       }
     } catch (err) {
@@ -246,6 +276,7 @@ export const useCatalogData = (supabaseClient: SupabaseClient) => {
     updateFood,
     deleteFood,
     checkFoodUsage,
-    deleteCategory
+    deleteCategory,
+    refreshCatalog: loadFoods
   };
 };

@@ -1,47 +1,30 @@
 'use client';
 
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { AlertTriangle, Info } from 'lucide-react';
+import { Button } from '@/app/components/ui/Button';
+import { Modal } from '@/app/components/ui/Modal';
 
 type Variant = 'default' | 'danger' | 'warning';
 
 type ConfirmModalProps = {
-  open: boolean;
-  title: string;
-  description?: string;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  variant?: Variant;
-  onConfirm: () => void;
-  onCancel: () => void;
+  readonly open: boolean;
+  readonly title: string;
+  readonly description?: string;
+  readonly confirmLabel?: string;
+  readonly cancelLabel?: string;
+  readonly variant?: Variant;
+  readonly onConfirm: () => void;
+  readonly onCancel: () => void;
 };
 
-const VARIANT_ICON: Record<Variant, { icon: ReactNode; ring: string; text: string; button: string; buttonHover: string }> = {
-  default: {
-    icon: <Info className="h-5 w-5" />,
-    ring: 'bg-slate-500/15 text-slate-600',
-    text: 'text-slate-600',
-    button: 'bg-slate-900 text-white',
-    buttonHover: 'hover:bg-slate-700'
-  },
-  warning: {
-    icon: <AlertTriangle className="h-5 w-5" />,
-    ring: 'bg-amber-500/15 text-amber-600',
-    text: 'text-amber-600',
-    button: 'bg-amber-500 text-white',
-    buttonHover: 'hover:bg-amber-600'
-  },
-  danger: {
-    icon: <AlertTriangle className="h-5 w-5" />,
-    ring: 'bg-rose-500/15 text-rose-600',
-    text: 'text-rose-600',
-    button: 'bg-rose-500 text-white',
-    buttonHover: 'hover:bg-rose-600'
-  }
+const variantIcons: Record<Variant, { icon: ReactNode; className: string }> = {
+  default: { icon: <Info className="h-5 w-5" />, className: 'bg-slate-100 text-slate-700' },
+  warning: { icon: <AlertTriangle className="h-5 w-5" />, className: 'bg-amber-100 text-amber-800' },
+  danger: { icon: <AlertTriangle className="h-5 w-5" />, className: 'bg-rose-100 text-rose-800' },
 };
 
-
-const ConfirmModal = ({
+export default function ConfirmModal({
   open,
   title,
   description,
@@ -49,46 +32,21 @@ const ConfirmModal = ({
   cancelLabel = 'Cancelar',
   variant = 'default',
   onConfirm,
-  onCancel
-}: ConfirmModalProps) => {
-  if (!open) return null;
-
-  const variantStyles = VARIANT_ICON[variant];
+  onCancel,
+}: ConfirmModalProps) {
+  const icon = variantIcons[variant];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-xl">
-        <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
-          <span className={`flex h-10 w-10 items-center justify-center rounded-full ${variantStyles.ring}`}>
-            {variantStyles.icon}
-          </span>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
-            {description && (
-              <p className="mt-1 text-sm text-slate-600">{description}</p>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100"
-          >
-            {cancelLabel}
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold shadow-sm transition-colors ${variantStyles.button} ${variantStyles.buttonHover}`}
-          >
-            {confirmLabel}
-          </button>
+    <Modal open={open} onClose={onCancel} title={title} description={description} size="sm">
+      <div className="flex items-start gap-3">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${icon.className}`} aria-hidden="true">
+          {icon.icon}
+        </span>
+        <div className="flex w-full justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onCancel}>{cancelLabel}</Button>
+          <Button type="button" variant={variant === 'danger' ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
-};
-
-export default ConfirmModal;
+}

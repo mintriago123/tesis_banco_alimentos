@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import Toast from '@/app/components/ui/Toast';
@@ -28,7 +28,7 @@ export default function OperadorInventarioPage() {
   const { supabase } = useSupabase();
   const { toasts, showSuccess, showError, hideToast } = useToast();
   const [currentView, setCurrentView] = useState<'inventario' | 'alertas' | 'estadisticas' | 'vencimientos'>('inventario');
-  const [selectedAlerta, setSelectedAlerta] = useState<AlertaInventario | null>(null);
+  const [, setSelectedAlerta] = useState<AlertaInventario | null>(null);
   const [selectedItem, setSelectedItem] = useState<InventarioItem | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isBajaModalOpen, setIsBajaModalOpen] = useState(false);
@@ -45,7 +45,6 @@ export default function OperadorInventarioPage() {
     stats,
     hasActiveFilters,
     refetch,
-    refetchAlertas,
     updateCantidad,
     setSearch,
     setDeposito,
@@ -62,17 +61,17 @@ export default function OperadorInventarioPage() {
   const [processingId, setProcessingId] = useState<string>();
 
   const handleUpdateCantidad = useCallback(async (item: InventarioItem, nuevaCantidad: number) => {
-    setProcessingId(item.id_inventario);
+    setProcessingId(item.id_entrada);
     
     try {
-      const success = await updateCantidad(item.id_inventario, nuevaCantidad);
+      const success = await updateCantidad(item.id_entrada, nuevaCantidad);
       
       if (success) {
         showSuccess(`Cantidad actualizada: ${item.producto.nombre_producto} - ${nuevaCantidad} unidades`);
       } else {
         showError('Error al actualizar la cantidad');
       }
-    } catch (error) {
+    } catch {
       showError('Error al actualizar la cantidad');
     } finally {
       setProcessingId(undefined);
@@ -123,7 +122,7 @@ export default function OperadorInventarioPage() {
 
   const handleAlertaVencimientoClick = useCallback((alerta: AlertaVencimiento) => {
     // Buscar el item de inventario correspondiente
-    const item = inventario.find(i => i.id_inventario === alerta.id_inventario);
+    const item = inventario.find(i => i.id_entrada === alerta.id_entrada);
     if (item) {
       handleDarDeBaja(item);
     }

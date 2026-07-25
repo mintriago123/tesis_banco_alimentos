@@ -1,6 +1,13 @@
-import { SupabaseClient } from '@supabase/supabase-js';
-import { DonacionFormulario } from '../../donaciones/types';
-import { NuevoProducto, ProductoSeleccionado, ImpactoCalculado } from '../types';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { DonacionFormulario } from '../../donaciones/types';
+import type { ProductoSeleccionado, ImpactoCalculado, Alimento } from '../types';
+import {
+  parseIsoDateValue,
+  parseOptionalTextValue,
+  parsePositiveIntegerValue,
+  parsePositiveNumberValue,
+  parseUuidValue,
+} from '@/lib/validation-core';
 
 interface UserProfile {
   nombre?: string;
@@ -18,35 +25,67 @@ export class NuevaDonacionService {
 
   async crearDonacion(
     formulario: DonacionFormulario,
-    nuevoProducto: NuevoProducto,
     impacto: ImpactoCalculado,
     productoInfo: ProductoSeleccionado | null,
     unidadInfo: { id: number; nombre: string; simbolo: string } | null,
-    alimentos: any[],
+    alimentos: Alimento[],
     userId: string,
     userProfile: UserProfile | null
   ): Promise<void> {
-    let alimentoIdFinal = null;
-    let tipoProductoFinal = '';
-    let categoriaFinal = '';
-    let esProductoPersonalizado = false;
+    const userIdResult = parseUuidValue(userId, { name: 'userId' });
+    if (!userIdResult.success) {
+      throw new Error(userIdResult.error);
+    }
 
-    // Determinar si es producto personalizado
-    if (formulario.tipo_producto === 'personalizado') {
-      esProductoPersonalizado = true;
-      tipoProductoFinal = nuevoProducto.nombre;
-      categoriaFinal = nuevoProducto.categoria;
-    } else {
-      const alimento = alimentos.find((a: any) => a.id.toString() === formulario.tipo_producto);
-      if (alimento) {
-        alimentoIdFinal = alimento.id;
-        tipoProductoFinal = alimento.nombre;
-        categoriaFinal = alimento.categoria;
-      }
+    const depositoId = parseUuidValue(formulario.id_deposito, { name: 'id_deposito' });
+    if (!depositoId.success) {
+      throw new Error('Selecciona una bodega activa antes de registrar la donación.');
+    }
+
+    const cantidad = parsePositiveNumberValue(formulario.cantidad, { name: 'cantidad' });
+    if (!cantidad.success) {
+      throw new Error(cantidad.error);
+    }
+
+    const unidadId = parsePositiveIntegerValue(formulario.unidad_id, {
+      name: 'unidad_id',
+      min: 1,
+    });
+    if (!unidadId.success) {
+      throw new Error(unidadId.error);
+    }
+
+    const fechaDisponible = parseIsoDateValue(formulario.fecha_disponible, {
+      name: 'fecha_disponible',
+    });
+    if (!fechaDisponible.success || !fechaDisponible.value) {
+      throw new Error(fechaDisponible.success ? 'fecha_disponible es requerida.' : fechaDisponible.error);
+    }
+
+    const fechaVencimiento = parseIsoDateValue(formulario.fecha_vencimiento, {
+      name: 'fecha_vencimiento',
+    });
+    if (!fechaVencimiento.success) {
+      throw new Error(fechaVencimiento.error);
+    }
+
+    const observaciones = parseOptionalTextValue(formulario.observaciones, {
+      name: 'observaciones',
+      maxLength: 500,
+    });
+    if (!observaciones.success) {
+      throw new Error(observaciones.error);
+    }
+
+    const alimento = alimentos.find((a) => a.id.toString() === formulario.tipo_producto);
+
+    if (!alimento) {
+      throw new Error('Selecciona un alimento existente del catálogo antes de registrar la donación.');
     }
 
     const datosDonacion = {
-      user_id: userId,
+      user_id: userIdResult.value,
+      id_deposito: depositoId.value,
       nombre_donante: userProfile?.nombre || '',
       telefono: userProfile?.telefono || '',
       email: userProfile?.email || '',
@@ -55,19 +94,19 @@ export class NuevaDonacionService {
       direccion_donante_completa: userProfile?.direccion || null,
       tipo_persona_donante: userProfile?.tipo_persona || null,
       representante_donante: userProfile?.representante || null,
-      alimento_id: alimentoIdFinal,
-      tipo_producto: tipoProductoFinal,
-      categoria_comida: categoriaFinal,
-      es_producto_personalizado: esProductoPersonalizado,
-      cantidad: parseFloat(formulario.cantidad),
-      unidad_id: parseInt(formulario.unidad_id),
+      alimento_id: alimento.id,
+      tipo_producto: productoInfo?.nombre || alimento.nombre,
+      categoria_comida: productoInfo?.categoria || alimento.categoria,
+      es_producto_personalizado: false,
+      cantidad: cantidad.value,
+      unidad_id: unidadId.value,
       unidad_nombre: unidadInfo?.nombre || '',
       unidad_simbolo: unidadInfo?.simbolo || '',
-      fecha_vencimiento: formulario.fecha_vencimiento || null,
-      fecha_disponible: formulario.fecha_disponible,
+      fecha_vencimiento: fechaVencimiento.value || null,
+      fecha_disponible: fechaDisponible.value,
       direccion_entrega: formulario.direccion_entrega,
       horario_preferido: formulario.horario_preferido || null,
-      observaciones: formulario.observaciones || null,
+      observaciones: observaciones.value,
       impacto_estimado_personas: impacto.personasAlimentadas,
       impacto_equivalente: impacto.comidaEquivalente,
       estado: 'Pendiente',

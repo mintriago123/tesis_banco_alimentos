@@ -119,7 +119,7 @@ const InventoryDetailModal = ({ item, isOpen, onClose }: InventoryDetailModalPro
                 <div>
                   <label className="text-sm font-medium text-gray-600">Unidad de Medida</label>
                   <p className="text-gray-900 font-medium">
-                    {item.producto.unidad_medida || 'No especificada'}
+                    {item.producto.unidad_nombre || 'No especificada'}
                   </p>
                 </div>
               </div>
@@ -201,8 +201,8 @@ const InventoryDetailModal = ({ item, isOpen, onClose }: InventoryDetailModalPro
               <div className="bg-gray-50 rounded-xl p-4 space-y-2">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-600">ID Inventario</label>
-                    <p className="text-gray-900 font-mono text-sm">{item.id_inventario}</p>
+                    <label className="text-sm font-medium text-gray-600">ID Entrada</label>
+                    <p className="text-gray-900 font-mono text-sm">{item.id_entrada}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-600">ID Producto</label>

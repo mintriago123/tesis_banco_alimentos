@@ -47,6 +47,18 @@ interface DonacionResult {
 
 type SearchResult = SolicitudResult | DonacionResult;
 
+type SolicitudRow = Omit<SolicitudResult, 'tipo' | 'unidades' | 'usuarios'> & {
+  unidades: SolicitudResult['unidades'] | SolicitudResult['unidades'][];
+  usuarios: SolicitudResult['usuarios'] | SolicitudResult['usuarios'][];
+};
+
+const singleRelation = <T,>(relation: T | T[] | null | undefined): T | null => {
+  if (Array.isArray(relation)) {
+    return relation[0] ?? null;
+  }
+  return relation ?? null;
+};
+
 export default function ValidarComprobantePage() {
   const [codigo, setCodigo] = useState('');
   const [loading, setLoading] = useState(false);
@@ -66,7 +78,7 @@ export default function ValidarComprobantePage() {
 
     try {
       // Buscar en solicitudes
-      const { data: solicitud, error: solError } = await supabase
+      const { data: solicitud } = await supabase
         .from('solicitudes')
         .select(`
           id,
@@ -85,8 +97,7 @@ export default function ValidarComprobantePage() {
         .maybeSingle();
 
       if (solicitud) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const sol = solicitud as any;
+        const sol = solicitud as SolicitudRow;
         setResult({
           tipo: 'solicitud',
           id: sol.id,
@@ -98,15 +109,15 @@ export default function ValidarComprobantePage() {
           fecha_respuesta: sol.fecha_respuesta,
           comentario_admin: sol.comentario_admin,
           codigo_comprobante: sol.codigo_comprobante,
-          unidades: sol.unidades,
-          usuarios: sol.usuarios,
-        } as SolicitudResult);
+          unidades: singleRelation(sol.unidades),
+          usuarios: singleRelation(sol.usuarios),
+        });
         setLoading(false);
         return;
       }
 
       // Buscar en donaciones
-      const { data: donacion, error: donError } = await supabase
+      const { data: donacion } = await supabase
         .from('donaciones')
         .select('*')
         .eq('codigo_comprobante', codigo.trim().toUpperCase())
@@ -184,8 +195,8 @@ export default function ValidarComprobantePage() {
 
     const confirmado = window.confirm(
       result.tipo === 'solicitud'
-        ? '¿Confirmar que los alimentos han sido entregados al beneficiario?'
-        : '¿Confirmar que la donación ha sido recibida e ingresada al inventario?'
+        ? '¿Confirmar que los alimentos han sido entregados al beneficiario? Debes validar el código del comprobante.'
+        : '¿Confirmar que la donación ha sido aprobada e integrada al inventario?'
     );
 
     if (!confirmado) return;
@@ -194,6 +205,21 @@ export default function ValidarComprobantePage() {
 
     try {
       if (result.tipo === 'solicitud') {
+        const codigoVerificacion = window.prompt(
+          'Escanea o ingresa el código del comprobante para marcar la entrega',
+          result.codigo_comprobante
+        );
+
+        if (!codigoVerificacion) {
+          alert('Debes ingresar el código del comprobante para continuar');
+          return;
+        }
+
+        if (codigoVerificacion.trim().toUpperCase() !== result.codigo_comprobante.trim().toUpperCase()) {
+          alert('El código del comprobante no coincide');
+          return;
+        }
+
         const { error } = await supabase
           .from('solicitudes')
           .update({ estado: 'entregada', fecha_respuesta: new Date().toISOString() })
@@ -204,11 +230,11 @@ export default function ValidarComprobantePage() {
       } else {
         const { error } = await supabase
           .from('donaciones')
-          .update({ estado: 'Entregada', actualizado_en: new Date().toISOString() })
+          .update({ estado: 'Aprobada', actualizado_en: new Date().toISOString() })
           .eq('id', result.id);
 
         if (error) throw error;
-        setResult({ ...result, estado: 'Entregada' });
+        setResult({ ...result, estado: 'Aprobada' });
       }
 
       alert('Estado actualizado exitosamente');
@@ -360,16 +386,17 @@ export default function ValidarComprobantePage() {
                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
                   Detalles del {result.tipo === 'solicitud' ? 'Pedido' : 'Producto'}
                 </h3>
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full">
-                    <thead className="bg-gray-50">
+                <div className="table-surface">
+                  <div className="table-scroll">
+                    <table className="table-base">
+                      <thead className="table-head">
                       <tr>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Producto</th>
                         <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Cantidad</th>
                         <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Unidad</th>
                       </tr>
-                    </thead>
-                    <tbody>
+                      </thead>
+                      <tbody className="table-body">
                       <tr>
                         <td className="px-4 py-4 font-medium text-gray-900">
                           {result.tipo === 'solicitud' ? result.tipo_alimento : result.tipo_producto}
@@ -383,8 +410,9 @@ export default function ValidarComprobantePage() {
                             : result.unidad_simbolo}
                         </td>
                       </tr>
-                    </tbody>
-                  </table>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
 
@@ -422,14 +450,14 @@ export default function ValidarComprobantePage() {
                 </button>
                 
                 {((result.tipo === 'solicitud' && result.estado === 'aprobada') ||
-                  (result.tipo === 'donacion' && result.estado === 'Recogida')) && (
+                  (result.tipo === 'donacion' && result.estado === 'Pendiente')) && (
                   <button
                     onClick={handleMarcarEntregada}
                     disabled={loading}
                     className="flex-1 py-3 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     <CheckCircle className="h-5 w-5" />
-                    Marcar como Entregada
+                    {result.tipo === 'solicitud' ? 'Marcar como Entregada' : 'Aprobar Donación'}
                   </button>
                 )}
               </div>

@@ -100,8 +100,9 @@ export default function AccesibilidadFlotante() {
     <>
       {/* Botón flotante principal */}
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-6 right-6 z-50 w-14 h-14 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center group"
+        className="group fixed right-4 top-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-blue-700 text-white shadow-lg hover:bg-blue-800 sm:right-6 sm:top-6 sm:h-14 sm:w-14"
         aria-label="Abrir panel de accesibilidad"
         title="Accesibilidad"
       >
@@ -110,14 +111,15 @@ export default function AccesibilidadFlotante() {
 
       {/* Panel de accesibilidad */}
       {isOpen && (
-        <div className="fixed top-24 right-6 z-50 w-80 bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed right-4 top-20 z-50 w-[calc(100vw-2rem)] max-w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg animate-in sm:right-6 sm:top-24">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4 flex items-center justify-between">
+          <div className="flex items-center justify-between bg-blue-800 p-4 text-white">
             <div className="flex items-center gap-2">
               <Accessibility className="w-5 h-5" />
               <h3 className="font-semibold">Accesibilidad</h3>
             </div>
             <button
+              type="button"
               onClick={() => setIsOpen(false)}
               className="hover:bg-white/20 rounded p-1 transition-colors"
               aria-label="Cerrar panel"

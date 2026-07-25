@@ -3,9 +3,9 @@
 // Manejo del perfil del usuario
 // ============================================================================
 
-import { useState, useEffect, useCallback } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
-import {
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type {
   UserProfile,
   UserProfileFormData,
   LoadingState,
@@ -30,7 +30,7 @@ export function usePerfilUsuario(
   const [loading, setLoading] = useState<LoadingState>('idle');
   const [message, setMessage] = useState<MessageState | null>(null);
 
-  const service = new PerfilService(supabase);
+  const service = useMemo(() => new PerfilService(supabase), [supabase]);
 
   const loadProfile = useCallback(async () => {
     if (!usuarioId) {
@@ -54,7 +54,7 @@ export function usePerfilUsuario(
       setProfile(data);
       setLoading('success');
     }
-  }, [usuarioId]);
+  }, [service, usuarioId]);
 
   useEffect(() => {
     loadProfile();
@@ -76,7 +76,7 @@ export function usePerfilUsuario(
     if (error || !updatedData) {
       setMessage({
         type: 'error',
-        text: error?.message || MESSAGES.PERFIL.ERROR_UPDATE,
+        text: error instanceof Error ? error.message : MESSAGES.PERFIL.ERROR_UPDATE,
       });
       setLoading('error');
       return false;

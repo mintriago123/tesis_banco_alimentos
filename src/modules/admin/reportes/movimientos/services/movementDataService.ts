@@ -1,7 +1,6 @@
 /**
  * @fileoverview Servicio especializado para acceso a datos de movimientos
- * Este servicio maneja toda la lógica de acceso a la base de datos, mapeo de datos
- * y transformaciones necesarias para el sistema de reportes de movimientos.
+ * Este servicio maneja la lectura de movimientos y su mapeo a la vista de reportes.
  * 
  * @author Sistema de Banco de Alimentos
  * @version 1.0.0
@@ -14,6 +13,8 @@ import type {
 } from '../types';
 import { DEFAULT_VALUES } from '../constants';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 /**
  * Logger personalizado para el servicio de datos
  */
@@ -25,21 +26,21 @@ const logger = {
     console.warn(`[MovementDataService] ${message}`, details);
   },
   info: (message: string, details?: unknown) => {
-    console.info(`[MovementDataService] ${message}`, details);
+    if (isDevelopment) {
+      console.info(`[MovementDataService] ${message}`, details);
+    }
   }
 };
 
 /**
  * Clase de servicio principal para manejo de datos de movimientos
- * Encapsula toda la lógica de acceso a datos y proporciona una interfaz limpia
- * para consumir información de movimientos desde múltiples fuentes
+ * Encapsula el acceso a la fuente única de movimientos registrada en la base.
  */
 export class MovementDataService {
   constructor(private readonly supabaseClient: SupabaseClient) {}
 
   /**
-   * Obtiene el conjunto completo de movimientos desde todas las fuentes disponibles
-   * Combina datos del sistema actual y sistemas legacy
+   * Obtiene el conjunto completo de movimientos desde la fuente actual.
    * 
    * @returns Promise con el resultado de la operación incluyendo todos los movimientos
    */
@@ -47,25 +48,11 @@ export class MovementDataService {
     try {
       logger.info('Iniciando carga completa de movimientos');
       
-      const movements: MovementItem[] = [];
-      const seenIds = new Set<string>();
-
-      // Función helper para agregar movimientos evitando duplicados
-      const addMovements = (items: MovementItem[]) => {
-        for (const item of items) {
-          if (!seenIds.has(item.id)) {
-            seenIds.add(item.id);
-            movements.push(item);
-          }
-        }
-      };
-
-      // Cargar movimientos del sistema actual
       const currentMovements = await this.loadCurrentMovements();
-      if (currentMovements.success && currentMovements.data) {
-        addMovements(currentMovements.data);
-        logger.info(`Cargados ${currentMovements.data.length} movimientos actuales`);
-      }
+      if (!currentMovements.success || !currentMovements.data) return currentMovements;
+
+      const movements = currentMovements.data;
+      logger.info(`Cargados ${movements.length} movimientos`);
 
       // Ordenar por fecha descendente
       movements.sort((a, b) => 
@@ -112,8 +99,6 @@ export class MovementDataService {
             unidad_id,
             productos_donados!inner(
               nombre_producto,
-              unidad_medida,
-              unidad_id,
               unidades:unidades(
                 id,
                 nombre,
@@ -188,30 +173,15 @@ export class MovementDataService {
         const cantidad = this.validateQuantity(detalle.cantidad);
         const fechaMovimiento = this.validateDate(movimiento.fecha_movimiento);
         
-        const productoDonado = detalle.productos_donados as { 
+        const productoDonado = detalle.productos_donados as {
           nombre_producto?: string; 
-          unidad_medida?: string;
-          unidad_id?: number;
           unidades?: { id?: number; nombre?: string; simbolo?: string } | { id?: number; nombre?: string; simbolo?: string }[];
         } | null;
 
-        // Priorizar información de unidad estructurada
-        let unidadMedida: string = DEFAULT_VALUES.defaultUnit;
-        
-        if (productoDonado?.unidades) {
-          // Si unidades es un array, tomar el primer elemento
-          const unidadInfo = Array.isArray(productoDonado.unidades) 
-            ? productoDonado.unidades[0] 
-            : productoDonado.unidades;
-          
-          if (unidadInfo?.simbolo) {
-            unidadMedida = unidadInfo.simbolo;
-          } else if (productoDonado.unidad_medida) {
-            unidadMedida = productoDonado.unidad_medida;
-          }
-        } else if (productoDonado?.unidad_medida) {
-          unidadMedida = productoDonado.unidad_medida;
-        }
+        const unidadInfo = productoDonado?.unidades
+          ? (Array.isArray(productoDonado.unidades) ? productoDonado.unidades[0] : productoDonado.unidades)
+          : null;
+        const unidadMedida = unidadInfo?.simbolo ?? unidadInfo?.nombre ?? DEFAULT_VALUES.defaultUnit;
 
         return {
           id: `current-${movimiento.id_movimiento}-${index}`,

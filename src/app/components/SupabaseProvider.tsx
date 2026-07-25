@@ -7,6 +7,8 @@ import { ConfirmProvider } from '@/modules/admin/shared/hooks/useConfirm';
 import { CONFIGURACION_SEGURIDAD } from '@/lib/configuracion-seguridad';
 import { useRouter } from 'next/navigation';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 type SupabaseContext = {
   supabase: SupabaseClient;
   user: User | null;
@@ -33,13 +35,13 @@ export default function SupabaseProvider({
     if (user && CONFIGURACION_SEGURIDAD.CIERRE_SESION_AUTOMATICO_HABILITADO) {
       const minutosInactividad = CONFIGURACION_SEGURIDAD.TIEMPO_INACTIVIDAD_MS / 60000;
       
-      if (CONFIGURACION_SEGURIDAD.LOGS_INACTIVIDAD) {
+      if (isDevelopment && CONFIGURACION_SEGURIDAD.LOGS_INACTIVIDAD) {
         console.log(`⏱️ Cerrando sesión por inactividad (${minutosInactividad} minuto${minutosInactividad !== 1 ? 's' : ''} sin actividad)`);
       }
       
       await supabase.auth.signOut();
       
-      if (CONFIGURACION_SEGURIDAD.LOGS_INACTIVIDAD) {
+      if (isDevelopment && CONFIGURACION_SEGURIDAD.LOGS_INACTIVIDAD) {
         console.log('✅ Sesión cerrada. Redirigiendo a /auth/iniciar-sesion?timeout=true');
       }
       
@@ -77,7 +79,7 @@ export default function SupabaseProvider({
     // Crear nuevo temporizador
     timeoutRef.current = setTimeout(handleInactivityLogout, CONFIGURACION_SEGURIDAD.TIEMPO_INACTIVIDAD_MS);
     
-    if (CONFIGURACION_SEGURIDAD.LOGS_INACTIVIDAD) {
+    if (isDevelopment && CONFIGURACION_SEGURIDAD.LOGS_INACTIVIDAD) {
       const tiempoTranscurrido = Math.floor((ahora - lastActivityRef.current) / 1000);
       console.log(`🔄 Actividad detectada - Temporizador reiniciado (última actividad: hace ${tiempoTranscurrido}s)`);
     }
@@ -89,9 +91,13 @@ export default function SupabaseProvider({
       try {
         const { data: { session } } = await supabase.auth.getSession();
         setUser(session?.user ?? null);
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Suprimir errores esperados de tokens inválidos
-        if (error?.code !== 'refresh_token_not_found') {
+        const errorCode = typeof error === 'object' && error !== null && 'code' in error
+          ? (error as { code?: string }).code
+          : undefined;
+
+        if (errorCode !== 'refresh_token_not_found') {
           console.error('Error obteniendo sesión:', error);
         }
         setUser(null);
@@ -107,7 +113,7 @@ export default function SupabaseProvider({
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       // Solo loggear en desarrollo si es necesario
-      if (process.env.NODE_ENV === 'development' && event !== 'TOKEN_REFRESHED') {
+      if (isDevelopment && event !== 'TOKEN_REFRESHED') {
         console.log('🔐 Auth:', event);
       }
       

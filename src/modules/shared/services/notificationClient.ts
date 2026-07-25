@@ -1,25 +1,6 @@
-type NotificationPayload = {
-  titulo: string;
-  mensaje: string;
-  categoria?: string;
-  tipo?: 'info' | 'success' | 'warning' | 'error';
-  destinatarioId?: string;
-  rolDestinatario?: string;
-  urlAccion?: string;
-  metadatos?: Record<string, unknown>;
-  expiraEn?: string;
-  enviarEmail?: boolean;
-  email?: {
-    to?: string | string[];
-    subject?: string;
-    html?: string;
-    text?: string;
-    from?: string;
-    cc?: string | string[];
-    bcc?: string | string[];
-    replyTo?: string;
-  };
-};
+import type { NotificationEventPayload } from './notificationEvents';
+
+type NotificationPayload = NotificationEventPayload;
 
 export async function sendNotification(payload: NotificationPayload) {
   try {

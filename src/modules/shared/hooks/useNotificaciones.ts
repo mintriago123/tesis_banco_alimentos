@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { SupabaseClient, User } from '@supabase/supabase-js';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { type SupabaseClient, type User } from '@supabase/supabase-js';
+import type { NotificationEventPayload } from '@/modules/shared/services/notificationEvents';
 
-interface Notificacion {
+export interface Notificacion {
   id: string;
   titulo: string;
   mensaje: string;
@@ -15,6 +16,25 @@ interface Notificacion {
   leida: boolean;
 }
 
+interface RpcNotificacion extends Omit<Notificacion, 'url_accion' | 'metadatos'> {
+  url_accion: string | null;
+  metadatos: Record<string, unknown> | null;
+}
+
+interface RealtimeNotification extends Omit<Notificacion, 'url_accion' | 'metadatos' | 'leida'> {
+  url_accion?: string | null;
+  metadatos?: Record<string, unknown> | null;
+  leida?: boolean;
+  expira_en?: string | null;
+}
+
+interface RealtimeState {
+  notificacion_id: string;
+  usuario_id: string;
+  leida: boolean;
+  oculta: boolean;
+}
+
 interface ConfiguracionNotificacion {
   categoria: string;
   email_activo: boolean;
@@ -22,14 +42,53 @@ interface ConfiguracionNotificacion {
   sonido_activo: boolean;
 }
 
+interface RealtimePayload {
+  eventType: string;
+  new: unknown;
+  old?: unknown;
+}
+
+const getSocketCloseCode = (error: unknown): number | undefined => {
+  if (typeof error !== 'object' || error === null || !('cause' in error)) {
+    return undefined;
+  }
+
+  const cause = error.cause;
+  if (typeof cause !== 'object' || cause === null || !('code' in cause)) {
+    return undefined;
+  }
+
+  return typeof cause.code === 'number' ? cause.code : undefined;
+};
+
+const normalizeRpcNotification = (notification: RpcNotificacion): Notificacion => ({
+  ...notification,
+  url_accion: notification.url_accion ?? undefined,
+  metadatos: notification.metadatos ?? {},
+});
+
+const normalizeRealtimeNotification = (notification: RealtimeNotification): Notificacion => ({
+  id: notification.id,
+  titulo: notification.titulo,
+  mensaje: notification.mensaje,
+  tipo: notification.tipo,
+  categoria: notification.categoria,
+  url_accion: notification.url_accion ?? undefined,
+  metadatos: notification.metadatos ?? {},
+  fecha_creacion: notification.fecha_creacion,
+  leida: notification.leida ?? false,
+});
+
 export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
   const [configuracion, setConfiguracion] = useState<ConfiguracionNotificacion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [conteoNoLeidas, setConteoNoLeidas] = useState(0);
+  const [userRole, setUserRole] = useState<{ userId: string; role: string } | null>(null);
+  const notificationIdsRef = useRef<Set<string>>(new Set());
+  const notificationsRef = useRef<Notificacion[]>([]);
 
-  // Cargar notificaciones del usuario
   const cargarNotificaciones = useCallback(async () => {
     if (!user) return;
 
@@ -37,7 +96,6 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
       setLoading(true);
       setError(null);
 
-      // Obtener rol del usuario
       const { data: userData, error: userError } = await supabase
         .from('usuarios')
         .select('rol')
@@ -46,33 +104,26 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
 
       if (userError) throw userError;
 
-      // Obtener notificaciones
-      const { data: notificacionesData, error: notificacionesError } = await supabase
-        .from('notificaciones')
-        .select(`
-          id,
-          titulo,
-          mensaje,
-          tipo,
-          categoria,
-          url_accion,
-          metadatos,
-          fecha_creacion,
-          leida
-        `)
-        .or(`destinatario_id.eq.${user.id},rol_destinatario.eq.${userData.rol},rol_destinatario.eq.TODOS`)
-        .eq('activa', true)
-        .order('fecha_creacion', { ascending: false })
-        .limit(50);
+      const rol = userData?.rol;
+      if (typeof rol !== 'string') {
+        throw new Error('Rol de usuario no disponible');
+      }
 
-      if (notificacionesError) throw notificacionesError;
+      const { data, error: notificationsError } = await supabase.rpc(
+        'obtener_notificaciones_usuario',
+        { p_limite: 50 },
+      );
 
-      setNotificaciones(notificacionesData || []);
-      
-      // Contar no leídas
-      const noLeidas = (notificacionesData || []).filter(n => !n.leida).length;
-      setConteoNoLeidas(noLeidas);
+      if (notificationsError) throw notificationsError;
 
+      const loadedNotifications = ((data ?? []) as RpcNotificacion[]).map(
+        normalizeRpcNotification,
+      );
+
+      notificationIdsRef.current = new Set(loadedNotifications.map(({ id }) => id));
+      setNotificaciones(loadedNotifications);
+      setConteoNoLeidas(loadedNotifications.filter(({ leida }) => !leida).length);
+      setUserRole({ userId: user.id, role: rol });
     } catch (err) {
       console.error('Error al cargar notificaciones:', err);
       setError(err instanceof Error ? err.message : 'Error al cargar notificaciones');
@@ -81,45 +132,41 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
     }
   }, [supabase, user]);
 
-  // Cargar configuración de notificaciones
   const cargarConfiguracion = useCallback(async () => {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      const { data, error: configurationError } = await supabase
         .from('configuracion_notificaciones')
         .select('categoria, email_activo, push_activo, sonido_activo')
         .eq('usuario_id', user.id);
 
-      if (error) throw error;
+      if (configurationError) throw configurationError;
       setConfiguracion(data || []);
     } catch (err) {
       console.error('Error al cargar configuración:', err);
     }
   }, [supabase, user]);
 
-  // Marcar notificación como leída
   const marcarComoLeida = async (notificacionId: string) => {
     try {
-      const { error } = await supabase
-        .from('notificaciones')
-        .update({ 
-          leida: true, 
-          fecha_leida: new Date().toISOString() 
-        })
-        .eq('id', notificacionId);
+      const { data, error: rpcError } = await supabase.rpc('marcar_notificacion_leida', {
+        p_notificacion_id: notificacionId,
+      });
 
-      if (error) throw error;
+      if (rpcError) throw rpcError;
+      if (data === false) return false;
 
-      // Actualizar estado local
-      setNotificaciones(prev => 
-        prev.map(n => 
-          n.id === notificacionId ? { ...n, leida: true } : n
-        )
+      const notificacion = notificaciones.find(({ id }) => id === notificacionId);
+      if (notificacion && !notificacion.leida) {
+        setConteoNoLeidas((previous) => Math.max(0, previous - 1));
+      }
+
+      setNotificaciones((previous) =>
+        previous.map((item) =>
+          item.id === notificacionId ? { ...item, leida: true } : item,
+        ),
       );
-
-      // Actualizar conteo
-      setConteoNoLeidas(prev => Math.max(0, prev - 1));
 
       return true;
     } catch (err) {
@@ -128,37 +175,19 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
     }
   };
 
-  // Marcar todas como leídas
   const marcarTodasComoLeidas = async () => {
     if (!user) return false;
 
     try {
-      // Obtener rol del usuario
-      const { data: userData, error: userError } = await supabase
-        .from('usuarios')
-        .select('rol')
-        .eq('id', user.id)
-        .single();
-
-      if (userError) throw userError;
-
-      const { error } = await supabase
-        .from('notificaciones')
-        .update({ 
-          leida: true, 
-          fecha_leida: new Date().toISOString() 
-        })
-        .or(`destinatario_id.eq.${user.id},rol_destinatario.eq.${userData.rol},rol_destinatario.eq.TODOS`)
-        .eq('leida', false);
-
-      if (error) throw error;
-
-      // Actualizar estado local
-      setNotificaciones(prev => 
-        prev.map(n => ({ ...n, leida: true }))
+      const { data, error: rpcError } = await supabase.rpc(
+        'marcar_todas_notificaciones_leidas',
       );
-      setConteoNoLeidas(0);
 
+      if (rpcError) throw rpcError;
+      if (data === false) return false;
+
+      setNotificaciones((previous) => previous.map((item) => ({ ...item, leida: true })));
+      setConteoNoLeidas(0);
       return true;
     } catch (err) {
       console.error('Error al marcar todas como leídas:', err);
@@ -166,32 +195,42 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
     }
   };
 
-  // Actualizar configuración
-  const actualizarConfiguracion = async (categoria: string, config: Partial<ConfiguracionNotificacion>) => {
+  const actualizarConfiguracion = async (
+    categoria: string,
+    config: Partial<ConfiguracionNotificacion>,
+  ) => {
     if (!user) return false;
 
     try {
-      const { error } = await supabase
+      const { error: configurationError } = await supabase
         .from('configuracion_notificaciones')
         .upsert({
           usuario_id: user.id,
           categoria,
           ...config,
-          fecha_actualizacion: new Date().toISOString()
+          fecha_actualizacion: new Date().toISOString(),
         });
 
-      if (error) throw error;
+      if (configurationError) throw configurationError;
 
-      // Actualizar estado local
-      setConfiguracion(prev => {
-        const existe = prev.find(c => c.categoria === categoria);
-        if (existe) {
-          return prev.map(c => 
-            c.categoria === categoria ? { ...c, ...config } : c
+      setConfiguracion((previous) => {
+        const existing = previous.find((item) => item.categoria === categoria);
+        if (existing) {
+          return previous.map((item) =>
+            item.categoria === categoria ? { ...item, ...config } : item,
           );
-        } else {
-          return [...prev, { categoria, email_activo: true, push_activo: true, sonido_activo: true, ...config }];
         }
+
+        return [
+          ...previous,
+          {
+            categoria,
+            email_activo: true,
+            push_activo: true,
+            sonido_activo: true,
+            ...config,
+          },
+        ];
       });
 
       return true;
@@ -201,67 +240,17 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
     }
   };
 
-  // Crear notificación (solo para admin)
-  const crearNotificacion = async (notificacion: {
-    titulo: string;
-    mensaje: string;
-    tipo?: 'info' | 'success' | 'warning' | 'error';
-    destinatario_id?: string;
-    destinatarioId?: string;
-    rol_destinatario?: string;
-    rolDestinatario?: string;
-    categoria?: string;
-    url_accion?: string;
-    urlAccion?: string;
-    metadatos?: Record<string, unknown>;
-    expira_en?: string;
-    expiraEn?: string;
-    enviarEmail?: boolean;
-    email?: {
-      to?: string | string[];
-      subject?: string;
-      html?: string;
-      text?: string;
-      from?: string;
-      cc?: string | string[];
-      bcc?: string | string[];
-      replyTo?: string;
-      attachments?: Array<{
-        filename: string;
-        path?: string;
-        content?: string;
-        contentType?: string;
-      }>;
-      headers?: Record<string, string>;
-    };
-  }) => {
+  const crearNotificacion = async (payload: NotificationEventPayload) => {
     try {
-      const payload = {
-        titulo: notificacion.titulo,
-        mensaje: notificacion.mensaje,
-        tipo: notificacion.tipo,
-        categoria: notificacion.categoria,
-        urlAccion: notificacion.urlAccion ?? notificacion.url_accion,
-        destinatarioId: notificacion.destinatarioId ?? notificacion.destinatario_id,
-        rolDestinatario: notificacion.rolDestinatario ?? notificacion.rol_destinatario,
-        metadatos: notificacion.metadatos,
-        expiraEn: notificacion.expiraEn ?? notificacion.expira_en,
-        enviarEmail: notificacion.enviarEmail,
-        email: notificacion.email,
-      };
-
       const response = await fetch('/api/notificaciones', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => null);
-        const message = errorBody?.error ?? 'No se pudo crear la notificación';
-        throw new Error(message);
+        throw new Error(errorBody?.error ?? 'No se pudo crear la notificación');
       }
 
       const data = await response.json();
@@ -272,77 +261,152 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
     }
   };
 
-  // Eliminar notificación
   const eliminarNotificacion = async (notificacionId: string) => {
     try {
-      const { error } = await supabase
-        .from('notificaciones')
-        .update({ activa: false })
-        .eq('id', notificacionId);
+      const { data, error: rpcError } = await supabase.rpc('ocultar_notificacion', {
+        p_notificacion_id: notificacionId,
+      });
 
-      if (error) throw error;
+      if (rpcError) throw rpcError;
+      if (data === false) return false;
 
-      // Actualizar estado local
-      setNotificaciones(prev => prev.filter(n => n.id !== notificacionId));
-      
-      // Actualizar conteo si no estaba leída
-      const notificacion = notificaciones.find(n => n.id === notificacionId);
+      const notificacion = notificaciones.find(({ id }) => id === notificacionId);
       if (notificacion && !notificacion.leida) {
-        setConteoNoLeidas(prev => Math.max(0, prev - 1));
+        setConteoNoLeidas((previous) => Math.max(0, previous - 1));
       }
 
+      notificationIdsRef.current.delete(notificacionId);
+      setNotificaciones((previous) => previous.filter(({ id }) => id !== notificacionId));
       return true;
     } catch (err) {
-      console.error('Error al eliminar notificación:', err);
+      console.error('Error al ocultar notificación:', err);
       return false;
     }
   };
 
-  // Suscribirse a cambios en tiempo real
+  useEffect(() => {
+    notificationsRef.current = notificaciones;
+  }, [notificaciones]);
+
+  useEffect(() => {
+    if (!user || !userRole || userRole.userId !== user.id) return;
+
+    const handleRealtimePayload = (payload: RealtimePayload, table: string) => {
+      if (table === 'notificaciones_usuario') {
+        const state = (payload.eventType === 'DELETE' ? payload.old : payload.new) as RealtimeState;
+        if (!state || state.usuario_id !== user.id) return;
+
+        const currentNotification = notificationsRef.current.find(
+          ({ id }) => id === state.notificacion_id,
+        );
+
+        if (!currentNotification) {
+          void cargarNotificaciones();
+          return;
+        }
+
+        if (payload.eventType === 'DELETE' || state.oculta) {
+          if (!currentNotification.leida) {
+            setConteoNoLeidas((previous) => Math.max(0, previous - 1));
+          }
+          notificationIdsRef.current.delete(state.notificacion_id);
+          setNotificaciones((previous) =>
+            previous.filter(({ id }) => id !== state.notificacion_id),
+          );
+          return;
+        }
+
+        if (!currentNotification.leida && state.leida) {
+          setConteoNoLeidas((previous) => Math.max(0, previous - 1));
+        }
+
+        setNotificaciones((previous) =>
+          previous.map((item) =>
+            item.id === state.notificacion_id ? { ...item, leida: state.leida } : item,
+          ),
+        );
+        return;
+      }
+
+      if (payload.eventType === 'INSERT') {
+        const incomingNotification = normalizeRealtimeNotification(
+          payload.new as RealtimeNotification,
+        );
+
+        if (notificationIdsRef.current.has(incomingNotification.id)) return;
+
+        notificationIdsRef.current.add(incomingNotification.id);
+        setNotificaciones((previous) => [incomingNotification, ...previous]);
+        if (!incomingNotification.leida) {
+          setConteoNoLeidas((previous) => previous + 1);
+        }
+      } else if (payload.eventType === 'DELETE') {
+        const deletedNotification = payload.old as { id?: string };
+        if (!deletedNotification.id) return;
+
+        const currentNotification = notificationsRef.current.find(
+          ({ id }) => id === deletedNotification.id,
+        );
+        if (currentNotification && !currentNotification.leida) {
+          setConteoNoLeidas((previous) => Math.max(0, previous - 1));
+        }
+        notificationIdsRef.current.delete(deletedNotification.id);
+        setNotificaciones((previous) =>
+          previous.filter(({ id }) => id !== deletedNotification.id),
+        );
+      }
+    };
+
+    const subscriptions = [
+      { table: 'notificaciones', filter: `destinatario_id=eq.${user.id}` },
+      { table: 'notificaciones', filter: `rol_destinatario=eq.${userRole.role}` },
+      { table: 'notificaciones', filter: 'rol_destinatario=eq.TODOS' },
+      { table: 'notificaciones_usuario', filter: `usuario_id=eq.${user.id}` },
+    ];
+
+    let isEffectActive = true;
+    const channel = supabase.channel(`notificaciones_realtime:${user.id}`);
+
+    try {
+      subscriptions.forEach(({ table, filter }) => {
+        channel.on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table, filter },
+          (payload) => handleRealtimePayload(payload as RealtimePayload, table),
+        );
+      });
+
+      channel.subscribe((status, subscriptionError) => {
+        if (!isEffectActive || (status !== 'CHANNEL_ERROR' && status !== 'TIMED_OUT')) {
+          return;
+        }
+
+        const closeCode = getSocketCloseCode(subscriptionError);
+        if (closeCode === 1000 || closeCode === 1001) return;
+
+        console.warn(
+          `Realtime de notificaciones no disponible (${status})`,
+          subscriptionError,
+        );
+      });
+    } catch (subscriptionError) {
+      if (isEffectActive) {
+        console.warn('Realtime de notificaciones no disponible', subscriptionError);
+      }
+    }
+
+    return () => {
+      isEffectActive = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [cargarNotificaciones, supabase, user, userRole]);
+
   useEffect(() => {
     if (!user) return;
 
-    const channel = supabase
-      .channel('notificaciones_realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'notificaciones',
-          filter: `destinatario_id=eq.${user.id}`
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const nuevaNotificacion = payload.new as Notificacion;
-            setNotificaciones(prev => [nuevaNotificacion, ...prev]);
-            if (!nuevaNotificacion.leida) {
-              setConteoNoLeidas(prev => prev + 1);
-            }
-          } else if (payload.eventType === 'UPDATE') {
-            const notificacionActualizada = payload.new as Notificacion;
-            setNotificaciones(prev => 
-              prev.map(n => 
-                n.id === notificacionActualizada.id ? notificacionActualizada : n
-              )
-            );
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [supabase, user]);
-
-  // Cargar datos iniciales
-  useEffect(() => {
-    if (user) {
-      cargarNotificaciones();
-      cargarConfiguracion();
-    }
-  }, [user, cargarNotificaciones, cargarConfiguracion]);
+    void cargarNotificaciones();
+    void cargarConfiguracion();
+  }, [cargarConfiguracion, cargarNotificaciones, user]);
 
   return {
     notificaciones,
@@ -355,6 +419,6 @@ export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
     actualizarConfiguracion,
     crearNotificacion,
     eliminarNotificacion,
-    recargar: cargarNotificaciones
+    recargar: cargarNotificaciones,
   };
 }

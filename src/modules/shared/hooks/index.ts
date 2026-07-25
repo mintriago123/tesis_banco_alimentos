@@ -1,4 +1,4 @@
-export { useNotificaciones } from './useNotificaciones';
+export { useNotificaciones, type Notificacion } from './useNotificaciones';
 export { useToast } from './useToast';
 export { usePasswordChange } from './usePasswordChange';
 export { useUserPreferences } from './useUserPreferences';

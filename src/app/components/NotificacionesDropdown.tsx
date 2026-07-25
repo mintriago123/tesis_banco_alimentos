@@ -6,7 +6,8 @@ import { BellIcon as BellSolidIcon } from '@heroicons/react/24/solid';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import { useNotificaciones } from '@/modules/shared';
 import { useRouter } from 'next/navigation';
-import { formatRelativeTime, formatShortDate } from '@/lib/dateUtils';
+import { formatShortDate } from '@/lib/dateUtils';
+import { safeInternalPath } from '@/lib/safe-internal-path';
 
 interface NotificacionesDropdownProps {
   readonly isCollapsed?: boolean;
@@ -56,8 +57,9 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
     }
 
     // Redireccionar si tiene URL de acción
-    if (notificacion.url_accion) {
-      let urlFinal = notificacion.url_accion;
+    const urlAccion = safeInternalPath(notificacion.url_accion);
+    if (urlAccion) {
+      let urlFinal = urlAccion;
       
       // Correcciones de rutas para el rol ADMIN
       if (roleColor === 'red') { // Admin
@@ -148,7 +150,10 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
         }
       }
       
-      router.push(urlFinal);
+      const safeUrlFinal = safeInternalPath(urlFinal);
+      if (safeUrlFinal) {
+        router.push(safeUrlFinal);
+      }
     }
 
     setIsOpen(false);
@@ -212,6 +217,7 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
     
     switch (roleColor) {
       case 'red': return 'border-l-4 border-red-500';
+      case 'orange': return 'border-l-4 border-orange-500';
       case 'green': return 'border-l-4 border-green-500';
       default: return 'border-l-4 border-blue-500';
     }
@@ -223,6 +229,7 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
     
     switch (roleColor) {
       case 'red': return 'bg-red-25';
+      case 'orange': return 'bg-orange-50';
       case 'green': return 'bg-green-25';
       default: return 'bg-blue-25';
     }
@@ -248,16 +255,10 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
             } ${getRoleBorderColor(!notificacion.leida)}`}
           >
             {/* Área clickeable principal */}
-            <div 
-              className="cursor-pointer"
-              tabIndex={0}
-              role="button"
+            <button
+              type="button"
+              className="block w-full cursor-pointer text-left"
               onClick={() => handleNotificacionClick(notificacion)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  handleNotificacionClick(notificacion);
-                }
-              }}
             >
               <div className="flex items-start space-x-3">
                 <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm border ${
@@ -277,6 +278,8 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
                       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
                         roleColor === 'red'
                           ? 'bg-red-600'
+                          : roleColor === 'orange'
+                          ? 'bg-orange-600'
                           : roleColor === 'green'
                           ? 'bg-green-600'
                           : 'bg-blue-600'
@@ -289,7 +292,7 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
                   </p>
                 </div>
               </div>
-            </div>
+            </button>
 
             {/* Acciones (botones separados) */}
             <div className="flex items-center justify-between mt-2">
@@ -304,9 +307,13 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
                       e.stopPropagation();
                       await marcarComoLeida(notificacion.id);
                     }}
-                    className={`p-1 rounded-full transition-colors duration-150 ${
+                    type="button"
+                    aria-label="Marcar notificación como leída"
+                    className={`rounded-full p-1 transition-colors duration-150 ${
                       roleColor === 'red'
                         ? 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                        : roleColor === 'orange'
+                        ? 'text-gray-400 hover:text-orange-600 hover:bg-orange-50'
                         : roleColor === 'green'
                         ? 'text-gray-400 hover:text-green-600 hover:bg-green-50'
                         : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
@@ -318,8 +325,10 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
                 )}
                 
                 <button
+                  type="button"
                   onClick={(e) => handleEliminarNotificacion(e, notificacion.id)}
                   className="p-1 text-gray-400 hover:text-red-600 rounded-full hover:bg-red-50 transition-colors duration-150"
+                  aria-label="Eliminar notificación"
                   title="Eliminar notificación"
                 >
                   <XMarkIcon className="h-4 w-4" />
@@ -336,6 +345,7 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
   const getRoleTextColor = () => {
     switch (roleColor) {
       case 'red': return 'text-red-600 hover:text-red-800';
+      case 'orange': return 'text-orange-700 hover:text-orange-800';
       case 'green': return 'text-green-600 hover:text-green-800';
       default: return 'text-blue-600 hover:text-blue-800';
     }
@@ -346,6 +356,7 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
     if (isOpen) {
       switch (roleColor) {
         case 'red': return 'bg-red-100 text-red-600';
+        case 'orange': return 'bg-orange-100 text-orange-700';
         case 'green': return 'bg-green-100 text-green-600';
         default: return 'bg-blue-100 text-blue-600';
       }
@@ -357,6 +368,7 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
   const getRoleBadgeColor = () => {
     switch (roleColor) {
       case 'red': return 'bg-red-600';
+      case 'orange': return 'bg-orange-600';
       case 'green': return 'bg-green-600';
       default: return 'bg-blue-600';
     }
@@ -366,11 +378,14 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
     <div className="relative" ref={dropdownRef}>
       {/* Botón de notificaciones */}
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={`relative p-2 rounded-lg transition-colors duration-200 ${getRoleButtonColors()} ${
           isCollapsed ? 'w-10 h-10' : 'w-full'
         }`}
         aria-label="Notificaciones"
+        aria-expanded={isOpen}
+        aria-haspopup="true"
       >
         <div className="flex items-center">
           {conteoNoLeidas > 0 ? (
@@ -423,6 +438,7 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
                 </h3>
                 {conteoNoLeidas > 0 && (
                   <button
+                    type="button"
                     onClick={handleMarcarTodasLeidas}
                     className={`text-sm ${getRoleTextColor()} font-medium transition-colors duration-150`}
                   >
@@ -444,6 +460,8 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
                   <div className={`animate-spin rounded-full h-6 w-6 border-b-2 ${
                     roleColor === 'red'
                       ? 'border-red-600'
+                      : roleColor === 'orange'
+                      ? 'border-orange-600'
                       : roleColor === 'green'
                       ? 'border-green-600'
                       : 'border-blue-600'
@@ -459,6 +477,7 @@ export default function NotificacionesDropdown({ isCollapsed = false, roleColor 
             {notificaciones.length > 10 && (
               <div className="px-4 py-3 border-t border-gray-100 text-center bg-gray-50 hover:bg-gray-100 transition-colors duration-150">
                 <button
+                  type="button"
                   onClick={() => {
                     router.push('/notificaciones');
                     setIsOpen(false);

@@ -3,9 +3,9 @@
 // Manejo de unidades de medida
 // ============================================================================
 
-import { useState, useEffect } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
-import { Unidad, LoadingState } from '../types';
+import { useState, useEffect, useMemo } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Unidad, LoadingState } from '../types';
 import { UnidadesService } from '../services/unidadesService';
 
 interface UseUnidadesResult {
@@ -20,7 +20,7 @@ export function useUnidades(supabase: SupabaseClient): UseUnidadesResult {
   const [loading, setLoading] = useState<LoadingState>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  const service = new UnidadesService(supabase);
+  const service = useMemo(() => new UnidadesService(supabase), [supabase]);
 
   useEffect(() => {
     const fetchUnidades = async () => {
@@ -39,7 +39,7 @@ export function useUnidades(supabase: SupabaseClient): UseUnidadesResult {
     };
 
     fetchUnidades();
-  }, [supabase]);
+  }, [service]);
 
   const getUnidadById = (id: number): Unidad | null => {
     return unidades.find((u) => u.id === id) || null;

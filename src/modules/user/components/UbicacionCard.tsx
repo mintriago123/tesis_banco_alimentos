@@ -3,7 +3,6 @@
 // Tarjeta de ubicación con mapa
 // ============================================================================
 
-import React from 'react';
 import { MapPin } from 'lucide-react';
 import MapboxMap from './MapboxMap';
 import { Ubicacion } from '../types';
@@ -18,17 +17,17 @@ export function UbicacionCard({
   onUbicacionChange,
 }: UbicacionCardProps) {
   return (
-    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-      <h3 className="font-medium text-green-800 mb-3 flex items-center">
-        <MapPin className="w-5 h-5 mr-2" />
+    <section className="rounded-xl border border-blue-200 bg-blue-50/70 p-4" aria-labelledby="ubicacion-entrega-title">
+      <h3 id="ubicacion-entrega-title" className="mb-3 flex items-center font-semibold text-blue-950">
+        <MapPin className="mr-2 h-5 w-5" aria-hidden="true" />
         Ubicación de Entrega
       </h3>
-      <div className="text-sm text-green-700 mb-3">
+      <div className="mb-3 text-sm text-blue-900">
         <p>
           <strong>Coordenadas:</strong> Lat {ubicacion.latitud.toFixed(5)}, Lng{' '}
           {ubicacion.longitud.toFixed(5)}
         </p>
-        <p className="text-xs mt-1 text-green-600">
+        <p className="mt-1 text-xs text-blue-800">
           💡 Puedes ajustar la ubicación haciendo clic en el mapa o arrastrando
           el marcador
         </p>
@@ -37,8 +36,8 @@ export function UbicacionCard({
         latitude={ubicacion.latitud}
         longitude={ubicacion.longitud}
         onLocationChange={onUbicacionChange}
-        className="w-full h-48 rounded-lg border border-green-200"
+        className="h-48 w-full rounded-xl border border-blue-200 shadow-sm"
       />
-    </div>
+    </section>
   );
 }

@@ -87,11 +87,11 @@ const InventoryTable = ({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm">
-      <div className="overflow-x-auto">
+    <div className="table-surface">
+      <div className="table-scroll">
         <div className="max-h-[70vh] overflow-y-auto">
-          <table className="min-w-full">
-            <thead className="sticky top-0 z-10 bg-gray-50">
+          <table className="table-base">
+            <thead className="table-head sticky top-0 z-10">
               <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Producto
@@ -110,13 +110,13 @@ const InventoryTable = ({
               </th>
             </tr>
           </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="table-body">
             {items.map(item => {
               const stockLevel = determineStockLevel(item.cantidad_disponible);
-              const isProcessing = processingId === item.id_inventario;
+              const isProcessing = processingId === item.id_entrada;
 
               return (
-                <tr key={item.id_inventario} className="transition-colors duration-150 hover:bg-slate-50">
+                <tr key={item.id_entrada} className="transition-colors duration-150 hover:bg-slate-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <Package className="w-10 h-10 text-gray-400 mr-3" />
@@ -128,7 +128,7 @@ const InventoryTable = ({
                           {item.producto.categoria || 'Sin categoría'}
                         </div>
                         <div className="text-xs text-gray-400">
-                          Unidad: {item.producto.unidad_medida || 'No especificada'}
+                          Unidad: {item.producto.unidad_nombre || 'No especificada'}
                         </div>
                       </div>
                     </div>
@@ -149,7 +149,7 @@ const InventoryTable = ({
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full border text-sm font-medium ${STOCK_LEVEL_STYLES[stockLevel]}`}>
                       {STOCK_LEVEL_ICONS[stockLevel]}
-                      <span>{formatQuantity(item.cantidad_disponible)} {item.producto.unidad_simbolo || item.producto.unidad_medida || 'unidades'}</span>
+                      <span>{formatQuantity(item.cantidad_disponible)} {item.producto.unidad_simbolo || item.producto.unidad_nombre || 'unidades'}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

@@ -11,7 +11,6 @@ import {
   Eye,
   Package,
   Phone,
-  Truck,
   User,
   XCircle,
   Building,
@@ -28,6 +27,7 @@ interface DonationsTableProps {
   hasActiveFilters: boolean;
   onResetFilters: () => void;
   onChangeEstado: (donation: Donation, nuevoEstado: DonationEstado) => void;
+  canCancel?: boolean;
   processingId?: number;
   onViewDetails?: (donation: Donation) => void;
   messages: {
@@ -38,8 +38,7 @@ interface DonationsTableProps {
 
 const estadoIcons: Record<DonationEstado, JSX.Element> = {
   Pendiente: <Clock className="w-4 h-4" />,
-  Recogida: <Truck className="w-4 h-4" />,
-  Entregada: <CheckCircle className="w-4 h-4" />,
+  Aprobada: <CheckCircle className="w-4 h-4" />,
   Cancelada: <XCircle className="w-4 h-4" />
 };
 
@@ -53,6 +52,7 @@ const DonationsTable = ({
   hasActiveFilters,
   onResetFilters,
   onChangeEstado,
+  canCancel = true,
   processingId,
   onViewDetails,
   messages
@@ -87,11 +87,11 @@ const DonationsTable = ({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm">
-      <div className="overflow-x-auto">
+    <div className="table-surface">
+      <div className="table-scroll">
         <div className="max-h-[70vh] overflow-y-auto">
-          <table className="min-w-full">
-            <thead className="sticky top-0 z-10 bg-gray-50">
+          <table className="table-base">
+            <thead className="table-head sticky top-0 z-10">
               <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Donante
@@ -116,9 +116,10 @@ const DonationsTable = ({
               </th>
             </tr>
           </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="table-body">
             {donations.map(donation => {
               const isProcessing = processingId === donation.id;
+              const canChangeState = donation.estado === 'Pendiente';
               // Extract expiration color selection into a separate statement to avoid nested ternary
               let expiryColorClass = 'text-gray-500';
               if (donation.fecha_vencimiento) {
@@ -216,36 +217,32 @@ const DonationsTable = ({
                       <button
                         type="button"
                         onClick={() => onChangeEstado(donation, 'Pendiente')}
-                        disabled={isProcessing || donation.estado === 'Pendiente'}
+                        disabled={isProcessing || !canChangeState || donation.estado === 'Pendiente'}
+                        aria-label={`Mantener donación ${donation.id} pendiente`}
                         className="px-2 py-1 text-xs border border-yellow-200 text-yellow-600 rounded hover:bg-yellow-50 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Pendiente
                       </button>
                       <button
                         type="button"
-                        onClick={() => onChangeEstado(donation, 'Recogida')}
-                        disabled={isProcessing || donation.estado === 'Recogida'}
-                        className="px-2 py-1 text-xs border border-blue-200 text-blue-600 rounded hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Recogida
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onChangeEstado(donation, 'Entregada')}
-                        disabled={isProcessing || donation.estado === 'Entregada'}
+                        onClick={() => onChangeEstado(donation, 'Aprobada')}
+                        disabled={isProcessing || !canChangeState}
+                        aria-label={`Aprobar donación ${donation.id}`}
                         className="px-2 py-1 text-xs border border-green-200 text-green-600 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Entregada
+                        Aprobada
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onChangeEstado(donation, 'Cancelada')}
-                        disabled={isProcessing || donation.estado === 'Cancelada' || donation.estado === 'Entregada'}
-                        className="px-2 py-1 text-xs border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={donation.estado === 'Entregada' ? 'No se puede cancelar una donación entregada' : ''}
-                      >
-                        Cancelada
-                      </button>
+                      {canCancel && (
+                        <button
+                          type="button"
+                          onClick={() => onChangeEstado(donation, 'Cancelada')}
+                          disabled={isProcessing || !canChangeState}
+                          aria-label={`Cancelar donación ${donation.id}`}
+                          className="px-2 py-1 text-xs border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Cancelar
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={onViewDetails ? () => onViewDetails(donation) : undefined}

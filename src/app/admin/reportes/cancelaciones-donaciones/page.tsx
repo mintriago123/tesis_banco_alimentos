@@ -7,7 +7,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
-import { useSupabase } from '@/app/components/SupabaseProvider';
 import Toast from '@/app/components/ui/Toast';
 import { useToast } from '@/modules/shared';
 import { 
@@ -23,16 +22,9 @@ import {
 } from 'lucide-react';
 import type { DonacionCanceladaDetalle, EstadisticasCancelaciones } from '@/modules/admin/reportes/cancelaciones/types';
 import type { MotivoCancelacion } from '@/modules/admin/reportes/donaciones/types';
+import { MOTIVO_CANCELACION_LABELS } from '@/modules/shared/donaciones/constants';
 
-const motivosLabels: Record<MotivoCancelacion, string> = {
-  error_donante: 'Error del Donante',
-  no_disponible: 'Producto No Disponible',
-  calidad_inadecuada: 'Calidad Inadecuada',
-  logistica_imposible: 'Logística Imposible',
-  duplicado: 'Donación Duplicada',
-  solicitud_donante: 'Solicitud del Donante',
-  otro: 'Otro Motivo'
-};
+const motivosLabels: Record<MotivoCancelacion, string> = MOTIVO_CANCELACION_LABELS;
 
 const motivosColors: Record<MotivoCancelacion, string> = {
   error_donante: 'bg-orange-100 text-orange-800 border-orange-300',
@@ -45,8 +37,7 @@ const motivosColors: Record<MotivoCancelacion, string> = {
 };
 
 export default function HistorialCancelacionesPage() {
-  const { supabase } = useSupabase();
-  const { toasts, showSuccess, showError, hideToast } = useToast();
+  const { toasts, showError, hideToast } = useToast();
   
   const [cancelaciones, setCancelaciones] = useState<DonacionCanceladaDetalle[]>([]);
   const [estadisticas, setEstadisticas] = useState<EstadisticasCancelaciones | null>(null);
@@ -105,20 +96,19 @@ export default function HistorialCancelacionesPage() {
       } else {
         throw new Error(data.error || 'Error desconocido');
       }
-    } catch (err: any) {
-      const errorMsg = err.message || 'Error al cargar cancelaciones';
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Error al cargar cancelaciones';
       setError(errorMsg);
       showError(errorMsg);
       console.error('Error detallado:', err);
     } finally {
       setIsLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [limit, offset, motivoFilter, fechaInicio, fechaFin]); // Removido showError para evitar loop
+  }, [limit, offset, motivoFilter, fechaInicio, fechaFin, showError]);
 
   useEffect(() => {
     cargarCancelaciones(offset === 0); // Cargar estadísticas solo en la primera página
-  }, [cargarCancelaciones]);
+  }, [cargarCancelaciones, offset]);
 
   const handleRefresh = () => {
     setOffset(0);
@@ -167,9 +157,9 @@ export default function HistorialCancelacionesPage() {
                   </summary>
                   <div className="mt-2 p-3 bg-white border border-blue-200 rounded text-xs space-y-2">
                     <p className="font-medium">1. Abre Supabase Dashboard → SQL Editor</p>
-                    <p className="font-medium">2. Ejecuta este script:</p>
+                    <p className="font-medium">2. Ejecuta las migraciones en orden ascendente:</p>
                     <code className="block bg-gray-900 text-green-400 p-2 rounded font-mono">
-                      database/agregar-campos-cancelacion-donaciones.sql
+                      supabase/migrations/*.sql (en orden ascendente)
                     </code>
                     <p className="font-medium">3. Recarga esta página</p>
                   </div>
@@ -319,17 +309,17 @@ export default function HistorialCancelacionesPage() {
               <div className="flex-1">
                 <p className="text-sm font-medium text-red-800">Error al cargar datos</p>
                 <p className="text-sm text-red-700 mt-1">{error}</p>
-                {error.includes('script SQL') && (
+                {error.includes('migraciones') && (
                   <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
                     <p className="text-sm font-medium text-yellow-800 mb-2">📋 Acción requerida:</p>
                     <p className="text-xs text-yellow-700 mb-2">
-                      Los campos de cancelación no existen en la base de datos. Debes ejecutar el script SQL:
+                      La base de datos no está actualizada. Debes ejecutar las migraciones SQL:
                     </p>
                     <code className="block text-xs bg-gray-900 text-green-400 p-2 rounded font-mono">
-                      database/agregar-campos-cancelacion-donaciones.sql
+                      supabase/migrations/*.sql (en orden ascendente)
                     </code>
                     <p className="text-xs text-yellow-700 mt-2">
-                      Copia el contenido del archivo y ejecútalo en el SQL Editor de Supabase.
+                      Ejecuta los archivos en orden ascendente desde el SQL Editor de Supabase.
                     </p>
                   </div>
                 )}
@@ -339,7 +329,7 @@ export default function HistorialCancelacionesPage() {
         )}
 
         {/* Tabla de cancelaciones */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="table-surface">
           <div className="px-6 py-4 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900">
               Historial de Cancelaciones
@@ -367,9 +357,9 @@ export default function HistorialCancelacionesPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+            <div className="table-scroll">
+              <table className="table-base">
+                <thead className="table-head">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Donación
@@ -391,7 +381,7 @@ export default function HistorialCancelacionesPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="table-body">
                   {cancelacionesFiltradas.map((cancelacion) => (
                     <tr key={cancelacion.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">

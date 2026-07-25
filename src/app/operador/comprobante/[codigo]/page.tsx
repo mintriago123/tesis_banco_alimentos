@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { ArrowLeft, Printer, QrCode, Package, Gift, Building2, Calendar, User, Phone, Mail, MapPin, FileText } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import QRCode from 'qrcode';
 
 interface ComprobanteData {
@@ -25,6 +26,24 @@ interface ComprobanteData {
   };
   comentario?: string;
 }
+
+type SolicitudComprobanteRow = {
+  codigo_comprobante: string;
+  estado: string;
+  tipo_alimento: string;
+  cantidad: number;
+  created_at: string;
+  fecha_respuesta: string | null;
+  comentario_admin: string | null;
+  unidades?: { simbolo?: string | null } | null;
+  usuarios?: {
+    nombre?: string | null;
+    cedula?: string | null;
+    telefono?: string | null;
+    email?: string | null;
+    direccion?: string | null;
+  } | null;
+};
 
 export default function ComprobantePage({ params }: { params: Promise<{ codigo: string }> }) {
   const resolvedParams = use(params);
@@ -56,8 +75,7 @@ export default function ComprobantePage({ params }: { params: Promise<{ codigo: 
 
           if (error || !solicitud) throw new Error('Solicitud no encontrada');
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const sol = solicitud as any;
+          const sol = solicitud as SolicitudComprobanteRow;
           setData({
             tipo: 'solicitud',
             codigo: sol.codigo_comprobante,
@@ -289,7 +307,14 @@ export default function ComprobantePage({ params }: { params: Promise<{ codigo: 
                   <div className="flex-shrink-0 text-center border-l border-gray-200 pl-6">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Verificación QR</p>
                     {qrImage && (
-                      <img src={qrImage} alt="QR Code" className="w-28 h-28 mx-auto" />
+                      <Image
+                        src={qrImage}
+                        alt="QR Code"
+                        width={112}
+                        height={112}
+                        unoptimized
+                        className="mx-auto"
+                      />
                     )}
                     <p className="text-xs text-gray-500 mt-1">Escanee para verificar</p>
                   </div>
@@ -305,23 +330,25 @@ export default function ComprobantePage({ params }: { params: Promise<{ codigo: 
                   <Package className="h-4 w-4" />
                   Detalle del Producto
                 </h3>
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full">
-                    <thead className="bg-gray-100">
+                <div className="table-surface">
+                  <div className="table-scroll">
+                    <table className="table-base">
+                      <thead className="table-head">
                       <tr>
                         <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Descripción</th>
                         <th className="px-4 py-2 text-center text-sm font-semibold text-gray-700">Cantidad</th>
                         <th className="px-4 py-2 text-center text-sm font-semibold text-gray-700">Unidad</th>
                       </tr>
-                    </thead>
-                    <tbody>
+                      </thead>
+                      <tbody className="table-body">
                       <tr className="border-t border-gray-200">
                         <td className="px-4 py-3 font-medium text-gray-900">{data.producto}</td>
                         <td className="px-4 py-3 text-center text-xl font-bold text-red-600">{data.cantidad}</td>
                         <td className="px-4 py-3 text-center text-gray-600">{data.unidad}</td>
                       </tr>
-                    </tbody>
-                  </table>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
 
@@ -352,29 +379,6 @@ export default function ComprobantePage({ params }: { params: Promise<{ codigo: 
                 <p className="text-blue-700 text-sm">{data.comentario}</p>
               </div>
             )}
-
-            {/* Firmas */}
-            <div className="pt-4 border-t-2 border-dashed border-gray-300">
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 text-center">
-                Firmas de Conformidad
-              </h3>
-              <div className="grid grid-cols-2 gap-8">
-                <div className="text-center">
-                  <div className="h-16 border-b-2 border-gray-400 mb-2"></div>
-                  <p className="font-medium text-gray-700 text-sm">
-                    {data.tipo === 'solicitud' ? 'Firma del Beneficiario' : 'Firma del Donante'}
-                  </p>
-                  <p className="text-xs text-gray-500">Nombre: {data.usuario.nombre}</p>
-                  <p className="text-xs text-gray-500">C.I.: {data.usuario.cedula}</p>
-                </div>
-                <div className="text-center">
-                  <div className="h-16 border-b-2 border-gray-400 mb-2"></div>
-                  <p className="font-medium text-gray-700 text-sm">Firma del Operador</p>
-                  <p className="text-xs text-gray-500">Banco de Alimentos</p>
-                  <p className="text-xs text-gray-500">Fecha: _______________</p>
-                </div>
-              </div>
-            </div>
 
             {/* Pie de página */}
             <div className="mt-4 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">

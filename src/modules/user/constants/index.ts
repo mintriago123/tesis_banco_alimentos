@@ -2,24 +2,6 @@
 // Constants - Módulo Usuario/Solicitante
 // ============================================================================
 
-import { SolicitudEstado } from '../types';
-
-// ---------- Estados de Solicitudes ----------
-export const ESTADOS_SOLICITUD: Record<SolicitudEstado, { label: string; color: string }> = {
-  pendiente: {
-    label: 'Pendiente',
-    color: 'yellow',
-  },
-  aprobada: {
-    label: 'Aprobada',
-    color: 'green',
-  },
-  rechazada: {
-    label: 'Rechazada',
-    color: 'red',
-  },
-};
-
 // ---------- Filtros de Estado ----------
 export const FILTROS_ESTADO = [
   { label: 'TODOS', value: 'TODOS' },
@@ -69,13 +51,4 @@ export const FORM_CONFIG = {
   TELEFONO_LENGTH: 10,
   CANTIDAD_MIN: 0.1,
   CANTIDAD_STEP: 0.1,
-};
-
-// ---------- Opciones de Mapa ----------
-export const MAP_CONFIG = {
-  DEFAULT_ZOOM: 15,
-  DEFAULT_CENTER: {
-    lat: -0.1807,
-    lng: -78.4678,
-  },
 };

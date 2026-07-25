@@ -3,7 +3,6 @@
 // Tarjeta de información del usuario solicitante
 // ============================================================================
 
-import React from 'react';
 import { User, IdCard, Phone } from 'lucide-react';
 import { UserProfile } from '../types';
 
@@ -13,31 +12,31 @@ interface UserInfoCardProps {
 
 export function UserInfoCard({ userData }: UserInfoCardProps) {
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-      <h3 className="font-medium text-blue-800 mb-3 flex items-center">
-        <User className="w-5 h-5 mr-2" />
+    <section className="rounded-xl border border-blue-200 bg-blue-50/70 p-4" aria-labelledby="solicitante-info-title">
+      <h3 id="solicitante-info-title" className="mb-3 flex items-center font-semibold text-blue-950">
+        <User className="mr-2 h-5 w-5" aria-hidden="true" />
         Información del Solicitante
       </h3>
-      <div className="space-y-2 text-sm text-blue-700">
+      <div className="grid gap-3 text-sm text-blue-900 sm:grid-cols-3">
         <div className="flex items-center gap-2">
-          <User className="w-4 h-4" />
+          <User className="h-4 w-4 shrink-0" aria-hidden="true" />
           <p>
             <strong>Nombre:</strong> {userData.nombre}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <IdCard className="w-4 h-4" />
+          <IdCard className="h-4 w-4 shrink-0" aria-hidden="true" />
           <p>
             <strong>Cédula:</strong> {userData.cedula}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Phone className="w-4 h-4" />
+          <Phone className="h-4 w-4 shrink-0" aria-hidden="true" />
           <p>
             <strong>Teléfono:</strong> {userData.telefono}
           </p>
         </div>
       </div>
-    </div>
+    </section>
   );
 }

@@ -21,6 +21,8 @@ export interface SolicitudUnidad {
   simbolo: string;
   tipo_magnitud_id: number;
   es_base: boolean;
+  es_discreta?: boolean;
+  permite_fraccion?: boolean;
 }
 
 export interface Solicitud {
@@ -71,12 +73,18 @@ export interface SolicitudCounters {
 
 export interface InventarioDisponible {
   id: string;
+  id_deposito: string;
   tipo_alimento: string;
   cantidad_disponible: number;
+  cantidad_disponible_original: number;
   deposito: string;
   fecha_vencimiento?: string | null;
+  unidad_id?: number;
   unidad_nombre?: string;
   unidad_simbolo?: string;
+  unidad_nombre_original?: string;
+  unidad_simbolo_original?: string;
+  fue_convertido?: boolean;
 }
 
 export interface ProductoInventario {
@@ -96,6 +104,11 @@ export interface UnidadConMagnitud {
 export interface InventarioDescontado {
   producto: ProductoInventario;
   cantidadEntregada: number;
+  cantidadOriginal?: number;
+  unidadOriginalId?: number;
+  unidadConvertidaId?: number;
+  idEntrada?: string;
+  idDeposito?: string;
 }
 
 export interface ResultadoInventario {
@@ -103,6 +116,7 @@ export interface ResultadoInventario {
   productosActualizados: number;
   noStock?: boolean;
   error?: boolean;
+  errorDetails?: unknown;
   detalleEntregado: InventarioDescontado[];
 }
 
@@ -134,6 +148,8 @@ export interface SupabaseSolicitudUnidad {
   simbolo?: string | null;
   tipo_magnitud_id?: number | null;
   es_base?: boolean | null;
+  es_discreta?: boolean | null;
+  permite_fraccion?: boolean | null;
 }
 
 export interface SupabaseSolicitudRow {
@@ -160,24 +176,33 @@ export interface SupabaseSolicitudRow {
 }
 
 export interface SupabaseInventarioDisponibleRow {
-  id_inventario: string | number;
+  id_entrada: string | number;
+  id_deposito: string;
+  unidad_id: number | null;
   cantidad_disponible: number | null;
-  fecha_actualizacion: string | null;
+  fecha_ingreso: string | null;
+  fecha_vencimiento: string | null;
   productos_donados: { 
     nombre_producto?: string | null;
+    unidad_id?: number | null;
     unidades?: {
+      id?: number | null;
       nombre?: string | null;
       simbolo?: string | null;
     } | {
+      id?: number | null;
       nombre?: string | null;
       simbolo?: string | null;
     }[] | null;
   } | { 
     nombre_producto?: string | null;
+    unidad_id?: number | null;
     unidades?: {
+      id?: number | null;
       nombre?: string | null;
       simbolo?: string | null;
     } | {
+      id?: number | null;
       nombre?: string | null;
       simbolo?: string | null;
     }[] | null;
@@ -189,4 +214,10 @@ export interface DescuentoProductoResult {
   cantidadRestante: number;
   productosActualizados: number;
   cantidadEntregada: number;
+  cantidadOriginal?: number;
+  unidadOriginalId?: number;
+  unidadConvertidaId?: number;
+  detallesEntregados?: InventarioDescontado[];
+  error?: boolean;
+  errorDetails?: unknown;
 }

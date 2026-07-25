@@ -15,12 +15,12 @@
 
 ## Visión General
 
-El frontend del Banco de Alimentos ULEAM está construido con **React** y **Next.js**, siguiendo una arquitectura basada en componentes reutilizables y modulares.
+El frontend del Banco de Alimentos ULEAM está construido con **React 19** y **Next.js 16**, siguiendo una arquitectura basada en componentes reutilizables y modulares.
 
 ### Tecnologías Frontend:
 
-- **React**: Biblioteca de UI con Server Components
-- **Next.js**: Framework con App Router
+- **React 19**: Biblioteca de UI
+- **Next.js 16**: Framework con App Router, API Routes y Proxy/Middleware
 - **TypeScript**: Type safety en todo el código
 - **Tailwind CSS**: Framework de estilos utility-first
 - **Lucide React**: Biblioteca de iconos
@@ -31,7 +31,7 @@ El frontend del Banco de Alimentos ULEAM está construido con **React** y **Next
 ### Principios de Diseño:
 
 - ✅ **Componentización**: Todo es un componente reutilizable
-- ✅ **Server Components**: Por defecto, para mejor performance
+- ⚠️ **Client Components predominantes con islas cliente**: 35 de 43 páginas usan `'use client'`; perfil/configuración común ya usa wrappers Server Component con componentes interactivos cliente
 - ✅ **Composición**: Componentes pequeños que se combinan
 - ✅ **Accesibilidad**: Semántica HTML y ARIA labels
 - ✅ **Type Safety**: TypeScript en todos los componentes
@@ -82,6 +82,8 @@ src/
     │
     └── shared/
         └── components/          # Componentes compartidos entre módulos
+            ├── UserProfilePageContent.tsx
+            ├── UserSettings.tsx
             ├── estadisticas/
             ├── tablas/
             └── formularios/
@@ -116,7 +118,7 @@ src/modules/shared/components/
 
 ### 🎨 Paleta de Colores (Tailwind)
 
-El sistema utiliza una paleta de colores definida en `globals.css` y `tailwind.config.ts`:
+El sistema utiliza Tailwind CSS v4 con configuración CSS-first. La paleta y los tokens visuales se mantienen en `src/app/globals.css`.
 
 #### Colores Principales:
 
@@ -324,6 +326,61 @@ export function CardContent({ children, className }: CardProps) {
 ---
 
 ## Componentes Globales
+
+### 👤 UserProfilePageContent
+
+**Ubicación**: `src/modules/shared/components/UserProfilePageContent.tsx`
+
+**Propósito**: Centralizar carga, estado y presentación de perfil para las páginas por rol.
+
+Páginas que lo usan:
+
+- `src/app/admin/perfil/page.tsx`
+- `src/app/operador/perfil/page.tsx`
+- `src/app/donante/perfil/page.tsx`
+- `src/app/user/perfil/page.tsx`
+
+Patrón:
+
+```tsx
+import UserProfilePageContent from '@/modules/shared/components/UserProfilePageContent';
+
+export default function AdminPerfilPage() {
+  return (
+    <UserProfilePageContent
+      requiredRole="ADMINISTRADOR"
+      title="Mi Perfil"
+      tone="red"
+    />
+  );
+}
+```
+
+La página queda como Server Component sin `'use client'`. La interacción vive en `UserProfilePageContent`.
+
+### ⚙️ UserSettingsContent
+
+**Ubicación**: `src/modules/shared/components/UserSettings.tsx`
+
+**Propósito**: Unificar preferencias comunes y cambio de contraseña.
+
+Exportaciones:
+
+- `UserSettings`: export default compatible.
+- `UserSettingsContent`: export nombrado para wrappers por rol.
+
+Páginas que lo usan como contenido compartido:
+
+- `src/app/donante/configuracion/page.tsx`
+- `src/app/user/configuracion/page.tsx`
+
+Ejemplo:
+
+```tsx
+<DashboardLayout requiredRole="SOLICITANTE">
+  <UserSettingsContent variant="solicitante" />
+</DashboardLayout>
+```
 
 ### 🏠 DashboardLayout
 
@@ -780,47 +837,79 @@ export function DataTable<T extends Record<string, any>>({
 
 **Ubicación**: `src/modules/shared/hooks/useNotificaciones.ts`
 
-**Propósito**: Gestión de notificaciones en tiempo real
+**Propósito**: Gestión de notificaciones visibles para el usuario y creación mediante eventos server-side.
 
 ```tsx
-export function useNotificaciones() {
+import type { NotificationEventPayload } from '@/modules/shared/services/notificationEvents';
+
+export function useNotificaciones(supabase: SupabaseClient, user: User | null) {
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
   const [loading, setLoading] = useState(true);
-  const supabase = createClientComponentClient();
-  const { user } = useUser();
+  const [userRole, setUserRole] = useState<{ userId: string; role: string } | null>(null);
+  const notificationIdsRef = useRef<Set<string>>(new Set());
   
   // Cargar notificaciones
   useEffect(() => {
     if (!user) return;
     
     async function cargarNotificaciones() {
-      const { data, error } = await supabase
-        .from('notificaciones')
-        .select('*')
-        .or(`destinatario_id.eq.${user.id},rol_destinatario.eq.${user.rol}`)
-        .eq('activa', true)
-        .order('fecha_creacion', { ascending: false });
+      const rol = await obtenerRolDelUsuario(user.id);
+      const { data, error } = await supabase.rpc('obtener_notificaciones_usuario', {
+        p_limite: 50,
+      });
       
       if (!error && data) {
+        notificationIdsRef.current = new Set(data.map(n => n.id));
         setNotificaciones(data);
+        setUserRole({ userId: user.id, role: rol });
       }
       setLoading(false);
     }
     
     cargarNotificaciones();
-    
-    // Polling cada 30 segundos
-    const interval = setInterval(cargarNotificaciones, 30000);
-    
-    return () => clearInterval(interval);
   }, [user]);
+
+  // Escuchar cambios en vivo por destinatario directo, rol y TODOS
+  useEffect(() => {
+    if (!user || !userRole || userRole.userId !== user.id) return;
+
+    const subscriptions = [
+      { table: 'notificaciones', filter: `destinatario_id=eq.${user.id}` },
+      { table: 'notificaciones', filter: `rol_destinatario=eq.${userRole.role}` },
+      { table: 'notificaciones', filter: 'rol_destinatario=eq.TODOS' },
+      { table: 'notificaciones_usuario', filter: `usuario_id=eq.${user.id}` },
+    ];
+
+    const channel = supabase.channel(`notificaciones_realtime:${user.id}`);
+    subscriptions.forEach(({ table, filter }) => {
+      channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table, filter },
+        (payload) => actualizarEstadoLocal(payload, notificationIdsRef)
+      );
+    });
+    channel.subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, [user, userRole]);
+
+  const crearNotificacion = async (payload: NotificationEventPayload) => {
+    const response = await fetch('/api/notificaciones', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error('No se pudo crear la notificación');
+    }
+  };
   
   // Marcar como leída
   const marcarComoLeida = async (notificacionId: string) => {
-    const { error } = await supabase
-      .from('notificaciones')
-      .update({ leida: true, fecha_leida: new Date().toISOString() })
-      .eq('id', notificacionId);
+    const { error } = await supabase.rpc('marcar_notificacion_leida', {
+      p_notificacion_id: notificacionId,
+    });
     
     if (!error) {
       setNotificaciones(prev =>
@@ -832,11 +921,14 @@ export function useNotificaciones() {
   return {
     notificaciones,
     loading,
+    crearNotificacion,
     marcarComoLeida,
     noLeidas: notificaciones.filter(n => !n.leida).length
   };
 }
 ```
+
+`crearNotificacion` no acepta `titulo`, `mensaje`, `destinatarioId`, `rolDestinatario`, `email` ni metadata libre. Debe recibir un `NotificationEventPayload` como `{ event: 'catalog_food_request_created', entityId }`. La carga inicial usa `obtener_notificaciones_usuario(50)`, que devuelve `leida` calculada desde `notificaciones_usuario` y excluye las filas ocultas o expiradas. Las acciones usan `marcar_notificacion_leida`, `marcar_todas_notificaciones_leidas` y `ocultar_notificacion`; el cliente no actualiza directamente `notificaciones`. Realtime escucha los tres filtros de contenido y el estado individual filtrado por `usuario_id`, y deduplica por `id`.
 
 ---
 
@@ -884,9 +976,40 @@ export function useInventoryStock(productoId?: string) {
 
 ### Server State vs Client State
 
-El proyecto utiliza **Server Components** por defecto, minimizando la necesidad de gestión de estado global.
+El proyecto tiene soporte para **Server Components**. El estado actual sigue siendo mayormente client-side: 35 de 43 páginas en `src/app` están marcadas con `'use client'`. Esto simplifica formularios, filtros, modales, mapas y flujos interactivos, pero reduce los beneficios de SSR y data fetching en servidor.
 
-#### Server State (Por Defecto):
+La dirección aplicada es migrar gradualmente páginas de lectura o wrappers simples a Server Components y mantener Client Components solo en las partes interactivas.
+
+#### Patrón Server Wrapper + Client Island:
+
+```tsx
+// src/app/user/perfil/page.tsx
+import UserProfilePageContent from '@/modules/shared/components/UserProfilePageContent';
+
+export default function UserPerfilPage() {
+  return (
+    <UserProfilePageContent
+      requiredRole="SOLICITANTE"
+      title="Mi Perfil"
+      tone="red"
+    />
+  );
+}
+```
+
+Reglas:
+
+- La página no debe importar barrels que arrastren hooks cliente si pretende mantenerse como Server Component.
+- Importar componentes cliente directamente, por ejemplo `@/modules/shared/components/UserProfilePageContent`.
+- Mantener formularios, mapas, toggles, modales y estados locales dentro de Client Components.
+
+Candidatas para próximas migraciones:
+
+- Dashboards con datos de solo lectura inicial.
+- Reportes que renderizan tablas antes de abrir filtros/modales.
+- Páginas de comprobante que solo muestran datos.
+
+#### Server State (Objetivo Recomendado):
 
 ```tsx
 // src/app/admin/dashboard/page.tsx
@@ -908,7 +1031,7 @@ export default async function AdminDashboard() {
 }
 ```
 
-#### Client State (Cuando es Necesario):
+#### Client State (Uso Actual Frecuente):
 
 ```tsx
 'use client';
@@ -946,58 +1069,32 @@ export function FormularioSolicitud() {
 
 ### 📦 Configuración de Tailwind
 
-**Archivo**: `tailwind.config.ts`
+Tailwind se integra mediante el plugin de PostCSS definido en `postcss.config.mjs`:
 
-```typescript
-import type { Config } from "tailwindcss";
+```javascript
+const config = {
+  plugins: ["@tailwindcss/postcss"],
+};
 
-export default {
-  content: [
-    "./src/**/*.{js,ts,jsx,tsx,mdx}",
-  ],
-  theme: {
-    extend: {
-      colors: {
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
-        },
-        secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
-        },
-        success: "hsl(var(--success))",
-        warning: "hsl(var(--warning))",
-        error: "hsl(var(--error))",
-        info: "hsl(var(--info))",
-        accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
-        },
-        muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
-        },
-        card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
-        },
-      },
-      borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
-      },
-    },
-  },
-  plugins: [],
-} satisfies Config;
+export default config;
 ```
+
+La hoja global importa Tailwind y expone las fuentes mediante `@theme inline`:
+
+```css
+@import "tailwindcss";
+
+:root {
+  --color-slate-900: #0f172a;
+  --font-sans: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
+}
+
+@theme inline {
+  --font-sans: var(--font-sans);
+}
+```
+
+La configuración se mantiene en CSS y Tailwind v4 detecta las clases utilizadas en las plantillas del proyecto automáticamente. Los estilos compartidos que requieren selectores complejos, como Mapbox y las tablas, permanecen en `src/app/globals.css`; el resto se compone con clases utilitarias directamente en los componentes.
 
 ---
 
@@ -1006,55 +1103,16 @@ export default {
 **Archivo**: `src/app/globals.css`
 
 ```css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer components {
-  /* Botones */
-  .btn {
-    @apply inline-flex items-center justify-center rounded-md font-medium transition-colors;
-    @apply disabled:pointer-events-none disabled:opacity-50;
-  }
-  
-  .btn-primary {
-    @apply bg-primary text-primary-foreground hover:bg-primary/90;
-  }
-  
-  /* Cards */
-  .card {
-    @apply rounded-lg border border-border bg-card shadow-sm;
-  }
-  
-  /* Inputs */
-  .input {
-    @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2;
-    @apply text-sm ring-offset-background placeholder:text-muted-foreground;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
-  }
-  
-  /* Estados */
-  .badge-success {
-    @apply inline-flex items-center rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-semibold text-success;
-  }
-  
-  .badge-warning {
-    @apply inline-flex items-center rounded-full bg-warning/10 px-2.5 py-0.5 text-xs font-semibold text-warning;
-  }
-  
-  .badge-error {
-    @apply inline-flex items-center rounded-full bg-error/10 px-2.5 py-0.5 text-xs font-semibold text-error;
-  }
+/* Clases compartidas para tablas y reglas específicas de Mapbox. */
+.table-surface {
+  overflow: hidden;
+  border: 1px solid var(--color-slate-200);
+  border-radius: 1rem;
+  background: white;
 }
 ```
 
-**Uso**:
-```tsx
-<button className="btn btn-primary">Guardar</button>
-<input type="text" className="input" />
-<span className="badge-success">Activo</span>
-<span className="badge-error">Cancelado</span>
-```
+Los componentes usan las utilidades de Tailwind directamente (`flex`, `rounded-lg`, `text-slate-700`, `hover:bg-slate-50`, etc.). Las clases CSS propias se reservan para patrones compartidos que no se expresan de forma tan clara con una sola utilidad.
 
 ---
 
@@ -1151,7 +1209,7 @@ El frontend del Banco de Alimentos ULEAM está construido con:
 
 - ✅ **Componentes modulares y reutilizables**
 - ✅ **Sistema de diseño consistente con Tailwind CSS**
-- ✅ **Server Components por defecto para mejor performance**
+- ⚠️ **Client Components predominantes actualmente**
 - ✅ **Hooks personalizados para lógica compartida**
 - ✅ **Tipado estricto con TypeScript**
 - ✅ **Accesibilidad con semántica HTML**
@@ -1161,4 +1219,4 @@ Esta arquitectura permite:
 - Mantenimiento sencillo con código organizado
 - Escalabilidad agregando nuevos componentes
 - Consistencia visual en toda la aplicación
-- Performance óptimo con SSR y Client Components selectivos
+- Mejora progresiva de performance si se reducen las fronteras client-side en páginas de lectura

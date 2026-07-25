@@ -77,15 +77,9 @@ const FoodModal = ({
     });
   };
 
-  // Obtener el tipo de magnitud de las unidades ya seleccionadas
-  const tipoMagnitudSeleccionado = unidadesSeleccionadas.length > 0
-    ? unidadesDisponibles.find(u => u.id === unidadesSeleccionadas[0])?.tipo_magnitud_id
-    : null;
-
-  // Filtrar unidades disponibles según el tipo de magnitud seleccionado
-  const unidadesFiltradasPorTipo = tipoMagnitudSeleccionado
-    ? unidadesDisponibles.filter(u => u.tipo_magnitud_id === tipoMagnitudSeleccionado)
-    : unidadesDisponibles;
+  // Agrupar visualmente por magnitud no implica que las unidades sean
+  // equivalentes. La equivalencia siempre requiere un factor explícito.
+  const unidadesFiltradasPorTipo = unidadesDisponibles;
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -219,13 +213,11 @@ const FoodModal = ({
                   </div>
                 ) : (
                   <>
-                    {tipoMagnitudSeleccionado && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                        <p className="text-xs font-medium text-blue-900">
-                          ℹ️ Solo puedes seleccionar unidades del mismo tipo de magnitud para asegurar conversiones correctas
-                        </p>
-                      </div>
-                    )}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-xs font-medium text-blue-900">
+                        ℹ️ Las equivalencias entre unidades solo se aplican cuando existe un factor explícito registrado.
+                      </p>
+                    </div>
                     <div className="max-h-64 overflow-y-auto space-y-3 p-3 bg-slate-50 rounded-lg">
                     {Object.entries(unidadesPorTipo).map(([tipoId, unidades]) => {
                       const tipoMagnitudNombre = unidades[0]?.tipo_magnitud_nombre || `Tipo ${tipoId}`;
@@ -256,6 +248,11 @@ const FoodModal = ({
                                       <div className="font-medium">{unidad.nombre}</div>
                                       <div className="text-xs text-slate-500">
                                         {unidad.simbolo}
+                                      </div>
+                                      <div className="text-[11px] text-slate-400">
+                                        {unidad.es_convertible
+                                          ? 'Convertible con equivalencia registrada'
+                                          : 'Sin equivalencia automática'}
                                       </div>
                                     </div>
                                     {isSelected && (

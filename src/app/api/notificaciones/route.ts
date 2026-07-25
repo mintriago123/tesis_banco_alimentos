@@ -1,67 +1,75 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { createAdminSupabaseClient } from '@/lib/supabase-admin';
+import {
+  getActiveUserProfile,
+  getAuthenticatedUser,
+} from '@/lib/server-auth';
+import {
+  buildNotificationForEvent,
+  NotificationDispatchError,
+  parseNotificationEventPayload,
+} from '@/modules/shared/services/notificationEventDispatcher';
 import { NotificationService } from '@/modules/shared/services/notificationService';
+import { validateCsrfRequest } from '@/lib/csrf';
+
+async function readJsonBody(request: Request): Promise<{ body: unknown } | { response: NextResponse }> {
+  try {
+    return { body: await request.json() };
+  } catch {
+    return {
+      response: NextResponse.json({ error: 'Payload JSON invalido.' }, { status: 400 }),
+    };
+  }
+}
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-
-    if (!body?.titulo || !body?.mensaje) {
-      return NextResponse.json(
-        { error: 'Los campos titulo y mensaje son obligatorios.' },
-        { status: 400 }
-      );
+    const csrfResponse = validateCsrfRequest(request);
+    if (csrfResponse) {
+      return csrfResponse;
     }
 
     const supabase = await createServerSupabaseClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const authResult = await getAuthenticatedUser(supabase);
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
+    if (authResult.response) {
+      return authResult.response;
+    }
+
+    const jsonBody = await readJsonBody(request);
+
+    if ('response' in jsonBody) {
+      return jsonBody.response;
+    }
+
+    const payloadResult = parseNotificationEventPayload(jsonBody.body);
+
+    if (!payloadResult.success) {
+      return NextResponse.json({ error: payloadResult.error }, { status: 400 });
     }
 
     const adminSupabase = createAdminSupabaseClient();
+    const profileResult = await getActiveUserProfile(adminSupabase, authResult.user.id);
 
-    const { data: usuario, error: usuarioError } = await adminSupabase
-      .from('usuarios')
-      .select('rol')
-      .eq('id', user.id)
-      .single();
-
-    if (usuarioError || !usuario) {
-      return NextResponse.json({ error: 'No se pudo validar el rol del usuario.' }, { status: 403 });
+    if (profileResult.response) {
+      return profileResult.response;
     }
 
-    const rol = usuario.rol?.toUpperCase();
-    const rolesPermitidos = ['ADMINISTRADOR', 'OPERADOR', 'DONANTE', 'SOLICITANTE'];
-
-    if (!rol || !rolesPermitidos.includes(rol)) {
-      return NextResponse.json({ error: 'No tienes permisos para crear notificaciones.' }, { status: 403 });
-    }
-
-
+    const input = await buildNotificationForEvent(
+      adminSupabase,
+      profileResult.profile,
+      payloadResult.payload
+    );
     const service = new NotificationService(adminSupabase);
-
-    const notificacion = await service.createNotification({
-      titulo: body.titulo,
-      mensaje: body.mensaje,
-      tipo: body.tipo,
-      categoria: body.categoria,
-      urlAccion: body.urlAccion ?? body.url_accion,
-      destinatarioId: body.destinatarioId ?? body.destinatario_id,
-      rolDestinatario: body.rolDestinatario ?? body.rol_destinatario,
-      metadatos: body.metadatos,
-      expiraEn: body.expiraEn ?? body.expira_en,
-      enviarEmail: body.enviarEmail,
-      email: body.email,
-    });
+    const notificacion = await service.createNotification(input);
 
     return NextResponse.json({ notificacion });
   } catch (error) {
+    if (error instanceof NotificationDispatchError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
     console.error('Error en POST /api/notificaciones:', error);
     return NextResponse.json(
       { error: 'Error al crear la notificacion.' },

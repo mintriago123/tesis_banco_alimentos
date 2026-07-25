@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Calendar, Package, TrendingDown, X, RefreshCw } from 'lucide-react';
 import type { AlertaVencimiento, AlertasVencimientoResponse } from '@/modules/operador/bajas/types';
 
@@ -66,7 +66,7 @@ export default function AlertasVencimiento({
   const [filtroActivo, setFiltroActivo] = useState<'todos' | 'vencidos' | 'proximos'>('todos');
   const [alertasCerradas, setAlertasCerradas] = useState<Set<string>>(new Set());
 
-  const cargarAlertas = async () => {
+  const cargarAlertas = useCallback(async () => {
     try {
       const response = await fetch(`/api/operador/alertas-vencimiento?dias=${diasUmbral}`);
       
@@ -77,13 +77,13 @@ export default function AlertasVencimiento({
       const result: AlertasVencimientoResponse = await response.json();
       setData(result);
       setError(null);
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar alertas');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al cargar alertas');
       console.error('Error cargando alertas:', err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [diasUmbral]);
 
   useEffect(() => {
     cargarAlertas();
@@ -92,15 +92,15 @@ export default function AlertasVencimiento({
       const interval = setInterval(cargarAlertas, refreshInterval * 60 * 1000);
       return () => clearInterval(interval);
     }
-  }, [diasUmbral, autoRefresh, refreshInterval]);
+  }, [cargarAlertas, autoRefresh, refreshInterval]);
 
   const handleRefresh = () => {
     setIsLoading(true);
     cargarAlertas();
   };
 
-  const handleCerrarAlerta = (idInventario: string) => {
-    setAlertasCerradas(prev => new Set(prev).add(idInventario));
+  const handleCerrarAlerta = (idEntrada: string) => {
+    setAlertasCerradas(prev => new Set(prev).add(idEntrada));
   };
 
   if (isLoading) {
@@ -147,7 +147,7 @@ export default function AlertasVencimiento({
 
   // Filtrar alertas
   const alertasFiltradas = data.alertas.filter(alerta => {
-    if (alertasCerradas.has(alerta.id_inventario)) return false;
+    if (alertasCerradas.has(alerta.id_entrada)) return false;
     
     if (filtroActivo === 'vencidos') return alerta.prioridad === 'vencido';
     if (filtroActivo === 'proximos') return alerta.prioridad !== 'vencido';
@@ -258,7 +258,7 @@ export default function AlertasVencimiento({
             const colors = prioridadColors[alerta.prioridad];
             return (
               <div
-                key={alerta.id_inventario}
+                key={alerta.id_entrada}
                 className={`${colors.bg} border ${colors.border} rounded-lg p-4 transition-all hover:shadow-md`}
               >
                 <div className="flex items-start justify-between">
@@ -305,7 +305,7 @@ export default function AlertasVencimiento({
                     </div>
                   </div>
                   <button
-                    onClick={() => handleCerrarAlerta(alerta.id_inventario)}
+                    onClick={() => handleCerrarAlerta(alerta.id_entrada)}
                     className={`ml-2 ${colors.text} hover:opacity-70 transition-opacity`}
                     title="Cerrar alerta"
                   >

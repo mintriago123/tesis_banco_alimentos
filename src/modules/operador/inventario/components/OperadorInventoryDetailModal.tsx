@@ -208,7 +208,7 @@ const OperadorInventoryDetailModal = ({ item, isOpen, onClose }: OperadorInvento
                 <div>
                   <label className="text-sm font-medium text-gray-600">Unidad de Medida</label>
                   <p className="text-gray-900 font-medium">
-                    {item.producto.unidad_medida || 'No especificada'}
+                    {item.producto.unidad_nombre || 'No especificada'}
                   </p>
                 </div>
               </div>
@@ -221,7 +221,7 @@ const OperadorInventoryDetailModal = ({ item, isOpen, onClose }: OperadorInvento
               <div>
                 <label className="text-sm font-medium text-gray-600">Cantidad Disponible</label>
                 <p className="text-2xl font-bold text-orange-600">
-                  {formatQuantity(item.cantidad_disponible)} {item.producto.unidad_simbolo || item.producto.unidad_medida || 'unidades'}
+                    {formatQuantity(item.cantidad_disponible)} {item.producto.unidad_simbolo || item.producto.unidad_nombre || 'unidades'}
                 </p>
               </div>
             </div>
@@ -301,7 +301,7 @@ const OperadorInventoryDetailModal = ({ item, isOpen, onClose }: OperadorInvento
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-gray-600">ID Inventario</label>
-                    <p className="text-gray-900 font-mono text-sm">{item.id_inventario}</p>
+                    <p className="text-gray-900 font-mono text-sm">{item.id_entrada}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-600">ID Producto</label>

@@ -41,6 +41,10 @@ interface SolicitudDetailModalProps {
   isProcessing: boolean;
   motivoRechazo?: string;
   onMotivoRechazoChange?: (value: string) => void;
+  depositoSeleccionado: string;
+  onDepositoSeleccionadoChange: (value: string) => void;
+  cantidadAprobar: number;
+  onCantidadAprobarChange: (value: number) => void;
 }
 
 const SolicitudDetailModal = ({
@@ -57,8 +61,10 @@ const SolicitudDetailModal = ({
   onAprobar,
   onRechazar,
   isProcessing,
-  motivoRechazo,
-  onMotivoRechazoChange
+  depositoSeleccionado,
+  onDepositoSeleccionadoChange,
+  cantidadAprobar,
+  onCantidadAprobarChange
 }: SolicitudDetailModalProps) => {
   const [nombreOperador, setNombreOperador] = useState<string>('');
   const [rolOperador, setRolOperador] = useState<string>('');
@@ -71,6 +77,30 @@ const SolicitudDetailModal = ({
     (total, item) => total + (item.cantidad_disponible ?? 0),
     0
   );
+
+  const formatQuantity = (cantidad: number): string => {
+    if (Number.isInteger(cantidad)) {
+      return cantidad.toString();
+    }
+
+    return cantidad.toFixed(2).replace(/\.?0+$/, '');
+  };
+
+  const depositoActual = inventario.find(item => item.id_deposito === depositoSeleccionado);
+  const stockDepositoSeleccionado = depositoActual?.cantidad_disponible ?? 0;
+  const maxAprobable = Math.max(0, Math.min(solicitud.cantidad, stockDepositoSeleccionado));
+  const permiteFraccion = solicitud.unidades?.permite_fraccion !== false;
+  const cantidadAprobadaValida = permiteFraccion || Number.isInteger(cantidadAprobar);
+
+  const handleCantidadAprobarChange = (value: string) => {
+    if (value.trim() === '') {
+      onCantidadAprobarChange(0);
+      return;
+    }
+
+    const cantidad = Number(value);
+    onCantidadAprobarChange(Number.isFinite(cantidad) ? Math.max(0, cantidad) : 0);
+  };
 
   // Cargar datos del operador/admin que rechazó
   useEffect(() => {
@@ -339,7 +369,7 @@ const SolicitudDetailModal = ({
             {solicitud.estado === 'pendiente' && (
               <div className="bg-white p-4 rounded-lg border">
                 <h4 className="font-semibold text-gray-900 mb-3">
-                  Inventario disponible para "{solicitud.tipo_alimento}"
+                  Inventario disponible para &quot;{solicitud.tipo_alimento}&quot;
                 </h4>
 
                 {inventarioLoading && (
@@ -357,8 +387,53 @@ const SolicitudDetailModal = ({
                 {!inventarioLoading && !inventarioError && inventario.length > 0 && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Bodega para aprobación
+                        </label>
+                        <select
+                          value={depositoSeleccionado}
+                          onChange={(event) => onDepositoSeleccionadoChange(event.target.value)}
+                          className="w-full p-2 border border-gray-300 rounded-lg"
+                          disabled={isProcessing}
+                        >
+                          <option value="">Selecciona una bodega</option>
+                          {inventario.map(item => (
+                            <option key={item.id} value={item.id_deposito}>
+                              {item.deposito} - {formatQuantity(item.cantidad_disponible)} {item.unidad_simbolo || item.unidad_nombre || solicitud.unidades?.simbolo || 'unidades'}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="cantidad-aprobar" className="block text-sm font-medium text-gray-700 mb-1">
+                          Cantidad a aprobar
+                        </label>
+                        <input
+                          id="cantidad-aprobar"
+                          type="number"
+                          min={0}
+                          max={maxAprobable}
+                          step={permiteFraccion ? 0.01 : 1}
+                          value={cantidadAprobar}
+                          onChange={(event) => handleCantidadAprobarChange(event.target.value)}
+                          aria-invalid={!cantidadAprobadaValida}
+                          aria-describedby={!cantidadAprobadaValida ? 'cantidad-aprobar-error' : undefined}
+                          className="w-full p-2 border border-gray-300 rounded-lg"
+                          disabled={isProcessing || !depositoSeleccionado}
+                        />
+                        {!cantidadAprobadaValida && (
+                          <p id="cantidad-aprobar-error" role="alert" className="mt-1 text-xs text-red-700">
+                            La unidad {solicitud.unidades?.nombre ?? solicitud.unidades?.simbolo ?? 'seleccionada'} no permite cantidades decimales. Ingresa una cantidad entera.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {inventario.map(item => {
                         const unidad = item.unidad_simbolo || item.unidad_nombre || 'unidades';
+                        const unidadOriginal = item.unidad_simbolo_original || item.unidad_nombre_original || unidad;
                         return (
                           <div key={item.id} className="border rounded-lg p-3">
                             <div className="font-semibold text-gray-900">
@@ -368,8 +443,13 @@ const SolicitudDetailModal = ({
                               Depósito: {item.deposito}
                             </div>
                             <div className="text-sm text-gray-600">
-                              Disponible: <span className="font-medium">{item.cantidad_disponible} {unidad}</span>
+                              Disponible: <span className="font-medium">{formatQuantity(item.cantidad_disponible)} {unidad}</span>
                             </div>
+                            {item.fue_convertido && (
+                              <div className="text-xs text-gray-500">
+                                Equivale a {formatQuantity(item.cantidad_disponible_original)} {unidadOriginal} en inventario
+                              </div>
+                            )}
                             {item.fecha_vencimiento && (
                               <div className="text-xs text-gray-500">
                                 Actualizado: {formatDate(item.fecha_vencimiento)}
@@ -390,7 +470,13 @@ const SolicitudDetailModal = ({
                         <div>
                           <span className="text-gray-600">Total disponible: </span>
                           <span className={`font-semibold ${totalDisponible >= solicitud.cantidad ? 'text-green-600' : 'text-red-600'}`}>
-                            {totalDisponible} {solicitud.unidades?.simbolo ?? 'unidades'}
+                            {formatQuantity(totalDisponible)} {solicitud.unidades?.simbolo ?? 'unidades'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Disponible en bodega seleccionada: </span>
+                          <span className={`font-semibold ${stockDepositoSeleccionado > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {formatQuantity(stockDepositoSeleccionado)} {solicitud.unidades?.simbolo ?? 'unidades'}
                           </span>
                         </div>
                         <div className="mt-2">
@@ -402,7 +488,7 @@ const SolicitudDetailModal = ({
                           ) : (
                             <div className="flex items-center text-red-600 text-sm">
                               <XCircle className="w-4 h-4 mr-1" />
-                              Stock insuficiente ({totalDisponible} de {solicitud.cantidad} disponibles)
+                              Stock insuficiente ({formatQuantity(totalDisponible)} de {formatQuantity(solicitud.cantidad)} disponibles)
                             </div>
                           )}
                         </div>
@@ -415,7 +501,7 @@ const SolicitudDetailModal = ({
                   <div className="text-center py-4">
                     <XCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
                     <p className="text-sm text-gray-600">
-                      No hay stock disponible de "{solicitud.tipo_alimento}" en el inventario
+                      No hay stock disponible de &quot;{solicitud.tipo_alimento}&quot; en el inventario
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
                       La solicitud no puede ser satisfecha en este momento
@@ -466,8 +552,8 @@ const SolicitudDetailModal = ({
                     type="button"
                     onClick={onAprobar}
                     className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                    disabled={isProcessing || inventarioLoading || totalDisponible < solicitud.cantidad}
-                    title={totalDisponible < solicitud.cantidad ? 'Stock insuficiente para aprobar esta solicitud' : ''}
+                    disabled={isProcessing || inventarioLoading || !depositoSeleccionado || !cantidadAprobadaValida || cantidadAprobar <= 0 || cantidadAprobar > maxAprobable}
+                    title={!depositoSeleccionado ? 'Selecciona una bodega para aprobar' : (!cantidadAprobadaValida ? 'La unidad seleccionada requiere una cantidad entera' : (cantidadAprobar > maxAprobable ? 'La cantidad supera el stock disponible en la bodega seleccionada' : ''))}
                   >
                     <CheckCircle className="w-4 h-4" />
                     <span>Aprobar Solicitud</span>

@@ -5,9 +5,20 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { InventarioItem, ServiceResult } from '../types';
 import { createInventoryDataService } from './inventoryDataService';
+import {
+  isUuid,
+  parseFiniteNumberValue,
+  parseUuidValue,
+} from '@/lib/validation-core';
+
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 const logger = {
-  info: (message: string, details?: unknown) => console.info(`[InventoryActionService] ${message}`, details),
+  info: (message: string, details?: unknown) => {
+    if (isDevelopment) {
+      console.info(`[InventoryActionService] ${message}`, details);
+    }
+  },
   warn: (message: string, details?: unknown) => console.warn(`[InventoryActionService] ${message}`, details),
   error: (message: string, error?: unknown) => console.error(`[InventoryActionService] ${message}`, error)
 };
@@ -19,14 +30,23 @@ export const createInventoryActionService = (supabaseClient: SupabaseClient) => 
     item: InventarioItem,
     nuevaCantidad: number
   ): Promise<ServiceResult<{ message: string }>> => {
-    if (nuevaCantidad < 0) {
+    const idEntrada = parseUuidValue(item.id_entrada, { name: 'item.id_entrada' });
+    if (!idEntrada.success) {
+      return { success: false, error: idEntrada.error };
+    }
+
+    const cantidad = parseFiniteNumberValue(nuevaCantidad, {
+      name: 'nuevaCantidad',
+      min: 0,
+    });
+    if (!cantidad.success) {
       return {
         success: false,
-        error: 'La cantidad no puede ser negativa'
+        error: cantidad.error
       };
     }
 
-    const diferencia = nuevaCantidad - item.cantidad_disponible;
+    const diferencia = cantidad.value - item.cantidad_disponible;
     if (diferencia === 0) {
       return {
         success: true,
@@ -35,13 +55,24 @@ export const createInventoryActionService = (supabaseClient: SupabaseClient) => 
     }
 
     try {
-      const { error } = await supabaseClient
-        .from('inventario')
-        .update({
-          cantidad_disponible: nuevaCantidad,
-          fecha_actualizacion: new Date().toISOString()
-        })
-        .eq('id_inventario', item.id_inventario);
+      const updateData: Record<string, unknown> = {
+        cantidad_disponible: cantidad.value,
+        estado: cantidad.value === 0 ? 'agotado' : 'disponible',
+        updated_at: new Date().toISOString(),
+      };
+      if (diferencia > 0) {
+        updateData.cantidad_original = cantidad.value;
+      }
+
+      let updateQuery = supabaseClient
+        .from('entradas_inventario')
+        .update(updateData)
+        .eq('id_entrada', idEntrada.value);
+      if (diferencia < 0) {
+        updateQuery = updateQuery.gte('cantidad_disponible', Math.abs(diferencia));
+      }
+
+      const { error } = await updateQuery;
 
       if (error) {
         logger.error('Error actualizando inventario', error);
@@ -52,15 +83,16 @@ export const createInventoryActionService = (supabaseClient: SupabaseClient) => 
         };
       }
 
-      const movimientoResult = await registrarMovimientoAjuste(item, diferencia, nuevaCantidad);
+      const movimientoResult = await registrarMovimientoAjuste(item, diferencia, cantidad.value);
       if (!movimientoResult.success) {
         const { error: rollbackError } = await supabaseClient
-          .from('inventario')
-          .update({
-            cantidad_disponible: item.cantidad_disponible,
-            fecha_actualizacion: item.fecha_actualizacion ?? null
-          })
-          .eq('id_inventario', item.id_inventario);
+        .from('entradas_inventario')
+        .update({
+          cantidad_disponible: item.cantidad_disponible,
+          estado: item.cantidad_disponible === 0 ? 'agotado' : 'disponible',
+          updated_at: new Date().toISOString(),
+        })
+          .eq('id_entrada', idEntrada.value);
 
         if (rollbackError) {
           logger.error('Error revirtiendo inventario tras falla en movimiento', rollbackError);
@@ -111,12 +143,34 @@ export const createInventoryActionService = (supabaseClient: SupabaseClient) => 
         };
       }
 
+      const usuarioId = parseUuidValue(auth.user.id, { name: 'usuarioId' });
+      if (!usuarioId.success) {
+        return {
+          success: false,
+          error: usuarioId.error
+        };
+      }
+
+      if (!isUuid(item.id_producto)) {
+        return {
+          success: false,
+          error: 'item.id_producto debe ser un UUID valido'
+        };
+      }
+
+      if (!item.producto.unidad_id) {
+        return {
+          success: false,
+          error: 'El producto no tiene una unidad configurada'
+        };
+      }
+
       const { data: cabecera, error: cabeceraError } = await supabaseClient
         .from('movimiento_inventario_cabecera')
         .insert({
           fecha_movimiento: new Date().toISOString(),
-          id_donante: auth.user.id,
-          id_solicitante: auth.user.id,
+          id_donante: usuarioId.value,
+          id_solicitante: usuarioId.value,
           estado_movimiento: 'completado',
           observaciones: `Ajuste manual de inventario - ${item.producto.nombre_producto} (${diferencia > 0 ? '+' : ''}${diferencia} unidades, nuevo stock: ${cantidadPosterior})`
         })
@@ -143,7 +197,11 @@ export const createInventoryActionService = (supabaseClient: SupabaseClient) => 
           cantidad,
           tipo_transaccion: tipoTransaccion,
           rol_usuario: 'distribuidor',
-          observacion_detalle: `Ajuste manual de inventario - ${tipoTransaccion === 'ingreso' ? 'Incremento' : 'Reducción'} de ${cantidad} unidades`
+          observacion_detalle: `Ajuste manual de inventario - ${tipoTransaccion === 'ingreso' ? 'Incremento' : 'Reducción'} de ${cantidad} unidades`,
+          unidad_id: item.producto.unidad_id,
+          unidad_convertida_id: item.producto.unidad_id,
+          id_entrada: item.id_entrada,
+          id_deposito: item.id_deposito,
         });
 
       if (detalleError) {
@@ -155,7 +213,7 @@ export const createInventoryActionService = (supabaseClient: SupabaseClient) => 
         };
       }
 
-      logger.info('Movimiento de ajuste registrado', { item: item.id_inventario, diferencia });
+      logger.info('Movimiento de ajuste registrado', { item: item.id_entrada, diferencia });
       return { success: true };
     } catch (error) {
       logger.error('Error registrando movimiento de ajuste', error);

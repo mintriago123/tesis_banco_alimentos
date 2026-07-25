@@ -3,21 +3,10 @@
 // Información del inventario disponible
 // ============================================================================
 
-import React from 'react';
 import { Package, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { LoadingSpinner } from '@/app/components';
 import { type StockSummary } from '../services/inventoryStockService';
 import { type LoadingState } from '../types';
-
-/**
- * Formatea una cantidad numérica con máximo 2 decimales.
- */
-const formatQuantity = (cantidad: number): string => {
-  if (Number.isInteger(cantidad)) {
-    return cantidad.toString();
-  }
-  return cantidad.toFixed(2).replace(/\.?0+$/, '');
-};
 
 interface InventarioInfoProps {
   stockInfo: StockSummary | null;
@@ -38,19 +27,18 @@ export function InventarioInfo({
   simboloUnidad,
   isStockSufficient,
   getStockMessage,
-  onUseMaxStock,
 }: InventarioInfoProps) {
   if (!stockInfo && loadingState === 'idle') return null;
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-      <h4 className="flex items-center text-sm font-medium text-gray-700 mb-3">
-        <Package className="w-4 h-4 mr-2" />
+    <section className="rounded-xl border border-slate-200 bg-slate-50 p-4" aria-labelledby="inventario-disponible-title">
+      <h3 id="inventario-disponible-title" className="mb-3 flex items-center text-sm font-semibold text-slate-800">
+        <Package className="mr-2 h-4 w-4" aria-hidden="true" />
         Inventario Disponible
-      </h4>
+      </h3>
 
       {loadingState === 'loading' && (
-        <div className="flex items-center text-blue-600 text-sm">
+        <div className="flex items-center text-sm text-blue-700" role="status" aria-live="polite">
           <div className="inline-block mr-2">
             <LoadingSpinner size="sm" color="blue" />
           </div>
@@ -59,8 +47,8 @@ export function InventarioInfo({
       )}
 
       {loadingState === 'error' && errorMessage && (
-        <div className="flex items-center text-red-600 text-sm">
-          <AlertTriangle className="w-4 h-4 mr-2" />
+        <div className="flex items-center text-sm text-rose-700" role="alert">
+          <AlertTriangle className="mr-2 h-4 w-4" aria-hidden="true" />
           {errorMessage}
         </div>
       )}
@@ -70,71 +58,55 @@ export function InventarioInfo({
           {stockInfo.producto_encontrado ? (
             <>
               <div
-                className={`flex items-center text-sm font-medium ${
-                  stockInfo.total_disponible > 0
-                    ? 'text-green-700'
-                    : 'text-red-700'
+                className={`flex items-center text-sm font-semibold ${
+                  stockInfo.unidades_disponibles.length > 0
+                    ? 'text-emerald-700'
+                    : 'text-rose-700'
                 }`}
               >
-                {stockInfo.total_disponible > 0 ? (
-                  <CheckCircle className="w-4 h-4 mr-2" />
+                {stockInfo.unidades_disponibles.length > 0 ? (
+                  <CheckCircle className="mr-2 h-4 w-4" aria-hidden="true" />
                 ) : (
-                  <AlertTriangle className="w-4 h-4 mr-2" />
+                  <AlertTriangle className="mr-2 h-4 w-4" aria-hidden="true" />
                 )}
                 {getStockMessage(cantidad || undefined, simboloUnidad)}
               </div>
 
-              {stockInfo.depositos.length > 0 && (
-                <div className="mt-3">
-                  <p className="text-xs text-gray-600 mb-2 font-medium">
-                    Distribución por depósito:
-                  </p>
-                  <div className="space-y-1">
-                    {stockInfo.depositos.map((deposito, index) => {
-                      // Usar la cantidad formateada si está disponible
-                      const cantidadTexto = deposito.cantidad_formateada
-                        ? `${deposito.cantidad_formateada.cantidad} ${deposito.cantidad_formateada.simbolo}`
-                        : `${formatQuantity(deposito.cantidad_disponible)} ${stockInfo.unidad_simbolo || 'unidades'}`;
-                      
-                      return (
-                        <div
-                          key={index}
-                          className="flex justify-between text-xs text-gray-600 bg-white px-2 py-1 rounded"
-                        >
-                          <span>{deposito.deposito}</span>
-                          <span className="font-medium">
-                            {cantidadTexto}
-                          </span>
-                        </div>
-                      );
-                    })}
+              {stockInfo.unidades_disponibles.length > 0 && (
+                <div className="rounded-lg border border-slate-200 bg-white p-3" aria-label="Stock disponible por unidad">
+                  <p className="mb-2 text-xs font-semibold text-slate-600">Disponible por unidad</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {stockInfo.unidades_disponibles.map((unidad) => (
+                      <div key={unidad.unidad_id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                        <span className="block text-xs text-slate-500">{unidad.unidad_nombre || unidad.unidad_simbolo || 'Unidad'}</span>
+                        <span className="text-sm font-semibold text-slate-800">
+                          {unidad.cantidad_formateada.cantidad} {unidad.unidad_simbolo || unidad.unidad_nombre || 'unidades'}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
 
-              {cantidad > 0 && stockInfo.total_disponible > 0 && (
-                <div className="mt-2 p-2 bg-white rounded border-l-4 border-blue-400">
-                  <p className="text-xs text-blue-700">
+              {cantidad > 0 && stockInfo.unidades_disponibles.length > 0 && (
+                <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                  <p className="text-xs text-blue-800">
                     💡{' '}
                     {isStockSufficient(cantidad, simboloUnidad)
                       ? 'Hay suficiente stock para tu solicitud'
-                      : `Cantidad disponible insuficiente. Considera reducir a máximo ${
-                          stockInfo.total_formateado && stockInfo.total_formateado.fue_convertido
-                            ? `${stockInfo.total_formateado.cantidad} ${stockInfo.total_formateado.simbolo}`
-                            : `${formatQuantity(stockInfo.total_disponible)} ${stockInfo.unidad_simbolo || stockInfo.unidad_nombre || 'unidades'}`
-                        }`}
+                      : getStockMessage(cantidad, simboloUnidad)}
                   </p>
                 </div>
               )}
             </>
           ) : (
-            <div className="flex items-center text-amber-600 text-sm">
-              <Info className="w-4 h-4 mr-2" />
+            <div className="flex items-center text-sm text-amber-700">
+              <Info className="mr-2 h-4 w-4" aria-hidden="true" />
               Este producto no está disponible en el inventario actual
             </div>
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 }

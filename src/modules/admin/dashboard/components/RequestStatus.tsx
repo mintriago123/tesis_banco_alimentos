@@ -13,8 +13,14 @@ const ICON_MAP = {
 };
 
 const RequestStatus = ({ items }: RequestStatusProps) => (
-  <div className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm">
-    <h2 className="text-lg font-semibold text-slate-800">Estado de solicitudes</h2>
+  <section className="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm sm:p-6" aria-labelledby="request-status-title">
+    <div className="flex items-end justify-between gap-4">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Flujo de atención</p>
+        <h2 id="request-status-title" className="mt-1 text-xl font-bold text-slate-900">Estado de solicitudes</h2>
+      </div>
+      <p className="hidden text-sm text-slate-500 sm:block">Distribución actual</p>
+    </div>
     <p className="text-sm text-slate-500">Seguimiento del flujo de aprobación y entregas.</p>
 
     <div className="mt-5 space-y-4">
@@ -47,7 +53,7 @@ const RequestStatus = ({ items }: RequestStatusProps) => (
             <div className="flex items-center justify-between text-sm font-medium text-slate-700">
               <div className="flex items-center gap-2">
                 <span className={`rounded-lg bg-white p-1.5 shadow ${accentColor}`}>
-                  <Icon className="h-4 w-4" />
+                  <Icon aria-hidden="true" className="h-4 w-4" />
                 </span>
                 {item.label}
               </div>
@@ -64,7 +70,7 @@ const RequestStatus = ({ items }: RequestStatusProps) => (
         );
       })}
     </div>
-  </div>
+  </section>
 );
 
 export default RequestStatus;

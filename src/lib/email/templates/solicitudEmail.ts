@@ -420,10 +420,9 @@ Este mensaje fue generado automáticamente por la plataforma Banco de Alimentos.
 // Plantilla de email para solicitud entregada
 export function buildSolicitudEntregadaEmailTemplate({
   comprobante,
-  qrImageBase64,
   baseUrl
 }: Omit<SolicitudEmailTemplateInput, 'estado'>): { subject: string; html: string; text: string } {
-  const { usuario, pedido, codigoComprobante, fechaEmision, descripcionProyecto } = comprobante;
+  const { usuario, fechaEmision } = comprobante;
 
   const subject = `🎉 Solicitud Entregada`;
   const html = `

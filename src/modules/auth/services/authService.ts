@@ -16,6 +16,8 @@ import type {
 } from '../types';
 import { AUTH_CONSTANTS } from '../constants';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 export class AuthService {
   constructor(private supabase: SupabaseClient) {}
 
@@ -49,11 +51,15 @@ export class AuthService {
       // Obtener perfil del usuario
       const perfil = await this.obtenerPerfil(data.user.id);
 
-      console.log('🔍 Perfil obtenido:', perfil);
+      if (isDevelopment) {
+        console.log('🔍 Perfil obtenido:', perfil);
+      }
 
       // Si no hay perfil o no tiene rol, crear/completar perfil
       if (!perfil || !perfil.rol) {
-        console.log('❌ Perfil incompleto (sin rol)');
+        if (isDevelopment) {
+          console.log('❌ Perfil incompleto (sin rol)');
+        }
         return {
           success: true,
           redirect: AUTH_CONSTANTS.RUTAS.COMPLETAR_PERFIL,
@@ -63,7 +69,9 @@ export class AuthService {
       // Verificar estado del usuario
       const validacionEstado = this.validarEstadoUsuario(perfil);
       if (!validacionEstado.success) {
-        console.log('❌ Estado de usuario inválido:', perfil.estado);
+        if (isDevelopment) {
+          console.log('❌ Estado de usuario inválido:', perfil.estado);
+        }
         await this.supabase.auth.signOut();
         return validacionEstado;
       }
@@ -71,26 +79,45 @@ export class AuthService {
       // Validar que el perfil esté completo (necesita nombre Y (cedula O ruc))
       const perfilCompleto = perfil.nombre && (perfil.cedula || perfil.ruc);
       
-      console.log('📋 Validación de perfil:', {
-        nombre: perfil.nombre,
-        cedula: perfil.cedula,
-        ruc: perfil.ruc,
-        perfilCompleto,
-      });
+      if (isDevelopment) {
+        console.log('📋 Validación de perfil:', {
+          nombre: perfil.nombre,
+          cedula: perfil.cedula,
+          ruc: perfil.ruc,
+          perfilCompleto,
+        });
+      }
 
       if (!perfilCompleto) {
-        console.log('❌ Perfil incompleto (faltan datos)');
+        if (isDevelopment) {
+          console.log('❌ Perfil incompleto (faltan datos)');
+        }
         return {
           success: true,
           redirect: AUTH_CONSTANTS.RUTAS.COMPLETAR_PERFIL,
         };
       }
 
+      if (perfil.rol === 'DONANTE') {
+        const { error: warehouseError } = await this.supabase.rpc('crear_bodega_principal_donante');
+        if (warehouseError) {
+          if (isDevelopment) {
+            console.error('❌ No se pudo asegurar la bodega principal:', warehouseError);
+          }
+          return {
+            success: true,
+            redirect: AUTH_CONSTANTS.RUTAS.COMPLETAR_PERFIL,
+          };
+        }
+      }
+
       // Redirigir según el rol
       const redirect = this.obtenerRutaPorRol(perfil.rol);
-      console.log('✅ Login exitoso, redirigiendo a:', redirect);
+      if (isDevelopment) {
+        console.log('✅ Login exitoso, redirigiendo a:', redirect);
+      }
       return { success: true, redirect };
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: AUTH_CONSTANTS.MENSAJES.ERROR_INESPERADO,
@@ -104,7 +131,7 @@ export class AuthService {
   async registrar(datos: DatosRegistro): Promise<ResultadoAuth> {
     try {
       // El perfil se creará automáticamente mediante un trigger de base de datos
-      const { data, error } = await this.supabase.auth.signUp({
+      const { error } = await this.supabase.auth.signUp({
         email: datos.email,
         password: datos.password,
         options: {
@@ -115,6 +142,17 @@ export class AuthService {
       });
 
       if (error) {
+        const esCorreoYaRegistrado =
+          error.status === 422 &&
+          /already|registered|exists|ya\s+registrad/i.test(error.message);
+
+        if (esCorreoYaRegistrado) {
+          return {
+            success: false,
+            error: 'Este correo ya está registrado. Intenta iniciar sesión o recupera tu contraseña.',
+          };
+        }
+
         return { success: false, error: error.message };
       }
 
@@ -122,7 +160,7 @@ export class AuthService {
         success: true,
         mensaje: AUTH_CONSTANTS.MENSAJES.EMAIL_VERIFICACION_ENVIADO,
       };
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: AUTH_CONSTANTS.MENSAJES.ERROR_INESPERADO,
@@ -153,7 +191,7 @@ export class AuthService {
         success: true,
         mensaje: AUTH_CONSTANTS.MENSAJES.EMAIL_ENVIADO,
       };
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: AUTH_CONSTANTS.MENSAJES.ERROR_INESPERADO,
@@ -181,7 +219,7 @@ export class AuthService {
         mensaje: AUTH_CONSTANTS.MENSAJES.PASSWORD_ACTUALIZADO,
         redirect: AUTH_CONSTANTS.RUTAS.INICIAR_SESION,
       };
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: AUTH_CONSTANTS.MENSAJES.ERROR_INESPERADO,
@@ -204,7 +242,7 @@ export class AuthService {
         } : null,
         session: data.session,
       };
-    } catch (error) {
+    } catch {
       return { user: null, session: null };
     }
   }
@@ -228,7 +266,7 @@ export class AuthService {
         mensaje:
           'Se ha reenviado el email de verificación. Por favor, revisa tu bandeja de entrada.',
       };
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: 'Ocurrió un error al reenviar el email.',

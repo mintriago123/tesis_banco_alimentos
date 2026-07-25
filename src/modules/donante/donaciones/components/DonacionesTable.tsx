@@ -1,19 +1,19 @@
-import { Eye, Edit, Trash2, Clock, CheckCircle, XCircle, Calendar, Package } from 'lucide-react';
-import { Donacion } from '../types';
+import { Eye, Edit, Clock, CheckCircle, XCircle, Package } from 'lucide-react';
+import type { Donacion } from '../types';
 import { useDateFormatter } from '@/modules/shared/hooks/useDateFormatter';
 
 interface DonacionesTableProps {
   donaciones: Donacion[];
   onVerDetalle: (donacion: Donacion) => void;
   onEditar: (donacion: Donacion) => void;
-  onEliminar: (id: number) => void;
+  onCancelar: (donacion: Donacion) => void;
 }
 
 export function DonacionesTable({
   donaciones,
   onVerDetalle,
   onEditar,
-  onEliminar,
+  onCancelar,
 }: DonacionesTableProps) {
   const { formatDate } = useDateFormatter();
 
@@ -22,9 +22,7 @@ export function DonacionesTable({
     switch (estado) {
       case 'Pendiente':
         return base + 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'Recogida':
-        return base + 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'Entregada':
+      case 'Aprobada':
         return base + 'bg-green-100 text-green-800 border-green-300';
       case 'Cancelada':
         return base + 'bg-red-100 text-red-800 border-red-300';
@@ -37,9 +35,7 @@ export function DonacionesTable({
     switch (estado) {
       case 'Pendiente':
         return <Clock className="w-4 h-4" />;
-      case 'Recogida':
-        return <Calendar className="w-4 h-4" />;
-      case 'Entregada':
+      case 'Aprobada':
         return <CheckCircle className="w-4 h-4" />;
       case 'Cancelada':
         return <XCircle className="w-4 h-4" />;
@@ -49,37 +45,37 @@ export function DonacionesTable({
   };
 
   return (
-    <div className="bg-white shadow rounded-lg overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="min-w-full">
-          <thead className="bg-gray-50">
+    <div className="table-surface">
+      <div className="table-scroll">
+        <table className="table-base">
+          <thead className="table-head">
             <tr>
-              <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+              <th className="rounded-tl-2xl border-b border-slate-200 px-6 py-3 text-left text-xs uppercase tracking-wider text-slate-500">
                 Producto
               </th>
-              <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+              <th className="border-b border-slate-200 px-6 py-3 text-left text-xs uppercase tracking-wider text-slate-500">
                 Categoría
               </th>
-              <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+              <th className="border-b border-slate-200 px-6 py-3 text-left text-xs uppercase tracking-wider text-slate-500">
                 Cantidad
               </th>
-              <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+              <th className="border-b border-slate-200 px-6 py-3 text-left text-xs uppercase tracking-wider text-slate-500">
                 Estado
               </th>
-              <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+              <th className="border-b border-slate-200 px-6 py-3 text-left text-xs uppercase tracking-wider text-slate-500">
                 Fecha Disponible
               </th>
-              <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+              <th className="border-b border-slate-200 px-6 py-3 text-left text-xs uppercase tracking-wider text-slate-500">
                 Impacto
               </th>
-              <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+              <th className="rounded-tr-2xl border-b border-slate-200 px-6 py-3 text-left text-xs uppercase tracking-wider text-slate-500">
                 Acciones
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 bg-white">
+          <tbody className="table-body">
             {donaciones.map((donacion) => (
-              <tr key={donacion.id} className="hover:bg-gray-50">
+              <tr key={donacion.id} className="hover:bg-slate-50">
                 <td className="px-6 py-4">
                   <div className="flex items-center">
                     <Package className="w-8 h-8 text-gray-400 mr-3" />
@@ -123,6 +119,7 @@ export function DonacionesTable({
                       onClick={() => onVerDetalle(donacion)}
                       className="text-blue-600 hover:text-blue-800"
                       title="Ver detalles"
+                      aria-label={`Ver detalles de ${donacion.tipo_producto}`}
                     >
                       <Eye className="w-5 h-5" />
                     </button>
@@ -132,15 +129,17 @@ export function DonacionesTable({
                           onClick={() => onEditar(donacion)}
                           className="text-green-600 hover:text-green-800"
                           title="Editar"
+                          aria-label={`Editar donación de ${donacion.tipo_producto}`}
                         >
                           <Edit className="w-5 h-5" />
                         </button>
                         <button
-                          onClick={() => onEliminar(donacion.id)}
+                          onClick={() => onCancelar(donacion)}
                           className="text-red-600 hover:text-red-800"
-                          title="Eliminar"
+                          title="Cancelar donación"
+                          aria-label={`Cancelar donación de ${donacion.tipo_producto}`}
                         >
-                          <Trash2 className="w-5 h-5" />
+                          <XCircle className="w-5 h-5" />
                         </button>
                       </>
                     )}

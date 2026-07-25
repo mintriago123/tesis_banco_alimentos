@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { SupabaseClient, User } from '@supabase/supabase-js';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { PerfilService } from '../services/perfilService';
 import { UserProfile, PerfilFormData, MessageState } from '../types';
 
@@ -14,7 +14,7 @@ export function usePerfilData(supabase: SupabaseClient, user: User | null) {
     direccion: '',
   });
 
-  const service = new PerfilService(supabase);
+  const service = useMemo(() => new PerfilService(supabase), [supabase]);
 
   const loadProfile = useCallback(async () => {
     if (!user) {
@@ -34,15 +34,15 @@ export function usePerfilData(supabase: SupabaseClient, user: User | null) {
         direccion: data.direccion || '',
       });
       setMessage(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       setMessage({
         type: 'error',
-        text: error.message || 'Error al cargar los datos del perfil',
+      text: error instanceof Error ? error.message : 'Error al cargar los datos del perfil',
       });
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [service, user]);
 
   useEffect(() => {
     loadProfile();
@@ -77,16 +77,16 @@ export function usePerfilData(supabase: SupabaseClient, user: User | null) {
         setProfile(updatedProfile);
         setMessage({ type: 'success', text: 'Perfil actualizado correctamente' });
         setTimeout(() => setMessage(null), 3000);
-      } catch (error: any) {
+      } catch (error: unknown) {
         setMessage({
           type: 'error',
-          text: error.message || 'Error al actualizar el perfil',
+          text: error instanceof Error ? error.message : 'Error al actualizar el perfil',
         });
       } finally {
         setIsSaving(false);
       }
     },
-    [formData, user]
+    [formData, service, user]
   );
 
   return {

@@ -1,6 +1,11 @@
+import type { MotivoCancelacion } from '@/modules/shared/donaciones/types';
+
+export type { MotivoCancelacion } from '@/modules/shared/donaciones/types';
+
 export interface Donacion {
   id: number;
   user_id: string;
+  id_deposito?: string | null;
   nombre_donante: string;
   ruc_donante?: string;
   cedula_donante?: string;
@@ -24,24 +29,27 @@ export interface Donacion {
   observaciones?: string;
   impacto_estimado_personas?: number;
   impacto_equivalente?: string;
-  estado: 'Pendiente' | 'Recogida' | 'Entregada' | 'Cancelada';
+  estado: 'Pendiente' | 'Aprobada' | 'Cancelada';
   creado_en: string;
   actualizado_en: string;
   codigo_comprobante?: string;
+  motivo_cancelacion?: MotivoCancelacion | null;
+  observaciones_cancelacion?: string | null;
+  usuario_cancelacion_id?: string | null;
+  fecha_cancelacion?: string | null;
 }
 
 export interface DonacionEstadisticas {
   total: number;
   pendientes: number;
-  recogidas: number;
-  entregadas: number;
+  aprobadas: number;
   canceladas: number;
   impactoTotal: number;
 }
 
 export interface DonacionFormulario {
+  id_deposito: string;
   tipo_producto: string;
-  producto_personalizado_nombre: string;
   cantidad: string;
   unidad_id: string;
   fecha_vencimiento: string;

@@ -1,39 +1,24 @@
-import { DashboardCard } from './DashboardCard';
+import type { Donacion, DonacionEstadisticas } from '../../donaciones/types';
+import { DashboardRecentActivity } from './DashboardRecentActivity';
+import { DashboardQuickActions } from './DashboardQuickActions';
+import { DashboardStats } from './DashboardStats';
+import { DashboardWelcome } from './DashboardWelcome';
 
 interface DashboardCardsGridProps {
   nombre?: string;
+  donaciones: Donacion[];
+  stats: DonacionEstadisticas;
 }
 
-export function DashboardCardsGrid({ nombre }: DashboardCardsGridProps) {
+export function DashboardCardsGrid({ nombre, donaciones, stats }: DashboardCardsGridProps) {
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-2xl shadow">
-        <h2 className="text-xl font-semibold text-gray-800">
-          ¡Bienvenido, {nombre || 'Usuario'}!
-        </h2>
-        <p className="text-gray-600 mt-2">
-          Este es tu panel donde puedes gestionar tu perfil, reservas y más.
-        </p>
-      </div>
+    <div className="space-y-7">
+      <DashboardWelcome nombre={nombre} impactoTotal={stats.impactoTotal} />
+      <DashboardStats stats={stats} />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <DashboardCard
-          href="/donante/perfil"
-          title="Ver Perfil"
-          description="Consulta tu información personal."
-          bgColor="bg-blue-50"
-          hoverColor="hover:bg-blue-100"
-          textColor="text-blue-700"
-        />
-
-        <DashboardCard
-          href="/donante/donaciones"
-          title="Ver mis donaciones"
-          description="Consulta el estado de tus donaciones."
-          bgColor="bg-green-50"
-          hoverColor="hover:bg-green-100"
-          textColor="text-green-700"
-        />
+      <div className="grid gap-7 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)] lg:items-start">
+        <DashboardRecentActivity donaciones={donaciones} />
+        <DashboardQuickActions />
       </div>
     </div>
   );

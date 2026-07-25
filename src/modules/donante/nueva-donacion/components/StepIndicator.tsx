@@ -8,24 +8,48 @@ interface StepIndicatorProps {
 
 export default function StepIndicator({ currentStep, totalSteps, stepLabels }: StepIndicatorProps) {
   return (
-    <nav className="flex justify-center sm:justify-end space-x-2 sm:space-x-4">
-      {Array.from({ length: totalSteps }).map((_, index) => (
-        <div
-          key={index + 1}
-          className={`flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm font-medium ${
-            currentStep >= index + 1 ? 'text-blue-600' : 'text-gray-400'
-          }`}
-        >
-          <div
-            className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm ${
-              currentStep >= index + 1 ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-600'
-            }`}
-          >
-            {currentStep > index + 1 ? <Check className="w-3 h-3 sm:w-5 sm:h-5" /> : index + 1}
-          </div>
-          <span className="hidden sm:block">{stepLabels[index]}</span>
-        </div>
-      ))}
+    <nav aria-label="Progreso del formulario" className="w-full">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Paso {currentStep} de {totalSteps}
+      </p>
+      <ol className="flex w-full items-start">
+        {Array.from({ length: totalSteps }).map((_, index) => {
+          const stepNumber = index + 1;
+          const isCompleted = currentStep > stepNumber;
+          const isCurrent = currentStep === stepNumber;
+
+          return (
+            <li key={stepNumber} className="flex min-w-0 flex-1 items-start">
+              <div className="flex min-w-0 flex-col items-center gap-1.5 text-center">
+                <div
+                  aria-current={isCurrent ? 'step' : undefined}
+                  aria-label={`${stepLabels[index]}${isCurrent ? ', paso actual' : ''}`}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold transition-colors ${
+                    isCompleted || isCurrent
+                      ? 'border-emerald-600 bg-emerald-600 text-white'
+                      : 'border-slate-200 bg-white text-slate-500'
+                  }`}
+                >
+                  {isCompleted ? <Check className="h-4 w-4" aria-hidden="true" /> : stepNumber}
+                </div>
+                <span className={`max-w-[5.5rem] text-xs font-medium leading-tight ${
+                  isCompleted || isCurrent ? 'text-emerald-700' : 'text-slate-500'
+                }`}>
+                  {stepLabels[index]}
+                </span>
+              </div>
+              {stepNumber < totalSteps && (
+                <span
+                  aria-hidden="true"
+                  className={`mx-2 mt-4 h-px flex-1 ${
+                    isCompleted ? 'bg-emerald-600' : 'bg-slate-200'
+                  }`}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ol>
     </nav>
   );
 }

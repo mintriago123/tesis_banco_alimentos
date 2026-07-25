@@ -1,12 +1,13 @@
 import { useState, useCallback, useMemo } from 'react';
-import { SupabaseClient, User } from '@supabase/supabase-js';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { DonacionesService } from '../services/donacionesService';
-import { Donacion } from '../types';
+import type { Donacion, MotivoCancelacion } from '../types';
 
 export function useDonacionesData(supabase: SupabaseClient, user: User | null) {
   const [donaciones, setDonaciones] = useState<Donacion[]>([]);
   const [cargando, setCargando] = useState(false);
   const [mensaje, setMensaje] = useState('');
+  const [cancelandoId, setCancelandoId] = useState<number | null>(null);
 
   const service = useMemo(() => new DonacionesService(supabase), [supabase]);
 
@@ -19,36 +20,33 @@ export function useDonacionesData(supabase: SupabaseClient, user: User | null) {
     try {
       const data = await service.obtenerDonaciones(user.id);
       setDonaciones(data);
-    } catch (error: any) {
-      setMensaje(error.message || 'Error al cargar donaciones');
+    } catch (error: unknown) {
+      setMensaje(error instanceof Error ? error.message : 'Error al cargar donaciones');
       console.error('Error al cargar donaciones:', error);
     } finally {
       setCargando(false);
     }
   }, [user, service]);
 
-  const eliminarDonacion = useCallback(async (id: number): Promise<boolean> => {
-    console.log('🔍 Solicitando confirmación para eliminar donación ID:', id);
-    
-    if (!window.confirm('¿Estás seguro de que deseas eliminar esta donación?')) {
-      console.log('❌ Eliminación cancelada por el usuario');
-      return false;
-    }
-
-    console.log('✅ Usuario confirmó eliminación, procediendo...');
-    
+  const cancelarDonacion = useCallback(async (
+    id: number,
+    motivo: MotivoCancelacion,
+    observaciones?: string,
+  ): Promise<Donacion | null> => {
+    setCancelandoId(id);
     try {
-      await service.eliminarDonacion(id);
-      console.log('📝 Actualizando estado local después de eliminar');
-      setDonaciones(prev => prev.filter(d => d.id !== id));
-      setMensaje('Donación eliminada exitosamente');
+      const donacionCancelada = await service.cancelarDonacion(id, motivo, observaciones);
+      setDonaciones(prev => prev.map(d => d.id === id ? donacionCancelada : d));
+      setMensaje('Donación cancelada exitosamente');
       setTimeout(() => setMensaje(''), 3000);
-      return true;
-    } catch (error: any) {
-      console.error('💥 Error capturado al eliminar:', error);
-      setMensaje(error.message || 'Error al eliminar donación');
-      console.error('Error al eliminar:', error);
-      return false;
+      return donacionCancelada;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Error al cancelar donación';
+      setMensaje(message);
+      console.error('Error al cancelar donación', { donacionId: id, result: 'error' });
+      return null;
+    } finally {
+      setCancelandoId(null);
     }
   }, [service]);
 
@@ -61,8 +59,8 @@ export function useDonacionesData(supabase: SupabaseClient, user: User | null) {
       setMensaje('Donación actualizada exitosamente');
       setTimeout(() => setMensaje(''), 3000);
       return true;
-    } catch (error: any) {
-      setMensaje(error.message || 'Error al actualizar donación');
+    } catch (error: unknown) {
+      setMensaje(error instanceof Error ? error.message : 'Error al actualizar donación');
       console.error('Error al actualizar:', error);
       return false;
     }
@@ -72,8 +70,9 @@ export function useDonacionesData(supabase: SupabaseClient, user: User | null) {
     donaciones,
     cargando,
     mensaje,
+    cancelandoId,
     cargarDonaciones,
-    eliminarDonacion,
+    cancelarDonacion,
     actualizarDonacion,
   };
 }

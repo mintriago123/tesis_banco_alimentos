@@ -3,9 +3,9 @@
 // Manejo de alimentos con búsqueda y filtros
 // ============================================================================
 
-import { useState, useEffect, useCallback } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
-import { Alimento, LoadingState, UnidadAlimento } from '../types';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Alimento, LoadingState, UnidadAlimento } from '../types';
 import { AlimentosService } from '../services/alimentosService';
 
 interface UseAlimentosResult {
@@ -33,7 +33,7 @@ export function useAlimentos(
   const [busqueda, setBusqueda] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
 
-  const service = new AlimentosService(supabase);
+  const service = useMemo(() => new AlimentosService(supabase), [supabase]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -74,25 +74,18 @@ export function useAlimentos(
       setAlimentos(alimentosConUnidades);
       setAlimentosFiltrados(alimentosConUnidades);
 
-      // Obtener categorías solo de productos con stock
-      const { data: categoriasData, error: categoriasError } =
-        await service.getCategoriasConStock();
-
-      if (categoriasError || !categoriasData) {
-        // Si falla, extraer categorías de los alimentos obtenidos
-        const categoriasUnicas = [
-          ...new Set(alimentosConUnidades.map((a) => a.categoria)),
-        ].sort();
-        setCategorias(categoriasUnicas);
-      } else {
-        setCategorias(categoriasData);
-      }
+      // El listado ya está limitado a alimentos con stock; reutilizarlo
+      // evita una segunda consulta y mantiene filtros y opciones sincronizados.
+      const categoriasUnicas = [
+        ...new Set(alimentosConUnidades.map((alimento) => alimento.categoria).filter(Boolean)),
+      ].sort();
+      setCategorias(categoriasUnicas);
 
       setLoading('success');
     };
 
     fetchData();
-  }, [supabase]);
+  }, [supabase, service]);
 
   const filtrarAlimentos = useCallback(
     (termino: string, categoria: string = filtroCategoria) => {

@@ -6,7 +6,6 @@ import { useSupabase } from "@/app/components/SupabaseProvider";
 import {
   useIdentityValidation,
   useProfileForm,
-  useDateFormatter,
   useProfileUpdate,
 } from "@/modules/shared";
 import { validarCedulaEcuatoriana, validarRucEcuatoriano } from "@/lib/validaciones";
@@ -14,6 +13,8 @@ import { Loader2 } from "lucide-react";
 
 // Lazy load del componente de mapa para mejor rendimiento
 const MapboxLocationPicker = lazy(() => import("@/modules/shared/components/MapboxLocationPicker"));
+
+type DateFieldName = "fechaEmisionIngresada" | "fechaExpRepreIngresada";
 
 export default function CompletarPerfil() {
   const router = useRouter();
@@ -48,9 +49,10 @@ export default function CompletarPerfil() {
     setError,
     checkDuplicateIdentification,
     saveProfile,
+    ensureDonorWarehouse,
   } = useProfileUpdate(supabase);
 
-  const [identificacionValidada, setIdentificacionValidada] = useState(false);
+  const [, setIdentificacionValidada] = useState(false);
 
   // Limpia el formulario al cambiar tipo_persona
   const limpiarFormulario = (tipo: "Natural" | "Juridica") => {
@@ -68,15 +70,15 @@ export default function CompletarPerfil() {
 
     let dia = cleanValue.slice(0, 2);
     let mes = cleanValue.slice(2, 4);
-    let anio = cleanValue.slice(4, 8);
+    const anio = cleanValue.slice(4, 8);
 
     if (dia) {
-      let nDia = parseInt(dia, 10);
+      const nDia = parseInt(dia, 10);
       if (nDia > 31) dia = "31";
       if (nDia < 1 && dia.length === 2) dia = "01";
     }
     if (mes) {
-      let nMes = parseInt(mes, 10);
+      const nMes = parseInt(mes, 10);
       if (nMes > 12) mes = "12";
       if (nMes < 1 && mes.length === 2) mes = "01";
     }
@@ -85,7 +87,7 @@ export default function CompletarPerfil() {
     if (mes) nuevaFecha += "/" + mes;
     if (anio) nuevaFecha += "/" + anio;
 
-    updateField(name as any, nuevaFecha);
+    updateField(name as DateFieldName, nuevaFecha);
     setError(null);
   };
 
@@ -229,6 +231,17 @@ export default function CompletarPerfil() {
     }
     const userId = userData.user.id;
 
+    const { data: userRole, error: userRoleError } = await supabase
+      .from('usuarios')
+      .select('rol')
+      .eq('id', userId)
+      .single();
+
+    if (userRoleError) {
+      setError('No se pudo validar el tipo de usuario.');
+      return;
+    }
+
     // Validar que la cédula o RUC no se repita en otro usuario
     if (form.tipo_persona === "Natural") {
       const isDuplicate = await checkDuplicateIdentification('Natural', form.cedula, userId);
@@ -252,17 +265,22 @@ export default function CompletarPerfil() {
     });
 
     if (success) {
+      if (userRole?.rol === 'DONANTE') {
+        const warehouseCreated = await ensureDonorWarehouse();
+        if (!warehouseCreated) return;
+      }
+
       router.push("/auth/iniciar-sesion"); // Redirigir a iniciar sesión
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-100 via-blue-200 to-blue-400">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50 px-4 py-8">
       <form
-        className="w-full max-w-lg mx-auto bg-white rounded-2xl shadow-xl border border-blue-100 p-8 space-y-6"
+        className="w-full max-w-lg space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-lg sm:p-8"
         onSubmit={manejarEnvio}
       >
-        <h2 className="text-3xl font-extrabold text-center text-blue-800 mb-4">
+        <h2 className="mb-4 text-center text-3xl font-extrabold text-slate-950">
           Completa tu Perfil
         </h2>
 
@@ -277,8 +295,8 @@ export default function CompletarPerfil() {
               className={`flex flex-col items-center justify-center px-0 py-4 rounded-xl border-2 transition-all font-medium
                 ${
                   form.tipo_persona === "Natural"
-                    ? "bg-blue-600 text-white border-blue-700 shadow-lg"
-                    : "bg-white text-blue-900 border-blue-200 hover:bg-blue-50"
+                    ? "border-blue-700 bg-blue-700 text-white shadow-sm"
+                    : "border-blue-200 bg-white text-blue-900 hover:bg-blue-50"
                 }
               `}
               onClick={() => limpiarFormulario("Natural")}
@@ -291,8 +309,8 @@ export default function CompletarPerfil() {
               className={`flex flex-col items-center justify-center px-0 py-4 rounded-xl border-2 transition-all font-medium
                 ${
                   form.tipo_persona === "Juridica"
-                    ? "bg-blue-600 text-white border-blue-700 shadow-lg"
-                    : "bg-white text-blue-900 border-blue-200 hover:bg-blue-50"
+                    ? "border-blue-700 bg-blue-700 text-white shadow-sm"
+                    : "border-blue-200 bg-white text-blue-900 hover:bg-blue-50"
                 }
               `}
               onClick={() => limpiarFormulario("Juridica")}
@@ -325,7 +343,7 @@ export default function CompletarPerfil() {
             />
             <button
               type="button"
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold shadow hover:bg-blue-700 transition-all"
+              className="inline-flex items-center rounded-xl bg-blue-700 px-4 py-2 font-semibold text-white shadow-sm hover:bg-blue-800"
               disabled={consultando}
               onClick={consultarIdentificacion}
             >
@@ -545,7 +563,7 @@ export default function CompletarPerfil() {
 
         <button
           type="submit"
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow transition-all"
+          className="w-full rounded-xl bg-blue-700 py-3 font-semibold text-white shadow-sm hover:bg-blue-800"
         >
           Guardar
         </button>

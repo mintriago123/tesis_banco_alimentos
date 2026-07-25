@@ -3,7 +3,6 @@
  */
 
 import {
-  Calendar,
   User,
   FileText,
   TrendingUp,

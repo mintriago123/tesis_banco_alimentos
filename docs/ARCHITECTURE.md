@@ -8,21 +8,41 @@
 - [Capas de la Aplicación](#capas-de-la-aplicación)
 - [Middleware y Proxy](#middleware-y-proxy)
 - [Seguridad y Autenticación](#seguridad-y-autenticación)
+- [Estado Técnico Actual](#estado-técnico-actual)
 
 ---
 
 ## Visión General
 
-El Banco de Alimentos ULEAM está construido con una **arquitectura modular monolítica** que sigue los principios de **separación de responsabilidades** y **encapsulamiento**. La aplicación utiliza Next.js con App Router como framework principal, Supabase como backend, y TypeScript para garantizar type-safety en toda la aplicación.
+El Banco de Alimentos ULEAM está construido con una **arquitectura modular monolítica** que sigue una separación parcial de responsabilidades. La aplicación utiliza Next.js 16 con App Router como framework principal, Supabase como backend, React 19 para la interfaz y TypeScript para type-safety en la aplicación.
 
 ### Características Arquitectónicas Principales
 
 - **Modular Monolith**: Organización en módulos independientes por dominio de negocio
-- **Server-Side Rendering (SSR)**: Páginas renderizadas en el servidor para mejor SEO y performance
+- **App Router**: Rutas de página y API routes integradas en Next.js
+- **Server wrappers + Client Islands**: La mayoría de páginas siguen siendo cliente, pero perfil/configuración común ya usa wrappers Server Component que renderizan componentes interactivos cliente
 - **API Routes**: Endpoints REST integrados en Next.js
 - **Row Level Security (RLS)**: Seguridad a nivel de base de datos
 - **Middleware de Autenticación**: Control de acceso centralizado
 - **Arquitectura por Capas**: Separación clara entre presentación, lógica de negocio y datos
+
+### Fuente de verdad del inventario
+
+El dominio de inventario trabaja con `entradas_inventario` como agregado de
+lotes. Los lectores obtienen las entradas disponibles y las operaciones reciben
+`id_entrada` cuando deben afectar un lote concreto. El stock visible se calcula
+sumando `cantidad_disponible` por producto, depósito y unidad compatible; el
+descuento usa FEFO y devuelve las entradas afectadas para permitir una
+reversión exacta.
+
+`productos_donados` es únicamente catálogo e identidad del producto. No se
+utilizan saldos agregados ni `unidad_medida`; las unidades se resuelven por
+`unidad_id` contra `unidades`. La tabla legacy `inventario` no forma parte del
+contrato de aplicación.
+
+Las donaciones aprobadas crean una entrada mediante el trigger SQL. Bajas,
+descuentos y restauraciones modifican las entradas directamente; los detalles
+de movimiento conservan `id_entrada` para trazabilidad.
 
 ---
 
@@ -109,6 +129,8 @@ graph TB
 
 La aplicación implementa un **Modular Monolith**, que combina las ventajas de un monolito (simplicidad de despliegue, transacciones directas) con la organización modular de microservicios.
 
+No implementa Clean Architecture estricta. Los servicios de `src/modules` dependen directamente de Supabase, notificaciones, email, comprobantes y utilidades globales. Esta decisión reduce complejidad inicial, pero dificulta pruebas unitarias y refactors seguros en flujos críticos.
+
 #### Características del Patrón:
 
 1. **Módulos Independientes por Dominio**
@@ -130,10 +152,10 @@ La aplicación implementa un **Modular Monolith**, que combina las ventajas de u
    ```
 
 3. **Domain-Driven Design (DDD) Elements**
-   - Agregados: `donaciones`, `solicitudes`, `inventario`
-   - Entidades: `usuarios`, `productos_donados`, `movimientos`
+   - Agregados: `donaciones`, `solicitudes`, `entradas_inventario`
+   - Entidades: `usuarios`, `productos_donados`, `entradas`, `movimientos`
    - Value Objects: Unidades de medida, estados, roles
-   - Servicios de Dominio: Conversión de unidades, cálculo de impacto
+   - Servicios de Dominio: Resolución de unidades, cálculo de impacto y reglas FEFO
 
 ---
 
@@ -141,7 +163,7 @@ La aplicación implementa un **Modular Monolith**, que combina las ventajas de u
 
 ### 📁 `/src/app` - App Router (Presentación y Rutas)
 
-La carpeta `app` sigue la convención del **App Router de Next.js 15**, donde la estructura de carpetas define las rutas de la aplicación.
+La carpeta `app` sigue la convención del **App Router de Next.js 16**, donde la estructura de carpetas define las rutas de la aplicación.
 
 ```
 src/app/
@@ -198,8 +220,8 @@ src/app/
 **Principios de `app/`:**
 - **Presentación pura**: Solo componentes de UI y páginas
 - **Rutas protegidas**: Verificación de autenticación y roles
-- **Server Components**: Por defecto, para mejor performance
-- **Client Components**: Marcados con `'use client'` cuando necesario
+- **Estado actual**: La mayoría de páginas son Client Components
+- **Objetivo recomendado**: Usar Server Components para páginas de lectura y dejar Client Components para formularios, filtros, mapas, modales y eventos del navegador
 
 ---
 
@@ -269,7 +291,7 @@ src/modules/
 - **Separación de responsabilidades**: Services, Hooks, Types, Utils separados
 - **Reutilización**: Código compartido en `shared/`
 - **Type Safety**: TypeScript types exportados desde cada módulo
-- **Testeable**: Lógica desacoplada de la UI
+- **Testabilidad incremental**: La separación por módulos se complementa con Vitest + React Testing Library para autorización, API routes y casos de uso críticos
 
 ---
 
@@ -280,6 +302,7 @@ src/lib/
 ├── supabase.ts                # Cliente Supabase (client-side)
 ├── supabase-server.ts         # Cliente Supabase (server-side)
 ├── supabase-admin.ts          # Cliente Supabase (admin)
+├── server-auth.ts             # Autorización server-side para API routes
 ├── constantes.ts              # Constantes globales
 ├── validaciones.ts            # Esquemas de validación
 ├── dateUtils.ts               # Utilidades de fechas
@@ -345,6 +368,7 @@ export default async function DonanteDashboard() {
 - Orquestar llamadas a servicios de negocio
 - Manejar autenticación y autorización
 - Transformar datos entre formatos (DTO ↔ Domain)
+- Validar sesión y rol dentro de handlers sensibles, no solo desde `proxy.ts`
 
 **Tecnologías**:
 - Next.js API Routes
@@ -383,6 +407,24 @@ export async function POST(request: Request) {
 **Tecnologías**:
 - TypeScript classes y funciones
 - Custom React Hooks
+
+**Patrón actual en solicitudes**:
+
+`createSolicitudesActionService()` actúa como fachada pública para no romper hooks ni páginas. Internamente delega en casos de uso y servicios especializados:
+
+```
+solicitudesActionService.ts
+├── use-cases/approveSolicitud.ts
+├── use-cases/rejectSolicitud.ts
+├── use-cases/deliverSolicitud.ts
+├── use-cases/revertSolicitud.ts
+├── use-cases/processPartialDelivery.ts
+├── solicitudesInventoryService.ts
+├── solicitudesMovementService.ts
+└── solicitudesNotificationService.ts
+```
+
+Los casos de uso coordinan reglas de negocio. Los servicios internos encapsulan inventario, movimientos y notificaciones.
 
 **Ejemplo**:
 ```typescript
@@ -439,7 +481,8 @@ export async function createServerSupabaseClient() {
   
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
       cookies: {
         get(name: string) {
@@ -457,7 +500,7 @@ export async function createServerSupabaseClient() {
 
 ### 📡 `proxy.ts` - Middleware de Autenticación y Autorización
 
-El archivo `proxy.ts` actúa como un **Middleware de Next.js** que intercepta todas las peticiones antes de que lleguen a las páginas o API routes.
+El archivo `proxy.ts` actúa como un **Middleware de Next.js** que intercepta las peticiones no estáticas antes de que lleguen a las páginas o API routes. Las páginas privadas se protegen aquí; las API routes sensibles también validan autorización dentro de cada handler.
 
 #### Funcionalidades Principales:
 
@@ -468,7 +511,7 @@ El archivo `proxy.ts` actúa como un **Middleware de Next.js** que intercepta to
 
 2. **Autorización por Rol**
    - Verifica que el usuario tenga el rol correcto para acceder a una ruta
-   - Redirige al dashboard correspondiente si intenta acceder a una ruta no autorizada
+   - Redirige a login con `error=forbidden` si intenta acceder a una ruta de otro rol
    - Roles: `ADMINISTRADOR`, `OPERADOR`, `DONANTE`, `SOLICITANTE`
 
 3. **Validación de Estado de Usuario**
@@ -477,8 +520,12 @@ El archivo `proxy.ts` actúa como un **Middleware de Next.js** que intercepta to
    - Comprueba perfiles completos
 
 4. **Gestión de Rutas Públicas**
-   - Define rutas que no requieren autenticación
-   - Permite acceso a `/auth/*`, `/api/public/*`, etc.
+   - Define rutas que no requieren autenticación: `/`, `/contribuyentes` y páginas públicas de `/auth`
+   - Usa match exacto o por segmento para evitar que una ruta similar quede pública por accidente
+
+5. **Páginas Privadas Compartidas**
+   - Protege `/perfil/actualizar`, `/notificaciones`, `/configuracion-notificaciones` y `/comprobante/*`
+   - Requiere sesión, usuario activo y perfil completo
 
 #### Flujo del Middleware:
 
@@ -502,7 +549,7 @@ sequenceDiagram
         P-->>U: Página renderizada
     else Rol incorrecto
         M->>M: Usuario no autorizado
-        M-->>U: Redirect a dashboard correcto
+        M-->>U: Redirect a login con error=forbidden
     else Usuario bloqueado
         M->>S: Cerrar sesión
         M-->>U: Redirect a login con error
@@ -516,39 +563,29 @@ sequenceDiagram
 export async function proxy(request: NextRequest) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  
+
   const isAuthenticated = !!user;
   const { pathname } = request.nextUrl;
-  
-  // Verificar si es ruta pública
-  const esRutaPublica = RUTAS_PUBLICAS.some(ruta => pathname.startsWith(ruta));
-  if (esRutaPublica) return NextResponse.next();
-  
-  // Para rutas protegidas, verificar autenticación
-  if (!isAuthenticated) {
-    return NextResponse.redirect(new URL('/auth/iniciar-sesion', request.url));
+
+  if (isCompletarPerfilPath(pathname)) {
+    // Permite completar perfil, pero redirige si ya está completo.
+    return handleProfileCompletionRoute(request, supabase, user);
   }
-  
-  // Obtener perfil y validar autorización
-  const { data: perfil } = await supabase
-    .from('usuarios')
-    .select('estado, rol')
-    .eq('id', user.id)
-    .single();
-  
-  // Validar estado
-  if (perfil.estado === 'bloqueado' || perfil.estado === 'desactivado') {
-    await supabase.auth.signOut();
-    return NextResponse.redirect(new URL('/auth/iniciar-sesion?error=blocked', request.url));
+
+  if (isAnyRouteMatch(pathname, RUTAS_PUBLICAS)) {
+    return NextResponse.next();
   }
-  
-  // Validar autorización por rol
-  if (pathname.startsWith('/admin') && perfil.rol !== 'ADMINISTRADOR') {
-    return NextResponse.redirect(new URL(`/${perfil.rol.toLowerCase()}/dashboard`, request.url));
+
+  const roleAccess = getRoleAccessForPath(pathname);
+  const isPrivatePage =
+    pathname === '/dashboard' ||
+    isAnyRouteMatch(pathname, SHARED_PRIVATE_ROUTES) ||
+    roleAccess;
+
+  if (isPrivatePage) {
+    return protectPrivateRoute(request, supabase, user, roleAccess?.role);
   }
-  
-  // ... validaciones similares para otros roles
-  
+
   return NextResponse.next();
 }
 ```
@@ -615,6 +652,69 @@ const ROLES = {
 } as const;
 ```
 
+### 4. Autorización en API Routes Sensibles
+
+El middleware protege rutas de página, pero las API routes sensibles deben validar autorización dentro del handler. Este patrón es obligatorio cuando una ruta usa `SUPABASE_SERVICE_ROLE_KEY`.
+
+Helper central: `src/lib/server-auth.ts`.
+
+Funciones principales:
+
+- `getAuthenticatedUser(supabase)`: devuelve usuario autenticado o `401`.
+- `getActiveUserProfile(adminSupabase, userId)`: consulta `usuarios` y exige `estado === 'activo'`.
+- `requireRole(profile, roles)`: devuelve `403` si el rol no está permitido.
+- `requireActiveUserRole(supabase, roles)`: combina sesión, perfil activo y rol permitido para handlers server-side.
+- `sanitizeAdminUserPatchUpdates(updates)`: aplica whitelist y valida `rol`/`estado`.
+
+Ejemplo aplicado:
+
+```typescript
+const context = await requireActiveAdmin();
+if ('response' in context) {
+  return context.response;
+}
+```
+
+Rutas que usan este patrón:
+
+- `/api/admin/usuarios`: valida sesión, perfil activo y rol `ADMINISTRADOR` antes de crear o actualizar usuarios con service role.
+- `/api/notificaciones`: valida sesión y perfil activo, acepta solo `{ event, entityId }`, y delega en `notificationEventDispatcher` para autorizar el evento y construir la notificación server-side antes de usar service role.
+- `/api/admin/cancelaciones-donaciones`: exige `ADMINISTRADOR` activo.
+- `/api/operador/bajas`, `/api/operador/bajas/estadisticas` y `/api/operador/alertas-vencimiento`: exigen `ADMINISTRADOR` u `OPERADOR` activo.
+- `/api/comprobante/[codigo]`: exige usuario activo y luego valida rol administrativo u ownership del comprobante.
+- `/api/proxy/consultar-cedula` y `/api/proxy/consultar-ruc`: exigen sesión autenticada, pero no perfil completo porque se usan durante el alta/completado de perfil.
+
+El cliente no puede escoger `titulo`, `mensaje`, `destinatarioId`, `rolDestinatario`, `email`, `metadatos` ni `urlAccion` para `/api/notificaciones`. El servidor deriva esos campos desde la entidad de negocio y el evento permitido.
+
+---
+
+## Pruebas Automatizadas
+
+El proyecto usa Vitest + React Testing Library.
+
+Scripts:
+
+```bash
+pnpm test
+pnpm test:coverage
+pnpm test:watch
+```
+
+Configuración:
+
+- `vitest.config.ts`
+- `src/test/setup.ts`
+
+Cobertura inicial:
+
+- Helpers de autorización y whitelist de usuarios.
+- `POST` y `PATCH` de `/api/admin/usuarios` con mocks de Supabase.
+- `POST` de `/api/notificaciones` con payload por evento, rechazo de campos sensibles y mapeo de errores del dispatcher.
+- Autorización de APIs operativas y proxies de consulta de identidad.
+- `notificationEventDispatcher` para autorización por rol, validación de entidad y construcción segura de notificaciones.
+- Casos de uso de solicitudes con mocks de inventario, movimientos y notificaciones.
+- Componente compartido `UserSettingsContent`.
+
 ### 4. Estados de Usuario
 
 ```typescript
@@ -628,15 +728,32 @@ type EstadoUsuario = 'activo' | 'bloqueado' | 'desactivado';
 
 ---
 
+## Estado Técnico Actual
+
+Estado verificado en la rama `refactoring_clean_code`:
+
+- `pnpm lint` pasa correctamente.
+- `pnpm build` pasa correctamente con Next.js 16.x.
+- `pnpm test` pasa correctamente con Vitest.
+- `pnpm test:coverage` pasa correctamente y genera reporte V8 en `coverage/`.
+- La arquitectura real es modular monolítica con capas, no Clean Architecture estricta.
+- El flujo de solicitudes se separó en fachada, casos de uso y servicios internos.
+- La protección de rutas de página está centralizada en `src/proxy.ts`; las API routes sensibles validan sesión, perfil activo y rol dentro del handler.
+- 35 de 43 páginas App Router usan `'use client'`; perfil/configuración común ya aplica Server Component + Client Island.
+
+Para el detalle de riesgos y prioridades, ver [CODE_QUALITY_REFACTORING.md](./CODE_QUALITY_REFACTORING.md).
+
+---
+
 ## Conclusión
 
-La arquitectura del Banco de Alimentos ULEAM está diseñada para ser:
+La arquitectura del Banco de Alimentos ULEAM permite mantener el proyecto como un monolito modular:
 
 - ✅ **Mantenible**: Código organizado y modular
 - ✅ **Escalable**: Fácil agregar nuevos módulos o extraer a microservicios
-- ✅ **Segura**: Múltiples capas de seguridad
-- ✅ **Testeable**: Lógica de negocio desacoplada
+- ✅ **Segura por capas**: RLS, proxy y autorización server-side en endpoints administrativos intervenidos
+- ✅ **Testeable incrementalmente**: TypeScript, servicios modulares y suite Vitest inicial
 - ✅ **Type-Safe**: TypeScript en toda la aplicación
-- ✅ **Performante**: SSR, caching, y optimizaciones de Next.js
+- ⚠️ **Performance mejorable**: Next.js permite SSR y Server Components; quedan dashboards/reportes client-heavy por migrar
 
-Esta arquitectura permite al equipo de desarrollo trabajar de forma independiente en diferentes módulos mientras mantiene la coherencia del sistema.
+La recomendación actual es continuar el refactor incremental en API routes restantes, donaciones/reportes y páginas de lectura.

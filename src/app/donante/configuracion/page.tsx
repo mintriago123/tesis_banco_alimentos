@@ -1,12 +1,14 @@
-'use client';
+import DashboardLayout from '@/app/components/DashboardLayout';
+import { UserSettingsContent } from '@/modules/shared/components/UserSettings';
 
-import { DashboardLayout } from '@/app/components';
-import { UserSettings } from '@/modules/shared';
-
-export default function UserConfiguracionPage() {
+export default function DonanteConfiguracionPage() {
   return (
-    <DashboardLayout title="Configuración de Usuario" description="Gestiona tus preferencias y seguridad">
-      <UserSettings />
+    <DashboardLayout
+      requiredRole="DONANTE"
+      title="Configuración de Usuario"
+      description="Gestiona tus preferencias y seguridad"
+    >
+      <UserSettingsContent variant="donante" showHeader={false} />
     </DashboardLayout>
   );
 }

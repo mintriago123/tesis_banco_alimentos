@@ -20,7 +20,6 @@ interface MapboxStaticMapProps {
 export default function MapboxStaticMap({
   latitude,
   longitude,
-  address,
   className = '',
   zoom = 15,
   height = '200px',

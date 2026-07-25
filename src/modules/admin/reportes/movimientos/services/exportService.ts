@@ -11,26 +11,28 @@ import ExcelJS from 'exceljs';
 import type { 
   MovementItem, 
   MovementSummary, 
-  ExportTheme, 
   WorksheetMerge, 
   RowRegistrationOptions 
 } from '../types';
 import { 
   EXPORT_HEADERS, 
   EXPORT_COLUMN_WIDTHS, 
-  EXPORT_THEME, 
   EXPORT_CONFIG, 
   EXCEL_ROW_HEIGHTS, 
   MOVEMENT_TYPE_LABELS 
 } from '../constants';
 import { formatDate, formatNumber, padRowToColumnCount, generateExportFilename } from '../utils/formatters';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 /**
  * Logger especializado para el servicio de exportación
  */
 const exportLogger = {
   info: (message: string, details?: unknown) => {
-    console.info(`[ExportService] ${message}`, details);
+    if (isDevelopment) {
+      console.info(`[ExportService] ${message}`, details);
+    }
   },
   error: (message: string, error?: unknown) => {
     console.error(`[ExportService] ${message}`, error);
@@ -53,11 +55,9 @@ interface DataRowInfo {
  * Encapsula toda la lógica de generación de archivos Excel profesionales
  */
 export class ExportService {
-  private readonly theme: ExportTheme;
   private readonly columnCount: number;
 
-  constructor(theme: ExportTheme = EXPORT_THEME) {
-    this.theme = theme;
+  constructor() {
     this.columnCount = EXPORT_HEADERS.length;
   }
 
@@ -500,9 +500,8 @@ export class ExportService {
 /**
  * Factory function para crear instancias del servicio de exportación
  * 
- * @param theme - Tema personalizado opcional para la exportación
  * @returns Instancia configurada del servicio de exportación
  */
-export const createExportService = (theme?: ExportTheme): ExportService => {
-  return new ExportService(theme);
+export const createExportService = (): ExportService => {
+  return new ExportService();
 };

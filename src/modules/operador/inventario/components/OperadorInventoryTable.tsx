@@ -79,7 +79,7 @@ const formatDiasParaVencer = (dias: number | undefined): string => {
   return `${dias} días`;
 };
 
-const getEstadoCaducidadText = (estado: string | undefined, dias: number | undefined): string => {
+const getEstadoCaducidadText = (estado: string | undefined): string => {
   switch (estado) {
     case 'vencido': return 'VENCIDO';
     case 'proximo': return 'PRÓXIMO A VENCER';
@@ -130,11 +130,11 @@ const OperadorInventoryTable = ({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm">
-      <div className="overflow-x-auto">
+    <div className="table-surface">
+      <div className="table-scroll">
         <div className="max-h-[70vh] overflow-y-auto">
-          <table className="min-w-full">
-            <thead className="sticky top-0 z-10 bg-gray-50">
+          <table className="table-base">
+            <thead className="table-head sticky top-0 z-10">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Producto
@@ -156,16 +156,16 @@ const OperadorInventoryTable = ({
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="table-body">
               {items.map(item => {
                 const stockLevel = item.stock_status || 'normal';
                 const estadoCaducidad = item.producto.estado_caducidad || 'vigente';
-                const isProcessing = processingId === item.id_inventario;
+                const isProcessing = processingId === item.id_entrada;
                 const necesitaAtencion = item.necesita_atencion;
 
                 return (
                   <tr 
-                    key={item.id_inventario} 
+                    key={item.id_entrada} 
                     className={`transition-colors duration-150 hover:bg-slate-50 ${
                       necesitaAtencion ? 'bg-red-25 border-l-4 border-l-red-400' : ''
                     }`}
@@ -191,7 +191,7 @@ const OperadorInventoryTable = ({
                           <div className="text-xs text-gray-400">
                             Unidad: {item.producto.unidad_simbolo 
                               ? `${item.producto.unidad_nombre} (${item.producto.unidad_simbolo})`
-                              : item.producto.unidad_medida || 'No especificada'}
+                              : item.producto.unidad_nombre || 'No especificada'}
                           </div>
                         </div>
                       </div>
@@ -219,7 +219,7 @@ const OperadorInventoryTable = ({
                         <span>
                           {formatQuantity(item.cantidad_disponible)} {
                             item.producto.unidad_simbolo || 
-                            item.producto.unidad_medida || 
+                            item.producto.unidad_nombre || 
                             'unidades'
                           }
                         </span>
@@ -233,7 +233,7 @@ const OperadorInventoryTable = ({
                     <td className="px-4 py-4 whitespace-nowrap">
                       <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full border text-xs font-medium ${ESTADO_CADUCIDAD_STYLES[estadoCaducidad]}`}>
                         {ESTADO_CADUCIDAD_ICONS[estadoCaducidad]}
-                        <span>{getEstadoCaducidadText(estadoCaducidad, item.producto.dias_para_vencer)}</span>
+                            <span>{getEstadoCaducidadText(estadoCaducidad)}</span>
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
                         {formatDiasParaVencer(item.producto.dias_para_vencer)}

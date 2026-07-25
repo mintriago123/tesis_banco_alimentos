@@ -11,9 +11,9 @@ import { SYSTEM_MESSAGES } from '../constants';
 interface UseSolicitudActionsResult {
   processingId?: string;
   lastError?: string;
-  updateEstado: (solicitud: Solicitud, nuevoEstado: 'aprobada' | 'rechazada' | 'entregada', comentario?: string, motivoRechazo?: string, operadorId?: string) => Promise<SolicitudActionResponse>;
+  updateEstado: (solicitud: Solicitud, nuevoEstado: 'aprobada' | 'rechazada' | 'entregada', comentario?: string, motivoRechazo?: string, operadorId?: string, codigoComprobanteVerificado?: string, depositoId?: string, cantidadAprobada?: number) => Promise<SolicitudActionResponse>;
   revertir: (solicitudId: string) => Promise<SolicitudActionResponse>;
-  procesarDonacion: (solicitud: Solicitud, cantidad: number, porcentaje: number, comentario?: string, operadorId?: string) => Promise<SolicitudActionResponse>;
+  procesarDonacion: (solicitud: Solicitud, cantidad: number, porcentaje: number, comentario?: string, operadorId?: string, depositoId?: string) => Promise<SolicitudActionResponse>;
 }
 
 export const useSolicitudActions = (supabaseClient: SupabaseClient): UseSolicitudActionsResult => {
@@ -25,12 +25,30 @@ export const useSolicitudActions = (supabaseClient: SupabaseClient): UseSolicitu
     [supabaseClient]
   );
 
-  const updateEstado = useCallback(async (solicitud: Solicitud, nuevoEstado: 'aprobada' | 'rechazada' | 'entregada', comentario?: string, motivoRechazo?: string, operadorId?: string) => {
+  const updateEstado = useCallback(async (
+    solicitud: Solicitud,
+    nuevoEstado: 'aprobada' | 'rechazada' | 'entregada',
+    comentario?: string,
+    motivoRechazo?: string,
+    operadorId?: string,
+    codigoComprobanteVerificado?: string,
+    depositoId?: string,
+    cantidadAprobada?: number
+  ) => {
     setProcessingId(solicitud.id);
     setLastError(undefined);
 
     try {
-      const result = await service.updateSolicitudEstado(solicitud, nuevoEstado, comentario, motivoRechazo, operadorId);
+      const result = await service.updateSolicitudEstado(
+        solicitud,
+        nuevoEstado,
+        comentario,
+        motivoRechazo,
+        operadorId,
+        codigoComprobanteVerificado,
+        depositoId,
+        cantidadAprobada
+      );
 
       if (result.success && result.data) {
         return result.data;
@@ -75,13 +93,14 @@ export const useSolicitudActions = (supabaseClient: SupabaseClient): UseSolicitu
     cantidad: number,
     porcentaje: number,
     comentario?: string,
-    operadorId?: string
+    operadorId?: string,
+    depositoId?: string
   ) => {
     setProcessingId(solicitud.id);
     setLastError(undefined);
 
     try {
-      const result = await service.procesarDonacion(solicitud, cantidad, porcentaje, comentario, operadorId);
+      const result = await service.procesarDonacion(solicitud, cantidad, porcentaje, comentario, operadorId, depositoId);
 
       if (result.success && result.data) {
         return result.data;

@@ -28,6 +28,7 @@ interface MapboxLocationPickerProps {
     longitude: number;
   }) => void;
   placeholder?: string;
+  ariaLabel?: string;
   className?: string;
 }
 
@@ -37,6 +38,7 @@ export default function MapboxLocationPicker({
   initialLongitude = -79.8891,
   onLocationSelect,
   placeholder = 'Buscar dirección...',
+  ariaLabel = 'Buscar dirección en el mapa',
   className = '',
 }: MapboxLocationPickerProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -284,6 +286,7 @@ export default function MapboxLocationPicker({
             onChange={handleSearchChange}
             onFocus={() => searchResults.length > 0 && setShowResults(true)}
             placeholder={placeholder}
+            aria-label={ariaLabel}
             className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-all"
           />
           {searchQuery && (

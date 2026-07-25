@@ -33,7 +33,37 @@ El sistema utiliza **PostgreSQL** como motor de base de datos, gestionado a trav
 - **Supabase**: Backend-as-a-Service
 - **UUID**: Para claves primarias
 - **JSONB**: Para metadatos flexibles
-- **Extensions**: pg_graphql, pgcrypto, uuid-ossp
+- **Extensions**: pgcrypto, uuid-ossp, pg_stat_statements, supabase_vault
+
+## Migraciones y Arranque Desde Cero
+
+La fuente oficial para crear una base nueva es `supabase/migrations/`.
+Los archivos se ejecutan en orden ascendente por nombre e incluyen:
+
+- Esquema completo, funciones, triggers, vistas, constraints e índices.
+- RLS y grants endurecidos para `anon`, `authenticated` y `service_role`.
+- Seed de catálogo base: tipos de magnitud, unidades, conversiones, alimentos, relaciones alimento-unidad y depósitos iniciales.
+- Flujo de solicitudes de alta de alimentos y hardening final detectado con Supabase MCP Advisor.
+
+`supabase/migrations/` es la única fuente SQL versionada para instalaciones
+nuevas y actualizaciones de la base de datos.
+
+### Modelo vigente de inventario
+
+`entradas_inventario` es la única fuente de stock. Cada fila representa una
+entrada/lote independiente, conserva `donacion_id`, depósito, unidad,
+vencimiento y cantidades original/disponible. Las consultas y operaciones usan
+`id_entrada`, suman las entradas disponibles y aplican FEFO por entrada.
+
+`productos_donados` conserva únicamente la identidad y el catálogo del
+producto, con `unidad_id` como referencia a `unidades`; no almacena saldo.
+La tabla agregada `inventario`, `productos_donados.cantidad` y
+`productos_donados.unidad_medida` se retiran en la migración
+`20260724220103_consolidate_entries_inventory_source.sql`. Las migraciones
+anteriores se conservan como historial y no representan el contrato vigente.
+
+La preferencia `usuarios.recibir_notificaciones` continúa activa para el correo
+global. `notificaciones_usuario` conserva lectura y ocultamiento por usuario.
 
 ---
 
@@ -45,7 +75,9 @@ erDiagram
     usuarios ||--o{ solicitudes : "realiza"
     usuarios ||--o{ productos_donados : "dona"
     usuarios ||--o{ notificaciones : "recibe"
+    usuarios ||--o{ notificaciones_usuario : "gestiona estado"
     usuarios ||--o{ bajas_productos : "registra"
+    notificaciones ||--o{ notificaciones_usuario : "tiene estado"
     
     donaciones }o--|| alimentos : "pertenece a"
     donaciones }o--|| unidades : "usa"
@@ -56,12 +88,12 @@ erDiagram
     
     productos_donados }o--|| alimentos : "es tipo de"
     productos_donados }o--|| unidades : "medido en"
-    productos_donados ||--o{ inventario : "está en"
+    productos_donados ||--o{ entradas_inventario : "identifica"
     productos_donados ||--o{ bajas_productos : "puede tener"
     productos_donados ||--o{ movimiento_inventario_detalle : "participa en"
     
-    inventario }o--|| depositos : "almacenado en"
-    inventario ||--o{ bajas_productos : "genera"
+    entradas_inventario }o--|| depositos : "almacenada en"
+    entradas_inventario ||--o{ bajas_productos : "genera"
     
     movimiento_inventario_cabecera ||--o{ movimiento_inventario_detalle : "contiene"
     movimiento_inventario_cabecera }o--|| usuarios : "realizado por (donante)"
@@ -122,19 +154,25 @@ erDiagram
         uuid id_producto PK
         uuid id_usuario FK
         text nombre_producto
-        numeric cantidad
         bigint alimento_id FK
         bigint unidad_id FK
         timestamp fecha_caducidad
         timestamp fecha_donacion
     }
     
-    inventario {
-        uuid id_inventario PK
+    entradas_inventario {
+        uuid id_entrada PK
+        integer donacion_id FK
+        uuid donante_id FK
         uuid id_deposito FK
         uuid id_producto FK
+        bigint unidad_id FK
+        numeric cantidad_original
         numeric cantidad_disponible
-        timestamp fecha_actualizacion
+        date fecha_vencimiento
+        timestamp fecha_ingreso
+        text estado
+        boolean es_legacy
     }
     
     depositos {
@@ -190,14 +228,26 @@ erDiagram
         text mensaje
         varchar tipo
         varchar categoria
-        boolean leida
         timestamp fecha_creacion
+        timestamp expira_en
+    }
+
+    notificaciones_usuario {
+        uuid id PK
+        uuid notificacion_id FK
+        uuid usuario_id FK
+        boolean leida
+        boolean oculta
+        timestamp fecha_lectura
+        timestamp fecha_ocultacion
+        timestamp created_at
+        timestamp updated_at
     }
     
     bajas_productos {
         uuid id_baja PK
         uuid id_producto FK
-        uuid id_inventario FK
+        uuid id_entrada FK
         uuid usuario_responsable_id FK
         numeric cantidad_baja
         text motivo_baja
@@ -284,8 +334,8 @@ erDiagram
 - `idx_donaciones_codigo_comprobante` en `codigo_comprobante`
 
 **Triggers**:
-- `trigger_crear_producto`: Crea producto en inventario cuando estado = 'Entregada'
-- `trigger_donacion_notificacion`: Crea notificaciones automáticas
+- `trigger_crear_producto`: Crea producto en inventario cuando estado = 'Aprobada'
+- Las notificaciones de estado se generan desde la capa de aplicación mediante `/api/notificaciones` y eventos controlados.
 
 ---
 
@@ -322,14 +372,15 @@ erDiagram
 - `idx_solicitudes_unidad_id` en `unidad_id`
 - `idx_solicitudes_codigo_comprobante` en `codigo_comprobante`
 
-**Triggers**:
-- `trigger_solicitud_notificacion`: Crea notificaciones automáticas
+**Notificaciones**:
+- Los cambios de estado relevantes disparan `/api/notificaciones` desde la capa de aplicación con eventos controlados.
 
 ---
 
 ### 📦 productos_donados
 
-**Propósito**: Catálogo de productos donados disponibles
+**Propósito**: Catálogo e identidad de los productos donados. No representa
+stock ni acumula cantidades.
 
 | Columna | Tipo | Descripción | Restricciones |
 |---------|------|-------------|---------------|
@@ -337,11 +388,8 @@ erDiagram
 | id_usuario | uuid | ID del donante original | FK a usuarios |
 | nombre_producto | text | Nombre del producto | |
 | descripcion | text | Descripción del producto | |
-| cantidad | numeric | Cantidad total | |
 | alimento_id | bigint | Tipo de alimento | FK a alimentos |
 | unidad_id | bigint | Unidad de medida | FK a unidades |
-| unidad_medida | text | Nombre de la unidad (legacy) | |
-| fecha_caducidad | timestamp | Fecha de vencimiento | |
 | fecha_donacion | timestamp | Cuándo se donó | DEFAULT now() |
 
 **Índices**:
@@ -355,24 +403,34 @@ erDiagram
 
 ---
 
-### 📊 inventario
+### 📦 entradas_inventario
 
-**Propósito**: Stock disponible de productos por depósito
+**Propósito**: Fuente única de inventario. Cada registro es una entrada/lote
+independiente, incluso cuando varias donaciones usan el mismo producto.
 
 | Columna | Tipo | Descripción | Restricciones |
 |---------|------|-------------|---------------|
-| id_inventario | uuid | Identificador único | PK, DEFAULT gen_random_uuid() |
+| id_entrada | uuid | Identificador de la entrada/lote | PK, DEFAULT gen_random_uuid() |
+| donacion_id | bigint | Donación de origen | FK a donaciones, UNIQUE cuando no es NULL |
+| donante_id | uuid | Donante de origen | FK a usuarios |
 | id_deposito | uuid | Depósito donde está | FK a depositos, NOT NULL |
 | id_producto | uuid | Producto almacenado | FK a productos_donados, NOT NULL |
-| cantidad_disponible | numeric | Stock actual | DEFAULT 0, NOT NULL |
-| fecha_actualizacion | timestamp | Última actualización | DEFAULT now() |
+| unidad_id | bigint | Unidad de la entrada | FK a unidades |
+| cantidad_original | numeric | Cantidad inicial del lote | NOT NULL |
+| cantidad_disponible | numeric | Saldo actual del lote | NOT NULL, CHECK >= 0 |
+| fecha_vencimiento | date | Vencimiento del lote | |
+| fecha_ingreso | timestamp | Ingreso al inventario | DEFAULT now() |
+| estado | text | Estado de la entrada | disponible, agotado, vencido, cancelado |
+| es_legacy | boolean | Marca de datos históricos | DEFAULT false |
+| updated_at | timestamp | Última actualización | DEFAULT now() |
 
 **Índices**:
-- `inventario_id_deposito_id_producto_key` UNIQUE en `id_deposito, id_producto`
-- `idx_inventario_id_producto` en `id_producto`
+- `entradas_inventario_donacion_unica` UNIQUE en `donacion_id` cuando no es NULL
+- Índices por `id_deposito`, `id_producto`, `estado` y `fecha_vencimiento`
 
-**Constraint Único**:
-- Un producto solo puede aparecer una vez por depósito
+**Regla de stock**: el disponible de un producto/deposito se calcula sumando
+`cantidad_disponible` de sus entradas en estado `disponible`; nunca se lee un
+saldo agregado del catálogo.
 
 ---
 
@@ -503,7 +561,8 @@ VALUES (5, 6, 1000);
 
 ### 🔔 notificaciones
 
-**Propósito**: Sistema de notificaciones del sistema
+**Propósito**: Contenido global e inmutable de las notificaciones. El estado de
+lectura y ocultamiento se almacena por usuario en `notificaciones_usuario`.
 
 | Columna | Tipo | Descripción | Restricciones |
 |---------|------|-------------|---------------|
@@ -514,21 +573,68 @@ VALUES (5, 6, 1000);
 | destinatario_id | uuid | Usuario destinatario | FK a usuarios |
 | rol_destinatario | varchar(50) | Rol destinatario | |
 | categoria | varchar(100) | Categoría de la notificación | NOT NULL |
-| leida | boolean | Si fue leída | DEFAULT false |
-| activa | boolean | Si está activa | DEFAULT true |
 | url_accion | varchar(500) | URL al hacer clic | |
 | metadatos | jsonb | Datos adicionales | DEFAULT '{}' |
 | fecha_creacion | timestamp | Cuándo se creó | DEFAULT now() |
-| fecha_leida | timestamp | Cuándo se leyó | |
 | expira_en | timestamp | Cuándo expira | |
 
 **Índices**:
 - `idx_notificaciones_destinatario` en `destinatario_id`
 - `idx_notificaciones_rol` en `rol_destinatario`
-- `idx_notificaciones_leida` en `leida`
-- `idx_notificaciones_activa` en `activa`
 - `idx_notificaciones_categoria` en `categoria`
 - `idx_notificaciones_fecha_creacion` en `fecha_creacion DESC`
+
+### 🔔 notificaciones_usuario
+
+**Propósito**: Estado individual de cada notificación para cada usuario.
+
+| Columna | Tipo | Descripción | Restricciones |
+|---------|------|-------------|---------------|
+| id | uuid | Identificador del estado | PK, DEFAULT gen_random_uuid() |
+| notificacion_id | uuid | Notificación relacionada | FK a notificaciones, ON DELETE CASCADE |
+| usuario_id | uuid | Usuario propietario del estado | FK a usuarios, ON DELETE CASCADE |
+| leida | boolean | Si el usuario la leyó | DEFAULT false |
+| oculta | boolean | Si el usuario la ocultó | DEFAULT false |
+| fecha_lectura | timestamp | Cuándo la leyó | |
+| fecha_ocultacion | timestamp | Cuándo la ocultó | |
+| created_at | timestamp | Fecha de creación | DEFAULT now() |
+| updated_at | timestamp | Última actualización | DEFAULT now() |
+
+**Restricciones e índices**:
+- UNIQUE en `notificacion_id, usuario_id`.
+- RLS permite consultar y modificar únicamente filas del usuario autenticado.
+- La visibilidad global depende de `expira_en IS NULL OR expira_en > now()`.
+
+**Contrato de escritura**:
+- El cliente no inserta notificaciones con payload libre.
+- La API pública de aplicación es `POST /api/notificaciones` con `{ event, entityId }`.
+- El servidor valida sesión, perfil activo, rol permitido y ownership/contexto de la entidad.
+- `NotificationService` usa `SUPABASE_SERVICE_ROLE_KEY` solo en servidor para insertar la notificación, resolver destinatarios y consultar preferencias de email.
+
+**Realtime**:
+- El frontend escucha cambios de `notificaciones` por `destinatario_id`, por
+  `rol_destinatario` y por `TODOS`.
+- También escucha `notificaciones_usuario` filtrada por `usuario_id` para
+  actualizar solo el estado del usuario actual.
+- El handler deduplica por `id` porque Supabase Realtime no soporta filtros
+  `OR` en una sola suscripción de Postgres Changes.
+- En una base nueva, ambas tablas deben estar incluidas en la publicación
+  `supabase_realtime`:
+
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.notificaciones;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.notificaciones_usuario;
+```
+
+**RPCs del frontend**:
+- `obtener_notificaciones_usuario(p_limite)` devuelve las notificaciones
+  visibles con `leida` calculada desde `notificaciones_usuario`.
+- `marcar_notificacion_leida(p_notificacion_id)` y
+  `marcar_todas_notificaciones_leidas()` actualizan solo el estado del usuario
+  autenticado.
+- `ocultar_notificacion(p_notificacion_id)` oculta la notificación solo para
+  el usuario actual.
+- El cliente no actualiza directamente `notificaciones`.
 
 ---
 
@@ -540,7 +646,7 @@ VALUES (5, 6, 1000);
 |---------|------|-------------|---------------|
 | id_baja | uuid | Identificador único | PK, DEFAULT gen_random_uuid() |
 | id_producto | uuid | Producto dado de baja | FK a productos_donados, NOT NULL |
-| id_inventario | uuid | Registro de inventario | FK a inventario, NOT NULL |
+| id_entrada | uuid | Entrada/lote afectado | FK a entradas_inventario, NOT NULL |
 | id_deposito | uuid | Depósito donde estaba | FK a depositos |
 | cantidad_baja | numeric | Cantidad dada de baja | CHECK > 0, NOT NULL |
 | motivo_baja | text | Razón de la baja | CHECK: vencido, dañado, contaminado, rechazado, otro |
@@ -582,11 +688,11 @@ productos_donados (N) ──── (1) alimentos
 productos_donados (N) ──── (1) unidades
   "Muchos productos con una unidad de medida"
 
-inventario (N) ──── (1) depositos
-  "Muchos productos en un depósito"
+entradas_inventario (N) ──── (1) depositos
+  "Muchas entradas/lotes en un depósito"
 
-inventario (N) ──── (1) productos_donados
-  "Muchos registros de inventario de un producto"
+entradas_inventario (N) ──── (1) productos_donados
+  "Muchas entradas de un producto de catálogo"
 
 movimiento_inventario_cabecera (1) ──── (N) movimiento_inventario_detalle
   "Un movimiento tiene muchas líneas de detalle"
@@ -602,47 +708,41 @@ unidades (N) ──── (N) unidades (a través de conversiones)
 
 ## Funciones y Triggers
 
+### Frontera transaccional de inventario
+
+La responsabilidad se divide entre base de datos y capa de aplicación:
+
+- **Donaciones**: la base de datos gobierna la creación de una entrada independiente en `entradas_inventario` mediante `trigger_crear_producto` / `crear_producto_desde_donacion()` cuando una donación pasa a estado `Aprobada`. El trigger valida la bodega almacenada en la donación y `productos_donados` solo se crea o reutiliza como identidad de catálogo.
+- **Bajas de productos**: la base de datos gobierna el flujo mediante la RPC `dar_baja_producto(p_id_entrada, ...)`, que bloquea y actualiza la entrada exacta y registra la baja y el movimiento en una unidad transaccional.
+- **Solicitudes aprobadas y entregas parciales**: la capa de aplicación solicita descuentos FEFO a `descontar_stock_por_lote()`. La RPC modifica directamente las entradas seleccionadas y devuelve sus `idEntrada`; si falla la actualización posterior, el servicio restaura esas entradas con `restaurar_entrada_inventario()`.
+- **Historial de entregas parciales**: `historial_donaciones` se mantiene como auditoría de aplicación; un fallo al registrar historial se reporta en logs y no duplica descuentos de inventario.
+
+Para nuevas operaciones que modifiquen más de una tabla crítica, la preferencia es una RPC SQL transaccional. Si se implementa en la capa de aplicación, debe incluir compensación explícita y tests de fallo de stock/movimiento.
+
 ### 🔧 Funciones Principales
 
-#### 1. `crear_notificacion()`
+#### 1. Notificaciones por evento
 
-**Propósito**: Crear notificaciones de forma segura
+**Propósito**: Crear notificaciones sin aceptar contenido sensible desde el cliente.
 
-```sql
-CREATE FUNCTION crear_notificacion(
-  p_titulo VARCHAR,
-  p_mensaje TEXT,
-  p_tipo VARCHAR,
-  p_destinatario_id UUID,
-  p_rol_destinatario VARCHAR,
-  p_categoria VARCHAR,
-  p_url_accion VARCHAR DEFAULT NULL,
-  p_metadatos JSONB DEFAULT '{}'
-) RETURNS UUID
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_notificacion_id uuid;
-BEGIN
-  INSERT INTO notificaciones (
-    titulo, mensaje, tipo, destinatario_id,
-    rol_destinatario, categoria, url_accion, metadatos
-  ) VALUES (
-    p_titulo, p_mensaje, p_tipo, p_destinatario_id,
-    p_rol_destinatario, p_categoria, p_url_accion, p_metadatos
-  )
-  RETURNING id INTO v_notificacion_id;
-  
-  RETURN v_notificacion_id;
-END;
-$$;
+El frontend llama a `/api/notificaciones` con un evento permitido:
+
+```json
+{
+  "event": "catalog_food_request_created",
+  "entityId": "55555555-5555-4555-8555-555555555555"
+}
 ```
+
+La capa de aplicación consulta la entidad, valida rol/ownership y construye internamente `titulo`, `mensaje`, `destinatario_id`, `rol_destinatario`, `url_accion`, `metadatos` y email. La tabla `notificaciones` queda como persistencia del resultado, no como contrato de negocio para clientes.
 
 ---
 
 #### 2. `crear_producto_desde_donacion()`
 
-**Propósito**: Actualizar inventario cuando una donación es entregada
+**Propósito**: Crear una entrada independiente cuando una donación es aprobada.
+El trigger reutiliza la identidad del producto en el catálogo, pero nunca
+acumula saldo en `productos_donados`.
 
 ```sql
 CREATE FUNCTION crear_producto_desde_donacion() 
@@ -651,39 +751,16 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_producto_id uuid;
-  v_deposito_id uuid;
 BEGIN
-  IF NEW.estado = 'Entregada' THEN
-    -- Obtener primer depósito disponible
-    SELECT id_deposito INTO v_deposito_id
-    FROM depositos LIMIT 1;
-    
-    -- Buscar producto existente
-    SELECT id_producto INTO v_producto_id
-    FROM productos_donados
-    WHERE lower(trim(nombre_producto)) = lower(trim(NEW.tipo_producto))
-      AND unidad_id = NEW.unidad_id;
-    
-    IF v_producto_id IS NOT NULL THEN
-      -- Actualizar cantidad existente
-      UPDATE productos_donados
-      SET cantidad = cantidad + NEW.cantidad
-      WHERE id_producto = v_producto_id;
-    ELSE
-      -- Insertar nuevo producto
-      INSERT INTO productos_donados (...)
-      VALUES (...)
-      RETURNING id_producto INTO v_producto_id;
-    END IF;
-    
-    -- Actualizar o insertar en inventario
-    IF EXISTS (SELECT 1 FROM inventario WHERE ...) THEN
-      UPDATE inventario SET cantidad_disponible = cantidad_disponible + NEW.cantidad;
-    ELSE
-      INSERT INTO inventario (...) VALUES (...);
-    END IF;
-  END IF;
-  
+  -- La implementación vigente crea una fila en entradas_inventario por donación.
+  -- El detalle completo está versionado en supabase/migrations/.
+  INSERT INTO entradas_inventario (
+    donacion_id, id_producto, unidad_id,
+    cantidad_original, cantidad_disponible, estado
+  ) VALUES (
+    NEW.id, v_producto_id, NEW.unidad_id,
+    NEW.cantidad, NEW.cantidad, 'disponible'
+  );
   RETURN NEW;
 END;
 $$;
@@ -693,7 +770,8 @@ $$;
 
 #### 3. `dar_baja_producto()`
 
-**Propósito**: Dar de baja productos y actualizar inventario (transacción atómica)
+**Propósito**: Dar de baja una entrada/lote y registrar la trazabilidad en una
+transacción atómica.
 
 **Diagrama de Flujo Transaccional**:
 
@@ -701,7 +779,7 @@ $$;
 sequenceDiagram
     participant App as App/API
     participant Func as FN dar_baja_producto()
-    participant Inv as Tabla Inventario
+    participant Inv as entradas_inventario
     participant Bajas as Tabla Bajas
     participant Movs as Tablas Movimientos
     
@@ -709,13 +787,13 @@ sequenceDiagram
     
     rect rgb(30, 30, 30)
     Note right of Func: Transacción Atómica
-    Func->>Inv: Verificar Stock actual
+    Func->>Inv: Bloquear entrada por id_entrada
     
     alt Stock Insuficiente
         Func-->>App: Error (False)
     else Stock Suficiente
         Func->>Bajas: Insertar Registro Baja
-        Func->>Inv: UPDATE cantidad - baja
+        Func->>Inv: UPDATE cantidad_disponible - baja
         Func->>Movs: INSERT Cabecera Movimiento
         Func->>Movs: INSERT Detalle Movimiento
         Func-->>App: Éxito (True, ID_Baja)
@@ -727,7 +805,7 @@ sequenceDiagram
 
 ```sql
 CREATE FUNCTION dar_baja_producto(
-  p_id_inventario UUID,
+  p_id_entrada UUID,
   p_cantidad NUMERIC,
   p_motivo TEXT,
   p_usuario_id UUID,
@@ -748,7 +826,7 @@ BEGIN
   
   -- Obtener cantidad actual
   SELECT cantidad_disponible INTO v_cantidad_actual
-  FROM inventario WHERE id_inventario = p_id_inventario;
+  FROM entradas_inventario WHERE id_entrada = p_id_entrada;
   
   -- Verificar suficiente cantidad
   IF v_cantidad_actual < p_cantidad THEN
@@ -764,10 +842,10 @@ BEGIN
   VALUES (...)
   RETURNING id_baja INTO v_id_baja;
   
-  -- Actualizar inventario
-  UPDATE inventario 
+  -- Actualizar la entrada exacta
+  UPDATE entradas_inventario
   SET cantidad_disponible = v_nueva_cantidad
-  WHERE id_inventario = p_id_inventario;
+  WHERE id_entrada = p_id_entrada;
   
   -- Registrar movimiento
   INSERT INTO movimiento_inventario_cabecera (...) VALUES (...);
@@ -780,106 +858,31 @@ $$;
 
 ---
 
-#### 4. `convertir_cantidad()`
+#### 4. `resolver_conversion()`
 
-**Propósito**: Convertir cantidades entre unidades de medida
+**Propósito**: Resolver conversiones por `unidad_id`. Los consumidores de
+TypeScript aplican el factor explícitamente y no existe un wrapper de cantidad.
 
 ```sql
-CREATE FUNCTION convertir_cantidad(
-  p_cantidad NUMERIC,
+CREATE FUNCTION resolver_conversion(
   p_unidad_origen_id BIGINT,
   p_unidad_destino_id BIGINT
 )
-RETURNS NUMERIC
+RETURNS JSONB
 AS $$
 DECLARE
   v_factor_conversion numeric;
 BEGIN
-  -- Si son la misma unidad, no convertir
-  IF p_unidad_origen_id = p_unidad_destino_id THEN
-    RETURN p_cantidad;
-  END IF;
-  
-  -- Buscar factor de conversión directo
-  SELECT factor_conversion INTO v_factor_conversion
-  FROM conversiones
-  WHERE unidad_origen_id = p_unidad_origen_id
-    AND unidad_destino_id = p_unidad_destino_id;
-  
-  IF FOUND THEN
-    RETURN p_cantidad * v_factor_conversion;
-  END IF;
-  
-  -- Buscar factor inverso
-  SELECT 1.0 / factor_conversion INTO v_factor_conversion
-  FROM conversiones
-  WHERE unidad_origen_id = p_unidad_destino_id
-    AND unidad_destino_id = p_unidad_origen_id;
-  
-  IF FOUND THEN
-    RETURN p_cantidad * v_factor_conversion;
-  END IF;
-  
-  -- No se encontró conversión
-  RETURN NULL;
+  -- La función vigente resuelve factor, unidad base y compatibilidad.
+  -- Se omite el cuerpo aquí para evitar duplicar la implementación versionada.
+  RETURN jsonb_build_object('convertible', true, 'factor', v_factor_conversion);
 END;
 $$;
 ```
 
 ---
 
-#### 5. Funciones Auxiliares (Placeholder / WIP)
-
-Las siguientes funciones están implementadas como **placeholders** y requieren lógica de negocio completa:
-
-##### `cancelar_eliminacion_categoria()`
-
-**Estado**: ⚠️ **Implementación Placeholder / WIP**
-
-```sql
-CREATE FUNCTION cancelar_eliminacion_categoria(p_categoria_id BIGINT)
-RETURNS BOOLEAN
-AS $$
-BEGIN
-  -- TODO: Implementar lógica de cancelación
-  RETURN true;  -- Actualmente solo retorna true
-END;
-$$;
-```
-
-**Pendiente de implementar**:
-- Validación de permisos del usuario
-- Verificación del estado de la categoría
-- Actualización de registros relacionados
-- Registro en auditoría
-
-##### `procesar_eliminaciones_categorias_pendientes()`
-
-**Estado**: ⚠️ **Implementación Placeholder / WIP**
-
-```sql
-CREATE FUNCTION procesar_eliminaciones_categorias_pendientes()
-RETURNS VOID
-AS $$
-BEGIN
-  -- TODO: Implementar lógica de procesamiento batch
-  -- Actualmente sin implementación
-  RETURN;
-END;
-$$;
-```
-
-**Pendiente de implementar**:
-- Lógica de procesamiento por lotes
-- Eliminación segura de categorías marcadas
-- Reasignación de productos huérfanos
-- Registro de eliminaciones ejecutadas
-
-> 💡 **Nota**: Estas funciones fueron creadas para funcionalidad futura y actualmente no contienen lógica de negocio. Se recomienda implementarlas completamente antes de usarlas en producción.
-
----
-
-### 🔔 Triggers Principales
+#### 5. Triggers Principales
 
 #### 1. `trigger_crear_producto`
 
@@ -890,48 +893,34 @@ CREATE TRIGGER trigger_crear_producto
   EXECUTE FUNCTION crear_producto_desde_donacion();
 ```
 
-**Cuándo se ejecuta**: Cuando una donación cambia a estado "Entregada"
+**Cuándo se ejecuta**: Cuando una donación cambia a estado "Aprobada"
 
 **Qué hace**:
 1. Busca o crea el producto en `productos_donados`
-2. Actualiza o inserta en `inventario`
-3. Normaliza nombres para prevenir duplicados
+2. Inserta una fila independiente en `entradas_inventario`
+3. Evita duplicar la entrada mediante `donacion_id`
 
 ---
 
-#### 2. `trigger_donacion_notificacion`
+#### 2. Notificaciones de donaciones
 
-```sql
-CREATE TRIGGER trigger_donacion_notificacion
-  AFTER INSERT OR UPDATE ON donaciones
-  FOR EACH ROW
-  EXECUTE FUNCTION trigger_notificacion_donacion();
-```
-
-**Cuándo se ejecuta**: Al crear o actualizar una donación
+**Cuándo se ejecuta**: Cuando un `ADMINISTRADOR` u `OPERADOR` procesa una donación y cambia su estado.
 
 **Qué hace**:
-1. Crea notificación para operadores cuando hay nueva donación
-2. Notifica al donante cuando cambia el estado
-3. Incluye metadatos relevantes (ID, cantidad, producto)
+1. Envía `{ event: "donation_status_changed", entityId }` a `/api/notificaciones`.
+2. El dispatcher valida que el usuario sea `ADMINISTRADOR` u `OPERADOR` para cambios de estado.
+3. El servidor construye la notificación para el donante asociado y agrega metadatos relevantes.
 
 ---
 
-#### 3. `trigger_solicitud_notificacion`
+#### 3. Notificaciones de solicitudes
 
-```sql
-CREATE TRIGGER trigger_solicitud_notificacion
-  AFTER INSERT OR UPDATE ON solicitudes
-  FOR EACH ROW
-  EXECUTE FUNCTION trigger_notificacion_solicitud();
-```
-
-**Cuándo se ejecuta**: Al crear o actualizar una solicitud
+**Cuándo se ejecuta**: Cuando la capa de aplicación cambia el estado de una solicitud.
 
 **Qué hace**:
-1. Notifica a operadores cuando hay nueva solicitud
-2. Notifica al solicitante cuando es aprobada/rechazada
-3. Genera comprobante si es aprobada
+1. Envía `{ event: "food_request_status_changed", entityId }` a `/api/notificaciones`.
+2. El dispatcher valida que el usuario sea `ADMINISTRADOR` u `OPERADOR`.
+3. El servidor construye la notificación para el solicitante cuando la solicitud queda aprobada, rechazada o entregada.
 
 ---
 
@@ -997,17 +986,17 @@ CREATE POLICY "Donantes pueden actualizar sus propias donaciones pendientes" ON 
 
 ---
 
-### Políticas de `inventario`
+### Políticas de `entradas_inventario`
 
 ```sql
--- Usuarios activos pueden ver inventario
-CREATE POLICY "inventario_select_usuarios_activos" ON inventario
+-- Usuarios activos pueden ver entradas disponibles
+CREATE POLICY "entradas_select_usuarios_activos" ON entradas_inventario
   FOR SELECT TO authenticated USING (
     EXISTS (SELECT 1 FROM usuarios WHERE id = auth.uid() AND estado = 'activo')
   );
 
--- Solo admin/operador pueden modificar
-CREATE POLICY "inventario_update_admin_operador" ON inventario
+-- Las modificaciones operativas se realizan mediante RPCs o servicios autorizados
+CREATE POLICY "entradas_update_admin_operador" ON entradas_inventario
   FOR UPDATE TO authenticated USING (
     EXISTS (SELECT 1 FROM usuarios 
             WHERE id = auth.uid() 
@@ -1027,27 +1016,27 @@ CREATE POLICY "inventario_update_admin_operador" ON inventario
 ```sql
 CREATE VIEW v_inventario_detallado AS
 SELECT 
-  i.id_inventario,
-  i.id_deposito,
+  e.id_entrada,
+  e.id_deposito,
   d.nombre AS nombre_deposito,
-  i.id_producto,
+  e.id_producto,
   pd.nombre_producto,
   pd.alimento_id,
   a.nombre AS nombre_alimento,
   a.categoria AS categoria_alimento,
-  i.cantidad_disponible,
-  pd.unidad_id,
+  e.cantidad_disponible,
+  e.unidad_id,
   u.nombre AS unidad_nombre,
   u.simbolo AS unidad_simbolo,
-  pd.fecha_caducidad,
-  pd.fecha_donacion,
-  i.fecha_actualizacion
-FROM inventario i
-JOIN depositos d ON i.id_deposito = d.id_deposito
-JOIN productos_donados pd ON i.id_producto = pd.id_producto
+  e.fecha_vencimiento,
+  e.fecha_ingreso,
+  e.updated_at
+FROM entradas_inventario e
+JOIN depositos d ON e.id_deposito = d.id_deposito
+JOIN productos_donados pd ON e.id_producto = pd.id_producto
 LEFT JOIN alimentos a ON pd.alimento_id = a.id
-LEFT JOIN unidades u ON pd.unidad_id = u.id
-ORDER BY i.fecha_actualizacion DESC;
+LEFT JOIN unidades u ON e.unidad_id = u.id
+ORDER BY e.updated_at DESC;
 ```
 
 ---
@@ -1116,8 +1105,10 @@ CREATE INDEX idx_productos_donados_alimento_id ON productos_donados(alimento_id)
 #### 2. **Índices de Integridad Referencial**
 
 ```sql
--- Acelerar JOINs entre tablas
-CREATE INDEX idx_inventario_id_producto ON inventario(id_producto);
+-- Acelerar JOINs y consultas FEFO de entradas
+CREATE INDEX idx_entradas_inventario_producto ON entradas_inventario(id_producto);
+CREATE INDEX idx_entradas_inventario_deposito_estado
+  ON entradas_inventario(id_deposito, estado, fecha_vencimiento);
 CREATE INDEX idx_detalle_movimiento ON movimiento_inventario_detalle(id_movimiento);
 CREATE INDEX idx_detalle_producto ON movimiento_inventario_detalle(id_producto);
 ```
