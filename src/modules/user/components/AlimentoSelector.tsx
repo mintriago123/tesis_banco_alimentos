@@ -44,8 +44,8 @@ export function AlimentoSelector({
       {/* Filtro de Categoría */}
       <FormField id="filtroCategoria" label="Categoría de alimentos" hint="Filtra por categoría para encontrar alimentos más fácilmente">
         {categorias.length === 0 ? (
-          <div className="w-full border-2 border-amber-300 bg-amber-50 rounded-lg px-4 py-3 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-amber-600" />
+            <div className="flex w-full items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <AlertCircle className="h-5 w-5 text-amber-600" aria-hidden="true" />
             <span className="text-sm text-amber-700">
               {MESSAGES.SOLICITUD.NO_CATEGORY_AVAILABLE}
             </span>
@@ -81,15 +81,20 @@ export function AlimentoSelector({
             onChange={onBusquedaChange}
             onFocus={onFocus}
             required
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={mostrarDropdown && !alimentoSeleccionado}
+            aria-controls="alimentos-disponibles"
           />
-          <ShoppingBasket className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
+          <ShoppingBasket className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
 
           {alimentoSeleccionado && (
             <button
               type="button"
               onClick={onLimpiarSeleccion}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-red-600 rounded hover:bg-gray-100 transition-colors"
+              className="absolute right-2 top-1/2 min-h-9 min-w-9 -translate-y-1/2 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
               title="Limpiar selección"
+              aria-label="Limpiar producto seleccionado"
             >
               <X className="h-4 w-4" />
             </button>
@@ -97,14 +102,16 @@ export function AlimentoSelector({
 
           {/* Dropdown con los alimentos filtrados */}
           {mostrarDropdown && !alimentoSeleccionado && (
-            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+            <div id="alimentos-disponibles" role="listbox" className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-[var(--shadow-popover)]">
               {alimentosFiltrados.length > 0 ? (
                 alimentosFiltrados.map((alimento) => (
                     <button
                       type="button"
                       key={alimento.id}
-                      className="block w-full border-b border-slate-100 p-3 text-left hover:bg-slate-50 last:border-b-0"
+                      className="block min-h-11 w-full border-b border-slate-100 p-3 text-left transition-colors hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none last:border-b-0"
                       onClick={() => onAlimentoSelect(alimento)}
+                      role="option"
+                      aria-selected={false}
                     >
                     <div className="font-semibold text-slate-900">
                       {alimento.nombre}
@@ -115,13 +122,13 @@ export function AlimentoSelector({
                   </button>
                 ))
               ) : busqueda || filtroCategoria ? (
-                <div className="p-3 text-gray-500 text-center">
+                <div className="p-3 text-center text-sm text-slate-500">
                   No se encontraron productos que coincidan con tu búsqueda
                   {filtroCategoria && ` en la categoría "${filtroCategoria}"`}
                 </div>
               ) : (
-                <div className="p-3 text-amber-600 text-center flex items-center justify-center gap-2">
-                  <AlertCircle className="h-4 w-4" />
+                <div className="flex items-center justify-center gap-2 p-3 text-center text-sm text-amber-700">
+                  <AlertCircle className="h-4 w-4" aria-hidden="true" />
                   <span>
                     {filtroCategoria 
                       ? `Escribe para buscar productos en "${filtroCategoria}"...` 
@@ -134,7 +141,7 @@ export function AlimentoSelector({
 
           {/* Mostrar contador de resultados */}
           {(busqueda || filtroCategoria) && !alimentoSeleccionado && (
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="mt-1 text-xs text-slate-500">
               {alimentosFiltrados.length} producto
               {alimentosFiltrados.length !== 1 ? 's' : ''} disponible
               {alimentosFiltrados.length !== 1 ? 's' : ''}
@@ -144,8 +151,8 @@ export function AlimentoSelector({
           
           {/* Mensaje cuando no hay productos en absoluto */}
           {!busqueda && !filtroCategoria && alimentosFiltrados.length === 0 && !mostrarDropdown && (
-            <p className="text-sm text-amber-600 mt-1 flex items-center gap-1">
-              <AlertCircle className="h-3 w-3" />
+            <p className="mt-1 flex items-center gap-1 text-xs text-amber-700">
+              <AlertCircle className="h-3 w-3" aria-hidden="true" />
               {MESSAGES.SOLICITUD.NO_STOCK_AVAILABLE}
             </p>
           )}

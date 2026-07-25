@@ -41,14 +41,14 @@ export function InventarioInfo({
   if (!stockInfo && loadingState === 'idle') return null;
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-      <h4 className="flex items-center text-sm font-medium text-gray-700 mb-3">
-        <Package className="w-4 h-4 mr-2" />
+    <section className="rounded-xl border border-slate-200 bg-slate-50 p-4" aria-labelledby="inventario-disponible-title">
+      <h3 id="inventario-disponible-title" className="mb-3 flex items-center text-sm font-semibold text-slate-800">
+        <Package className="mr-2 h-4 w-4" aria-hidden="true" />
         Inventario Disponible
-      </h4>
+      </h3>
 
       {loadingState === 'loading' && (
-        <div className="flex items-center text-blue-600 text-sm">
+        <div className="flex items-center text-sm text-blue-700" role="status" aria-live="polite">
           <div className="inline-block mr-2">
             <LoadingSpinner size="sm" color="blue" />
           </div>
@@ -57,8 +57,8 @@ export function InventarioInfo({
       )}
 
       {loadingState === 'error' && errorMessage && (
-        <div className="flex items-center text-red-600 text-sm">
-          <AlertTriangle className="w-4 h-4 mr-2" />
+        <div className="flex items-center text-sm text-rose-700" role="alert">
+          <AlertTriangle className="mr-2 h-4 w-4" aria-hidden="true" />
           {errorMessage}
         </div>
       )}
@@ -68,23 +68,23 @@ export function InventarioInfo({
           {stockInfo.producto_encontrado ? (
             <>
               <div
-                className={`flex items-center text-sm font-medium ${
+                className={`flex items-center text-sm font-semibold ${
                   stockInfo.total_disponible > 0
-                    ? 'text-green-700'
-                    : 'text-red-700'
+                    ? 'text-emerald-700'
+                    : 'text-rose-700'
                 }`}
               >
                 {stockInfo.total_disponible > 0 ? (
-                  <CheckCircle className="w-4 h-4 mr-2" />
+                  <CheckCircle className="mr-2 h-4 w-4" aria-hidden="true" />
                 ) : (
-                  <AlertTriangle className="w-4 h-4 mr-2" />
+                  <AlertTriangle className="mr-2 h-4 w-4" aria-hidden="true" />
                 )}
                 {getStockMessage(cantidad || undefined, simboloUnidad)}
               </div>
 
               {stockInfo.depositos.length > 0 && (
                 <div className="mt-3">
-                  <p className="text-xs text-gray-600 mb-2 font-medium">
+                  <p className="mb-2 text-xs font-semibold text-slate-600">
                     Distribución por depósito:
                   </p>
                   <div className="space-y-1">
@@ -97,10 +97,10 @@ export function InventarioInfo({
                       return (
                         <div
                           key={index}
-                          className="flex justify-between text-xs text-gray-600 bg-white px-2 py-1 rounded"
+                          className="flex justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"
                         >
                           <span>{deposito.deposito}</span>
-                          <span className="font-medium">
+                          <span className="font-semibold text-slate-800">
                             {cantidadTexto}
                           </span>
                         </div>
@@ -111,8 +111,8 @@ export function InventarioInfo({
               )}
 
               {cantidad > 0 && stockInfo.total_disponible > 0 && (
-                <div className="mt-2 p-2 bg-white rounded border-l-4 border-blue-400">
-                  <p className="text-xs text-blue-700">
+                <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                  <p className="text-xs text-blue-800">
                     💡{' '}
                     {isStockSufficient(cantidad, simboloUnidad)
                       ? 'Hay suficiente stock para tu solicitud'
@@ -126,13 +126,13 @@ export function InventarioInfo({
               )}
             </>
           ) : (
-            <div className="flex items-center text-amber-600 text-sm">
-              <Info className="w-4 h-4 mr-2" />
+            <div className="flex items-center text-sm text-amber-700">
+              <Info className="mr-2 h-4 w-4" aria-hidden="true" />
               Este producto no está disponible en el inventario actual
             </div>
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 }

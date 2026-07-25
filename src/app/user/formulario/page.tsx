@@ -5,7 +5,7 @@ import { useSupabase } from "@/app/components/SupabaseProvider";
 import DashboardLayout from "@/app/components/DashboardLayout";
 import { useInventoryStock } from "@/modules/user/hooks/useInventoryStock";
 import { validarCantidadParaUnidad } from "@/lib/unidadConversion";
-import { Send, AlertTriangle } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, Send, AlertTriangle, ShoppingBasket } from "lucide-react";
 import { Alert } from '@/app/components/ui/Alert';
 import { Button } from '@/app/components/ui/Button';
 import {
@@ -250,92 +250,101 @@ export default function FormularioSolicitante() {
       title="Solicitar Alimentos"
       description="Rellena el formulario para enviar tu solicitud al Banco de Alimentos."
     >
-      <div className="space-y-6">
-          <div className="mx-auto w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
+        <section
+          className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+          aria-labelledby="solicitud-form-title"
+        >
+          {/* Mensajes */}
+          {!ubicacion && (
+            <Alert tipo="warning" mensaje="Ubicación requerida: permite el acceso a tu ubicación en el navegador para continuar." />
+          )}
+          {mensaje && (
+            <Alert tipo={mensaje.includes("éxito") ? 'success' : 'error'} mensaje={mensaje} />
+          )}
 
-            {/* Información del usuario */}
-            {userData && <UserInfoCard userData={userData} />}
-
-            {/* Ubicación */}
-            {ubicacion && (
-              <UbicacionCard
-                ubicacion={ubicacion}
-                onUbicacionChange={manejarCambioUbicacion}
-              />
-            )}
-
-            {/* Alerta de ubicación requerida */}
-            {!ubicacion && (
-              <Alert tipo="warning" mensaje="Ubicación requerida: permite el acceso a tu ubicación en el navegador para continuar." />
-            )}
-
-            {/* Mensajes */}
-            {mensaje && (
-              <Alert tipo={mensaje.includes("éxito") ? 'success' : 'error'} mensaje={mensaje} />
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="text-center mb-6">
-                <h3 className="text-xl font-bold text-gray-800">
-                  Detalles de la Solicitud
-                </h3>
-                <p className="text-gray-600">
-                  Especifica qué alimentos necesitas
+          {/* Encabezado equivalente al StepHeader de Nueva donación */}
+          <div className="border-b border-slate-200 pb-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-700">
+                <ShoppingBasket className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <h2 id="solicitud-form-title" className="text-base font-semibold text-slate-800 sm:text-lg">
+                  Detalles de la solicitud
+                </h2>
+                <p className="mt-1 max-w-xl text-sm leading-5 text-slate-500">
+                  Especifica qué alimentos necesitas y la cantidad solicitada.
                 </p>
               </div>
+            </div>
+          </div>
 
-              <div className="space-y-4">
-                {/* Selector de alimentos */}
-                <AlimentoSelector
-                  alimentos={[]}
-                  alimentosFiltrados={alimentosFiltrados}
-                  alimentoSeleccionado={alimentoSeleccionado}
-                  busqueda={busqueda}
-                  filtroCategoria={filtroCategoria}
-                  categorias={categorias}
-                  mostrarDropdown={mostrarDropdown}
-                  onBusquedaChange={manejarBusquedaAlimento}
-                  onCategoriaChange={manejarCambioCategoria}
-                  onAlimentoSelect={manejarSeleccionAlimento}
-                  onLimpiarSeleccion={limpiarSeleccion}
-                  onFocus={manejarFocusInput}
-                  onBlur={manejarBlurContainer}
-                />
+          {/* Información del usuario */}
+          {userData && <UserInfoCard userData={userData} />}
 
-                {/* Información de inventario */}
-                {alimentoSeleccionado && (
-                  <InventarioInfo
-                    stockInfo={stockInfo}
-                    loadingState={inventoryLoadingState}
-                    errorMessage={inventoryErrorMessage || null}
-                    cantidad={parseFloat(cantidad) || 0}
-                    simboloUnidad={getUnidadesDisponibles().find(u => u.id === parseInt(unidadId))?.simbolo}
-                    isStockSufficient={isStockSufficient}
-                    getStockMessage={getStockMessage}
-                    onUseMaxStock={manejarUseMaxStock}
-                  />
-                )}
+          {/* Ubicación */}
+          {ubicacion && (
+            <UbicacionCard
+              ubicacion={ubicacion}
+              onUbicacionChange={manejarCambioUbicacion}
+            />
+          )}
 
-                {/* Cantidad y Unidad */}
-                <CantidadUnidadInputs
-                  cantidad={cantidad}
-                  unidadId={unidadId}
-                  unidades={getUnidadesDisponibles()}
-                  loadingUnidades={loadingUnidades === 'loading'}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-4">
+              {/* Selector de alimentos */}
+              <AlimentoSelector
+                alimentos={[]}
+                alimentosFiltrados={alimentosFiltrados}
+                alimentoSeleccionado={alimentoSeleccionado}
+                busqueda={busqueda}
+                filtroCategoria={filtroCategoria}
+                categorias={categorias}
+                mostrarDropdown={mostrarDropdown}
+                onBusquedaChange={manejarBusquedaAlimento}
+                onCategoriaChange={manejarCambioCategoria}
+                onAlimentoSelect={manejarSeleccionAlimento}
+                onLimpiarSeleccion={limpiarSeleccion}
+                onFocus={manejarFocusInput}
+                onBlur={manejarBlurContainer}
+              />
+
+              {/* Información de inventario */}
+              {alimentoSeleccionado && (
+                <InventarioInfo
                   stockInfo={stockInfo}
+                  loadingState={inventoryLoadingState}
+                  errorMessage={inventoryErrorMessage || null}
+                  cantidad={parseFloat(cantidad) || 0}
+                  simboloUnidad={getUnidadesDisponibles().find(u => u.id === parseInt(unidadId))?.simbolo}
                   isStockSufficient={isStockSufficient}
-                  onCantidadChange={(e) => setCantidad(e.target.value)}
-                  onUnidadChange={(e) => setUnidadId(e.target.value)}
+                  getStockMessage={getStockMessage}
                   onUseMaxStock={manejarUseMaxStock}
                 />
+              )}
 
-                {/* Comentarios */}
-                <ComentariosInput
-                  comentarios={comentarios}
-                  onChange={(e) => setComentarios(e.target.value)}
-                />
-              </div>
+              {/* Cantidad y Unidad */}
+              <CantidadUnidadInputs
+                cantidad={cantidad}
+                unidadId={unidadId}
+                unidades={getUnidadesDisponibles()}
+                loadingUnidades={loadingUnidades === 'loading'}
+                stockInfo={stockInfo}
+                isStockSufficient={isStockSufficient}
+                onCantidadChange={(e) => setCantidad(e.target.value)}
+                onUnidadChange={(e) => setUnidadId(e.target.value)}
+                onUseMaxStock={manejarUseMaxStock}
+              />
 
+              {/* Comentarios */}
+              <ComentariosInput
+                comentarios={comentarios}
+                onChange={(e) => setComentarios(e.target.value)}
+              />
+            </div>
+
+            <div className="mt-8 flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end">
               <Button
                 type="submit"
                 disabled={
@@ -352,12 +361,13 @@ export default function FormularioSolicitante() {
                 }
                 loading={loading}
                 accent="solicitante"
+                className="w-full sm:w-auto"
               >
                 {loading ? (
                   "Enviando Solicitud..."
                 ) : !ubicacion ? (
                   <>
-                    <AlertTriangle className="w-5 h-5 mr-2" />
+                    <AlertTriangle className="h-5 w-5" aria-hidden="true" />
                     Ubicación Requerida
                   </>
                 ) : !!cantidad &&
@@ -369,18 +379,60 @@ export default function FormularioSolicitante() {
                     getUnidadesDisponibles().find(u => u.id === parseInt(unidadId))?.simbolo
                   ) ? (
                   <>
-                    <AlertTriangle className="w-5 h-5 mr-2" />
+                    <AlertTriangle className="h-5 w-5" aria-hidden="true" />
                     Stock Insuficiente
                   </>
                 ) : (
                   <>
-                    <Send className="w-5 h-5 mr-2" />
+                    <Send className="h-5 w-5" aria-hidden="true" />
                     Enviar Solicitud
                   </>
                 )}
               </Button>
-            </form>
+            </div>
+          </form>
+        </section>
+
+        <aside
+          className="h-fit space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:sticky lg:top-6"
+          aria-labelledby="solicitud-context-title"
+        >
+          <div className="mb-4 flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-700">
+              <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 id="solicitud-context-title" className="text-base font-semibold text-slate-800">
+                Tu solicitud cuenta
+              </h2>
+              <p className="mt-1 text-sm leading-5 text-slate-500">
+                Completa la información para que el Banco de Alimentos pueda revisar tu pedido.
+              </p>
+            </div>
           </div>
+
+          <ol className="space-y-4">
+            {[
+              'Selecciona el alimento que necesitas.',
+              'Indica la cantidad y unidad de medida.',
+              'Comparte tu ubicación para coordinar la entrega.',
+            ].map((step, index) => (
+              <li key={step} className="flex items-start gap-3 text-sm leading-5 text-slate-500">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xs font-bold text-blue-700">
+                  {index + 1}
+                </span>
+                {step}
+              </li>
+            ))}
+          </ol>
+
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm leading-5 text-blue-800">
+            <p className="flex items-start gap-2">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" aria-hidden="true" />
+              Puedes revisar el estado de tu solicitud desde “Mis solicitudes”.
+            </p>
+          </div>
+        </aside>
       </div>
     </DashboardLayout>
   );

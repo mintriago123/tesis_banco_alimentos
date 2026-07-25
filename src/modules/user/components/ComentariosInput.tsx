@@ -29,7 +29,7 @@ export function ComentariosInput({
           rows={4}
           maxLength={FORM_CONFIG.COMENTARIOS_MAX_LENGTH}
         />
-        <MessageCircle className="absolute left-3 top-4 h-5 w-5 text-gray-400" />
+        <MessageCircle className="absolute left-3 top-4 h-5 w-5 text-slate-400" aria-hidden="true" />
       </div>
     </FormField>
   );
