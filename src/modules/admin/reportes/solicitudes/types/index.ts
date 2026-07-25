@@ -21,6 +21,8 @@ export interface SolicitudUnidad {
   simbolo: string;
   tipo_magnitud_id: number;
   es_base: boolean;
+  es_discreta?: boolean;
+  permite_fraccion?: boolean;
 }
 
 export interface Solicitud {
@@ -146,6 +148,8 @@ export interface SupabaseSolicitudUnidad {
   simbolo?: string | null;
   tipo_magnitud_id?: number | null;
   es_base?: boolean | null;
+  es_discreta?: boolean | null;
+  permite_fraccion?: boolean | null;
 }
 
 export interface SupabaseSolicitudRow {

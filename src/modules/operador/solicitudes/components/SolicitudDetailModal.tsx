@@ -107,6 +107,8 @@ const SolicitudDetailModal = ({
   const depositoActual = inventario.find(item => item.id_deposito === depositoSeleccionado);
   const stockDepositoSeleccionado = depositoActual?.cantidad_disponible ?? 0;
   const maxDisponibleDeposito = Math.max(0, Math.min(solicitud.cantidad, stockDepositoSeleccionado));
+  const permiteFraccion = solicitud.unidades?.permite_fraccion !== false;
+  const cantidadUnidadValida = permiteFraccion || Number.isInteger(cantidadDonar);
 
   // Actualizar cantidad a donar cuando cambie el inventario disponible
   useEffect(() => {
@@ -126,7 +128,8 @@ const SolicitudDetailModal = ({
       Number.isFinite(cantidadDonar) &&
       cantidadDonar > 0 &&
       cantidadDonar <= solicitud.cantidad &&
-      cantidadDonar <= maxDisponibleDeposito
+      cantidadDonar <= maxDisponibleDeposito &&
+      cantidadUnidadValida
     ) {
       // Calcular porcentaje automáticamente para el backend
       const porcentaje = Math.round((cantidadDonar / solicitud.cantidad) * 100);
@@ -644,7 +647,7 @@ const SolicitudDetailModal = ({
 
                   {/* Cantidad a donar */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="cantidad-donar" className="block text-sm font-medium text-gray-700 mb-2">
                       Cantidad a donar
                     </label>
                     <div className="flex items-center space-x-2">
@@ -653,15 +656,22 @@ const SolicitudDetailModal = ({
                         type="number"
                         min="0"
                         max={maxDisponibleDeposito}
-                        step="0.01"
+                        step={permiteFraccion ? '0.01' : '1'}
                         value={cantidadDonar}
                         onChange={(e) => handleCantidadChange(e.target.value)}
+                        aria-invalid={!cantidadUnidadValida}
+                        aria-describedby={!cantidadUnidadValida ? 'cantidad-donar-error' : undefined}
                         className="flex-1 px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-lg font-semibold"
                         disabled={isProcessing}
                         placeholder="Ingrese cantidad"
                       />
                       <span className="text-gray-600 font-medium">{solicitud.unidades?.simbolo ?? 'unidades'}</span>
                     </div>
+                    {!cantidadUnidadValida && (
+                      <p id="cantidad-donar-error" role="alert" className="mt-1 text-xs text-red-700">
+                        La unidad {solicitud.unidades?.nombre ?? solicitud.unidades?.simbolo ?? 'seleccionada'} no permite cantidades decimales. Ingresa una cantidad entera.
+                      </p>
+                    )}
                   </div>
 
                   {/* Comentario de donación */}
@@ -684,7 +694,7 @@ const SolicitudDetailModal = ({
                     <button
                       type="button"
                       onClick={handleDonacionSubmit}
-                      disabled={isProcessing || cantidadDonar <= 0 || cantidadDonar > maxDisponibleDeposito}
+                      disabled={isProcessing || !cantidadUnidadValida || cantidadDonar <= 0 || cantidadDonar > maxDisponibleDeposito}
                       className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
                     >
                       {isProcessing ? 'Procesando...' : `Confirmar Donación de ${cantidadDonar} ${solicitud.unidades?.simbolo ?? 'unidades'}`}
