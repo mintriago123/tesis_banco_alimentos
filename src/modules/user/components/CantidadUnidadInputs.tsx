@@ -15,6 +15,7 @@ interface CantidadUnidadInputsProps {
   unidades: Unidad[];
   loadingUnidades: boolean;
   stockInfo: StockSummary | null;
+  unitCompatibilityMessage: string | null;
   isStockSufficient: (cantidad: number, simboloUnidad?: string) => boolean;
   onCantidadChange: (e: ChangeEvent<HTMLInputElement>) => void;
   onUnidadChange: (e: ChangeEvent<HTMLSelectElement>) => void;
@@ -27,6 +28,7 @@ export function CantidadUnidadInputs({
   unidades,
   loadingUnidades,
   stockInfo,
+  unitCompatibilityMessage,
   isStockSufficient,
   onCantidadChange,
   onUnidadChange,
@@ -63,7 +65,11 @@ export function CantidadUnidadInputs({
           placeholder="0"
         />
         <div className="mt-1 space-y-1">
-          {cantidadNum > 0 &&
+          {unitCompatibilityMessage ? (
+            <p className="text-xs font-medium text-amber-700" role="status">
+              ⚠️ {unitCompatibilityMessage}
+            </p>
+          ) : cantidadNum > 0 &&
             stockInfo &&
             stockInfo.producto_encontrado && (
               <p

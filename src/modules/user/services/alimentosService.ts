@@ -122,13 +122,6 @@ export class AlimentosService {
       }
 
       const alimentosData = data as Alimento[];
-      if (isDevelopment) {
-        console.log('Alimentos con stock:', alimentosData.map((alimento) => alimento.id));
-      }
-
-      if (isDevelopment) {
-        console.log('Alimentos encontrados:', alimentosData.length);
-      }
       return { data: alimentosData, error: null };
     } catch (error) {
       console.error('Exception in getAlimentosConStock:', error);

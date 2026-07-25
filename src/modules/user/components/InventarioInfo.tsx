@@ -82,34 +82,6 @@ export function InventarioInfo({
                 {getStockMessage(cantidad || undefined, simboloUnidad)}
               </div>
 
-              {stockInfo.depositos.length > 0 && (
-                <div className="mt-3">
-                  <p className="mb-2 text-xs font-semibold text-slate-600">
-                    Distribución por depósito:
-                  </p>
-                  <div className="space-y-1">
-                    {stockInfo.depositos.map((deposito, index) => {
-                      // Usar la cantidad formateada si está disponible
-                      const cantidadTexto = deposito.cantidad_formateada
-                        ? `${deposito.cantidad_formateada.cantidad} ${deposito.cantidad_formateada.simbolo}`
-                        : `${formatQuantity(deposito.cantidad_disponible)} ${stockInfo.unidad_simbolo || 'unidades'}`;
-                      
-                      return (
-                        <div
-                          key={index}
-                          className="flex justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"
-                        >
-                          <span>{deposito.deposito}</span>
-                          <span className="font-semibold text-slate-800">
-                            {cantidadTexto}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
               {cantidad > 0 && stockInfo.total_disponible > 0 && (
                 <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
                   <p className="text-xs text-blue-800">

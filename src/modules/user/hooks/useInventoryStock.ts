@@ -45,6 +45,37 @@ const obtenerUnidadIdPorSimbolo = (
     : conversion.unidad_destino_id;
 };
 
+export const getUnitCompatibilityMessage = (
+  stockInfo: Pick<StockSummary, 'producto_encontrado' | 'unidad_id' | 'unidad_simbolo'> | null,
+  conversiones: ConversionData[],
+  simboloUnidad?: string,
+): string | null => {
+  if (!stockInfo?.producto_encontrado || !simboloUnidad || !stockInfo.unidad_simbolo) {
+    return null;
+  }
+
+  const stockSymbol = stockInfo.unidad_simbolo;
+  if (simboloUnidad.toLowerCase() === stockSymbol.toLowerCase()) {
+    return null;
+  }
+
+  const unidadOrigenId = obtenerUnidadIdPorSimbolo(simboloUnidad, conversiones);
+  if (!unidadOrigenId || !stockInfo.unidad_id) {
+    return `No se puede resolver la unidad ${simboloUnidad}. Selecciona ${stockSymbol}.`;
+  }
+
+  const resolution = resolverConversionLocal(
+    unidadOrigenId,
+    stockInfo.unidad_id,
+    conversiones,
+  );
+  if (!resolution.convertible) {
+    return `No existe una conversión registrada de ${simboloUnidad} a ${stockSymbol}. Selecciona ${stockSymbol} o una unidad equivalente.`;
+  }
+
+  return null;
+};
+
 interface UseInventoryStockResult {
   stockInfo: StockSummary | null;
   loadingState: LoadingState;
@@ -53,6 +84,7 @@ interface UseInventoryStockResult {
   checkStock: (nombreProducto: string) => Promise<void>;
   clearStock: () => void;
   isStockSufficient: (cantidadSolicitada: number, simboloUnidad?: string) => boolean;
+  getUnitCompatibilityMessage: (simboloUnidad?: string) => string | null;
   getStockMessage: (cantidadSolicitada?: number, simboloUnidad?: string) => string;
 }
 
@@ -154,11 +186,15 @@ export const useInventoryStock = (supabaseClient: SupabaseClient): UseInventoryS
     simboloUnidad?: string
   ): boolean => {
     if (!stockInfo || !stockInfo.total_calculable || cantidadSolicitada <= 0) return false;
+
+    if (getUnitCompatibilityMessage(stockInfo, conversiones, simboloUnidad)) {
+      return false;
+    }
     
     const stockSymbol = stockInfo.unidad_simbolo || '';
     
     // Si no se proporciona unidad o son iguales, comparación directa
-    if (!simboloUnidad || simboloUnidad === stockSymbol) {
+    if (!simboloUnidad || simboloUnidad.toLowerCase() === stockSymbol.toLowerCase()) {
       return stockInfo.total_disponible >= cantidadSolicitada;
     }
     
@@ -172,12 +208,17 @@ export const useInventoryStock = (supabaseClient: SupabaseClient): UseInventoryS
     );
 
     if (!cantidadConvertida.success) {
-      console.error(`[useInventoryStock] No se pudo convertir de ${simboloUnidad} a ${stockSymbol}`);
       return false;
     }
 
     return stockInfo.total_disponible >= cantidadConvertida.cantidad;
   }, [stockInfo, conversiones]);
+
+  const unitCompatibilityMessage = useCallback(
+    (simboloUnidad?: string): string | null =>
+      getUnitCompatibilityMessage(stockInfo, conversiones, simboloUnidad),
+    [stockInfo, conversiones],
+  );
 
   const getStockMessage = useCallback((cantidadSolicitada?: number, simboloUnidad?: string): string => {
     if (!stockInfo) return '';
@@ -213,7 +254,7 @@ export const useInventoryStock = (supabaseClient: SupabaseClient): UseInventoryS
       const stockSymbol = stockInfo.unidad_simbolo || '';
       
       // Si son la misma unidad, comparación directa
-      if (simboloUnidad === stockSymbol) {
+      if (simboloUnidad.toLowerCase() === stockSymbol.toLowerCase()) {
         if (stockInfo.total_disponible >= cantidadSolicitada) {
           return `✓ ${baseMessage} (suficiente)`;
         } else {
@@ -223,10 +264,11 @@ export const useInventoryStock = (supabaseClient: SupabaseClient): UseInventoryS
       }
       
       // Necesitamos convertir
+      const compatibilityMessage = unitCompatibilityMessage(simboloUnidad);
+      if (compatibilityMessage) return `${baseMessage} (${compatibilityMessage})`;
+
       const unidadOrigenId = obtenerUnidadIdPorSimbolo(simboloUnidad, conversiones);
-      if (!unidadOrigenId || !stockInfo.unidad_id) {
-        return `${baseMessage} (no se puede resolver la unidad ${simboloUnidad})`;
-      }
+      if (!unidadOrigenId || !stockInfo.unidad_id) return baseMessage;
 
       const cantidadConvertida = aplicarConversion(
         cantidadSolicitada,
@@ -246,7 +288,7 @@ export const useInventoryStock = (supabaseClient: SupabaseClient): UseInventoryS
     }
 
     return baseMessage;
-  }, [stockInfo, conversiones]);
+  }, [stockInfo, conversiones, unitCompatibilityMessage]);
 
   // Efecto para limpiar cuando cambia el cliente de Supabase
   useEffect(() => {
@@ -265,6 +307,7 @@ export const useInventoryStock = (supabaseClient: SupabaseClient): UseInventoryS
     checkStock,
     clearStock,
     isStockSufficient,
+    getUnitCompatibilityMessage: unitCompatibilityMessage,
     getStockMessage
   };
 };

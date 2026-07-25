@@ -71,18 +71,16 @@ describe('createInventoryStockService', () => {
       data: options.conversionRows ?? [],
       error: options.conversionError ?? null,
     }, 'eq');
-    const inventoryQuery = createQuery({
+    const rpc = vi.fn().mockResolvedValue({
       data: options.inventoryRows ?? [],
       error: options.inventoryError ?? null,
-    }, 'order');
-    const from = vi.fn((table: string) =>
-      table === 'conversiones' ? conversionQuery : inventoryQuery
-    );
+    });
+    const from = vi.fn(() => conversionQuery);
 
     return {
-      supabase: { from } as unknown as SupabaseClient,
+      supabase: { from, rpc } as unknown as SupabaseClient,
       conversionQuery,
-      inventoryQuery,
+      rpc,
     };
   };
 
@@ -92,13 +90,9 @@ describe('createInventoryStockService', () => {
     unidad_id: 1,
     cantidad_disponible: 10,
     fecha_ingreso: '2026-07-20T00:00:00.000Z',
-    productos_donados: {
-      id_producto: 'producto-1',
-      nombre_producto: 'Arroz',
-      unidad_id: 1,
-      unidades: { id: 1, nombre: 'Kilogramo', simbolo: 'kg' },
-    },
-    depositos: { nombre: 'Bodega principal' },
+    unidad_nombre: 'Kilogramo',
+    unidad_simbolo: 'kg',
+    deposito: 'Bodega principal',
     ...overrides,
   });
 
@@ -126,7 +120,7 @@ describe('createInventoryStockService', () => {
   });
 
   it('aggregates rows by warehouse and unit while retaining the newest date', async () => {
-    const { supabase } = createSupabase({
+    const { supabase, rpc } = createSupabase({
       conversionRows: [{
         unidad_origen_id: 1,
         unidad_destino_id: 2,
@@ -153,7 +147,7 @@ describe('createInventoryStockService', () => {
           id_entrada: 'entrada-3',
           id_deposito: 'deposito-2',
           cantidad_disponible: 1,
-          depositos: [{ name: 'ignored' }],
+          deposito: 'Bodega secundaria',
         }),
         stockRow({ id_entrada: 'zero', cantidad_disponible: 0 }),
         stockRow({ id_entrada: 'invalid', cantidad_disponible: 'not-a-number' }),
@@ -175,7 +169,9 @@ describe('createInventoryStockService', () => {
       fecha_actualizacion: '2026-07-21T00:00:00.000Z',
     });
     expect(result.data?.total_formateado?.cantidad).toBe(13.5);
-    expect(inventoryQueryCalledWith(supabase, 'productos_donados.nombre_producto')).toBe(true);
+    expect(rpc).toHaveBeenCalledWith('obtener_stock_por_producto', {
+      p_nombre_producto: 'Arroz',
+    });
   });
 
   it('marks a product as found but not calculable when units are incompatible', async () => {
@@ -186,12 +182,9 @@ describe('createInventoryStockService', () => {
           id_entrada: 'entrada-2',
           id_deposito: 'deposito-2',
           unidad_id: 99,
-          productos_donados: {
-            id_producto: 'producto-2',
-            nombre_producto: 'Arroz',
-            unidad_id: 99,
-            unidades: { id: 99, nombre: 'Caja', simbolo: 'caja' },
-          },
+          unidad_nombre: 'Caja',
+          unidad_simbolo: 'caja',
+          deposito: 'Bodega secundaria',
         }),
       ],
     });
@@ -230,18 +223,13 @@ describe('createInventoryStockService', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockResolvedValue({ data: [], error: null }),
     };
-    const inventoryQuery = {
-      select: vi.fn().mockReturnThis(),
-      ilike: vi.fn().mockReturnThis(),
-      order: vi.fn().mockResolvedValue({
-        data: null,
-        error: { message: 'database unavailable' },
-      }),
-    };
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: 'database unavailable' },
+    });
     const supabase = {
-      from: vi.fn()
-        .mockReturnValueOnce(conversionQuery)
-        .mockReturnValueOnce(inventoryQuery),
+      from: vi.fn().mockReturnValue(conversionQuery),
+      rpc,
     } as unknown as SupabaseClient;
 
     const result = await createInventoryStockService(supabase).getStockByProductName('Arroz');
@@ -336,9 +324,3 @@ describe('createInventoryStockService', () => {
       });
   });
 });
-
-const inventoryQueryCalledWith = (supabase: SupabaseClient, field: string): boolean => {
-  const from = (supabase.from as unknown as ReturnType<typeof vi.fn>);
-  const inventoryQuery = from.mock.results[1]?.value as { ilike?: ReturnType<typeof vi.fn> } | undefined;
-  return inventoryQuery?.ilike?.mock.calls.some((call: unknown[]) => call[0] === field) ?? false;
-};

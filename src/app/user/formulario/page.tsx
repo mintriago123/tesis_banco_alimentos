@@ -52,6 +52,7 @@ export default function FormularioSolicitante() {
     checkStock,
     clearStock,
     isStockSufficient,
+    getUnitCompatibilityMessage,
     getStockMessage,
   } = useInventoryStock(supabase);
 
@@ -156,19 +157,47 @@ export default function FormularioSolicitante() {
 
     // Obtener unidades específicas del alimento seleccionado
     const unidadesAlimento = obtenerUnidadesAlimento(alimentoId);
-    
-    // Si el alimento no tiene unidades configuradas, mostrar todas
-    if (unidadesAlimento.length === 0) {
-      return unidades;
+    const unidadesDisponibles = unidadesAlimento.length === 0
+      ? unidades
+      : unidadesAlimento.map(u => ({
+          id: u.unidad_id,
+          nombre: u.nombre,
+          simbolo: u.simbolo,
+        }));
+
+    // Si el catálogo del alimento no tiene asociada la unidad del stock,
+    // agregarla como respaldo para que el usuario pueda solicitarla.
+    if (
+      stockInfo?.producto_encontrado &&
+      stockInfo.unidad_id &&
+      !unidadesDisponibles.some((unidad) => unidad.id === stockInfo.unidad_id)
+    ) {
+      const unidadDeCatalogo = unidades.find((unidad) => unidad.id === stockInfo.unidad_id);
+      return [
+        ...unidadesDisponibles,
+        unidadDeCatalogo ?? {
+          id: stockInfo.unidad_id,
+          nombre: stockInfo.unidad_nombre ?? 'Unidad disponible',
+          simbolo: stockInfo.unidad_simbolo ?? '',
+        },
+      ];
     }
 
-    // Convertir UnidadAlimento a Unidad
-    return unidadesAlimento.map(u => ({
-      id: u.unidad_id,
-      nombre: u.nombre,
-      simbolo: u.simbolo
-    }));
+    return unidadesDisponibles;
   };
+
+  const unidadSeleccionadaActual = getUnidadesDisponibles().find(
+    (unidad) => unidad.id === parseInt(unidadId),
+  );
+  const simboloUnidadSeleccionada = unidadSeleccionadaActual?.simbolo;
+  const unitCompatibilityMessage = getUnitCompatibilityMessage(simboloUnidadSeleccionada);
+  const cantidadSolicitadaActual = parseFloat(cantidad) || 0;
+  const stockBloqueaEnvio = Boolean(
+    cantidadSolicitadaActual > 0 &&
+      stockInfo?.producto_encontrado &&
+      (!isStockSufficient(cantidadSolicitadaActual, simboloUnidadSeleccionada) ||
+        unitCompatibilityMessage),
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,8 +220,8 @@ export default function FormularioSolicitante() {
     }
 
     // Obtener el símbolo de la unidad seleccionada
-    const unidadSeleccionada = getUnidadesDisponibles().find(u => u.id === parseInt(unidadId));
-    const simboloUnidadSeleccionada = unidadSeleccionada?.simbolo || '';
+    const unidadSeleccionada = unidadSeleccionadaActual;
+    const simboloUnidadParaSolicitud = simboloUnidadSeleccionada || '';
 
     const cantidadUnidad = validarCantidadParaUnidad(cantidadNum, unidadSeleccionada ?? {});
     if (!cantidadUnidad.valid) {
@@ -202,12 +231,14 @@ export default function FormularioSolicitante() {
     }
 
     // Verificar stock disponible si hay información de inventario
-    if (stockInfo && stockInfo.producto_encontrado && !isStockSufficient(cantidadNum, simboloUnidadSeleccionada)) {
+    if (stockInfo && stockInfo.producto_encontrado && !isStockSufficient(cantidadNum, simboloUnidadParaSolicitud)) {
       // Usar el mensaje del hook que ya maneja las conversiones correctamente
-      const mensajeStock = getStockMessage(cantidadNum, simboloUnidadSeleccionada);
+      const mensajeStock = getStockMessage(cantidadNum, simboloUnidadParaSolicitud);
       
       setMensaje(
-        `${MESSAGES.SOLICITUD.STOCK_INSUFFICIENT} ${mensajeStock}`
+        unitCompatibilityMessage
+          ? mensajeStock
+          : `${MESSAGES.SOLICITUD.STOCK_INSUFFICIENT} ${mensajeStock}`
       );
       setLoading(false);
       return;
@@ -317,7 +348,7 @@ export default function FormularioSolicitante() {
                   loadingState={inventoryLoadingState}
                   errorMessage={inventoryErrorMessage || null}
                   cantidad={parseFloat(cantidad) || 0}
-                  simboloUnidad={getUnidadesDisponibles().find(u => u.id === parseInt(unidadId))?.simbolo}
+                  simboloUnidad={simboloUnidadSeleccionada}
                   isStockSufficient={isStockSufficient}
                   getStockMessage={getStockMessage}
                   onUseMaxStock={manejarUseMaxStock}
@@ -331,6 +362,7 @@ export default function FormularioSolicitante() {
                 unidades={getUnidadesDisponibles()}
                 loadingUnidades={loadingUnidades === 'loading'}
                 stockInfo={stockInfo}
+                unitCompatibilityMessage={unitCompatibilityMessage}
                 isStockSufficient={isStockSufficient}
                 onCantidadChange={(e) => setCantidad(e.target.value)}
                 onUnidadChange={(e) => setUnidadId(e.target.value)}
@@ -350,14 +382,7 @@ export default function FormularioSolicitante() {
                 disabled={
                   loading ||
                   !ubicacion ||
-                  (!!cantidad &&
-                    parseFloat(cantidad) > 0 &&
-                    !!stockInfo &&
-                    stockInfo.producto_encontrado &&
-                    !isStockSufficient(
-                      parseFloat(cantidad),
-                      getUnidadesDisponibles().find(u => u.id === parseInt(unidadId))?.simbolo
-                    ))
+                  stockBloqueaEnvio
                 }
                 loading={loading}
                 accent="solicitante"
@@ -370,17 +395,10 @@ export default function FormularioSolicitante() {
                     <AlertTriangle className="h-5 w-5" aria-hidden="true" />
                     Ubicación Requerida
                   </>
-                ) : !!cantidad &&
-                  parseFloat(cantidad) > 0 &&
-                  !!stockInfo &&
-                  stockInfo.producto_encontrado &&
-                  !isStockSufficient(
-                    parseFloat(cantidad),
-                    getUnidadesDisponibles().find(u => u.id === parseInt(unidadId))?.simbolo
-                  ) ? (
+              ) : stockBloqueaEnvio ? (
                   <>
                     <AlertTriangle className="h-5 w-5" aria-hidden="true" />
-                    Stock Insuficiente
+                    {unitCompatibilityMessage ? 'Unidad no compatible' : 'Stock insuficiente'}
                   </>
                 ) : (
                   <>
