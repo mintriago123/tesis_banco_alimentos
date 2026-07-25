@@ -195,13 +195,20 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
     return { error: primary.error };
   };
 
-  const ensureDonorDepositMapping = async (donorId: string): Promise<ServiceResult<{ depositoId: string }>> => {
+  const ensureDonorDepositMapping = async (donation: Donation): Promise<ServiceResult<void>> => {
     try {
-      const parsedDonorId = parseUuidValue(donorId, { name: 'donorId' });
+      const parsedDonorId = parseUuidValue(donation.user_id, { name: 'donorId' });
       if (!parsedDonorId.success) {
         return {
           success: false,
           error: parsedDonorId.error,
+        };
+      }
+      const parsedDepositId = parseUuidValue(donation.id_deposito, { name: 'donation.id_deposito' });
+      if (!parsedDepositId.success) {
+        return {
+          success: false,
+          error: 'La donación no tiene una bodega de origen seleccionada. Debe registrarse nuevamente con una bodega activa.',
         };
       }
 
@@ -209,10 +216,8 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
         .from('donante_depositos')
         .select('id_deposito, es_principal, created_at')
         .eq('donante_id', parsedDonorId.value)
+        .eq('id_deposito', parsedDepositId.value)
         .eq('activo', true)
-        .order('es_principal', { ascending: false })
-        .order('created_at', { ascending: true })
-        .limit(1)
         .maybeSingle();
 
       if (existing.error) {
@@ -227,13 +232,12 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
       if (existing.data?.id_deposito) {
         return {
           success: true,
-          data: { depositoId: existing.data.id_deposito }
         };
       }
 
       return {
         success: false,
-        error: 'El donante no tiene una bodega principal activa. Debe completar la configuración de su perfil.',
+        error: 'La bodega de origen de la donación ya no está activa. Selecciona otra bodega antes de aprobarla.',
       };
     } catch (error) {
       logger.error('Excepción asegurando mapeo de bodega por donante', error);
@@ -298,7 +302,7 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
       }
 
       if (nuevoEstado === 'Aprobada') {
-        const mappingResult = await ensureDonorDepositMapping(donation.user_id);
+        const mappingResult = await ensureDonorDepositMapping(donation);
         if (!mappingResult.success) {
           return {
             success: false,

@@ -74,6 +74,7 @@ type SupabaseDonationWithAlimento = SupabaseDonationRow & {
 const mapDonationRowToDomain = (row: SupabaseDonationWithAlimento): Donation => ({
   id: row.id,
   user_id: row.user_id,
+  id_deposito: row.id_deposito ?? null,
   nombre_donante: row.nombre_donante,
   ruc_donante: row.ruc_donante ?? undefined,
   cedula_donante: row.cedula_donante ?? undefined,

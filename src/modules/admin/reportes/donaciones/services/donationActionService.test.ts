@@ -13,6 +13,7 @@ const ADMIN_ID = '11111111-1111-4111-8111-111111111111';
 const donation: Donation = {
   id: 10,
   user_id: '22222222-2222-4222-8222-222222222222',
+  id_deposito: '33333333-3333-4333-8333-333333333333',
   nombre_donante: 'Donante de prueba',
   telefono: '0999999999',
   email: 'donante@example.com',
@@ -183,7 +184,7 @@ describe('createDonationActionService cancellation', () => {
 
     expect(result).toMatchObject({
       success: false,
-      error: 'El donante no tiene una bodega principal activa. Debe completar la configuración de su perfil.',
+      error: 'La bodega de origen de la donación ya no está activa. Selecciona otra bodega antes de aprobarla.',
     });
     expect(supabase.from).toHaveBeenCalledTimes(1);
   });

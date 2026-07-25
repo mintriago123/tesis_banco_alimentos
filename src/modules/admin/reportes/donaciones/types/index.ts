@@ -20,6 +20,7 @@ export interface DonationAlimento {
 export interface Donation {
   id: number;
   user_id: string;
+  id_deposito?: string | null;
   nombre_donante: string;
   ruc_donante?: string;
   cedula_donante?: string;
@@ -90,6 +91,7 @@ export interface ServiceResult<T> {
 export interface SupabaseDonationRow {
   id: number;
   user_id: string;
+  id_deposito?: string | null;
   nombre_donante: string;
   ruc_donante?: string | null;
   cedula_donante?: string | null;
