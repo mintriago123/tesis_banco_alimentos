@@ -18,3 +18,6 @@ export * from './nueva-donacion/utils/impactoCalculator';
 export * from './perfil/components';
 export * from './perfil/hooks';
 export * from './perfil/types';
+
+// Bodegas del donante
+export * from './bodegas';

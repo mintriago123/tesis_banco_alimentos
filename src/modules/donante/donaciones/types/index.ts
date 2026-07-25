@@ -5,6 +5,7 @@ export type { MotivoCancelacion } from '@/modules/shared/donaciones/types';
 export interface Donacion {
   id: number;
   user_id: string;
+  id_deposito?: string | null;
   nombre_donante: string;
   ruc_donante?: string;
   cedula_donante?: string;
@@ -47,6 +48,7 @@ export interface DonacionEstadisticas {
 }
 
 export interface DonacionFormulario {
+  id_deposito: string;
   tipo_producto: string;
   cantidad: string;
   unidad_id: string;
