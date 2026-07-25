@@ -15,6 +15,7 @@ import {
   ClipboardDocumentListIcon,
   PlusCircleIcon,
   Cog6ToothIcon,
+  BuildingStorefrontIcon,
   PowerIcon,
   ChevronDownIcon,
   ChevronUpIcon,
@@ -108,6 +109,11 @@ const menuItems: MenuItem[] = [
         href: '/admin/reportes/cancelaciones-donaciones',
         description: 'Historial de donaciones canceladas'
       }, 
+      {
+        name: 'Solicitudes de bodegas',
+        href: '/admin/reportes/solicitudes-bodegas',
+        description: 'Revisar altas y modificaciones de bodegas'
+      },
       // {
       //   name: 'Historial de Reportes',
       //   href: '/admin/reportes/historial',
@@ -129,6 +135,13 @@ const menuItems: MenuItem[] = [
     href: '/operador/solicitudes',
     icon: ClipboardDocumentListIcon,
     description: 'Aprobar/Rechazar solicitudes',
+    operadorOnly: true
+  },
+  {
+    name: 'Solicitudes de bodegas',
+    href: '/operador/solicitudes-bodegas',
+    icon: BuildingStorefrontIcon,
+    description: 'Revisar bodegas de donantes',
     operadorOnly: true
   },
   {
@@ -166,6 +179,13 @@ const menuItems: MenuItem[] = [
     href: '/donante/donaciones',
     icon: ClipboardDocumentListIcon,
     description: 'Ver mis donaciones realizadas',
+    donanteOnly: true
+  },
+  {
+    name: 'Mis Bodegas',
+    href: '/donante/configuracion/bodegas',
+    icon: BuildingStorefrontIcon,
+    description: 'Gestionar bodegas de origen',
     donanteOnly: true
   },
   {

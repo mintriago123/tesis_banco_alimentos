@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { validarCantidadParaUnidad } from '@/lib/unidadConversion';
@@ -19,6 +20,7 @@ import {
   useMultiStepForm,
   useFormValidation,
   useNuevaDonacionSubmit,
+  useDonanteBodegas,
   HORARIOS_DISPONIBLES,
   calcularImpacto
 } from '@/modules/donante';
@@ -35,6 +37,11 @@ const obtenerFechaHoy = () => {
 export default function NuevaDonacionPage() {
   const { supabase, user: currentUser, isLoading: authLoading } = useSupabase();
   const mensajeValidacionRef = useRef<HTMLDivElement>(null);
+  const {
+    bodegas,
+    loadingState: bodegasLoadingState,
+    errorMessage: bodegasError,
+  } = useDonanteBodegas(supabase, currentUser?.id ?? null);
 
   // Hook de navegación multi-paso
   const { pasoActual, siguientePaso: avanzarPaso, pasoAnterior, resetearPaso } = useMultiStepForm(3);
@@ -79,6 +86,7 @@ export default function NuevaDonacionPage() {
 
   // Estado del formulario
   const [formulario, setFormulario] = useState({
+    id_deposito: '',
     // Paso 1: Información del producto
     tipo_producto: '',
     cantidad: '',
@@ -181,6 +189,9 @@ export default function NuevaDonacionPage() {
         }
         break;
       case 2:
+        if (!formulario.id_deposito) {
+          return mostrarErrorValidacion('Selecciona una bodega de origen antes de continuar.');
+        }
         if (!formulario.fecha_disponible.trim() || !formulario.direccion_entrega.trim()) {
           return mostrarErrorValidacion('Por favor, completa la información de logística.');
         }
@@ -223,6 +234,7 @@ export default function NuevaDonacionPage() {
     if (exito) {
       // Reiniciar formulario
       setFormulario({
+        id_deposito: '',
         tipo_producto: '',
         cantidad: '',
         unidad_id: '',
@@ -372,6 +384,46 @@ export default function NuevaDonacionPage() {
             />
 
             <div className="space-y-4">
+              <div>
+                <label htmlFor="bodega-origen" className="mb-1 block text-sm font-medium text-slate-700">
+                  Bodega de origen <span aria-hidden="true">*</span>
+                </label>
+                {bodegasLoadingState === 'loading' || bodegasLoadingState === 'idle' ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600" aria-busy="true">
+                    Cargando bodegas activas...
+                  </div>
+                ) : bodegasError ? (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-700" role="alert">
+                    {bodegasError}
+                  </div>
+                ) : bodegas.length === 0 ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800">
+                    No tienes una bodega activa. <Link href="/donante/configuracion/bodegas" className="font-semibold underline">Configura una bodega</Link> para continuar.
+                  </div>
+                ) : (
+                  <select
+                    id="bodega-origen"
+                    name="id_deposito"
+                    value={formulario.id_deposito}
+                    onChange={manejarCambio}
+                    required
+                    aria-required="true"
+                    aria-describedby="bodega-origen-ayuda"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  >
+                    <option value="">Selecciona una bodega activa</option>
+                    {bodegas.map((bodega) => (
+                      <option key={bodega.id_deposito} value={bodega.id_deposito}>
+                        {bodega.nombre}{bodega.es_principal ? ' (principal)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <p id="bodega-origen-ayuda" className="mt-1 text-xs text-slate-500">
+                  La donación y el inventario conservarán esta ubicación de origen.
+                </p>
+              </div>
+
               <div>
                 <label htmlFor="fecha-disponible" className="mb-1 block text-sm font-medium text-slate-700">
                   Fecha disponible <span aria-hidden="true">*</span>
