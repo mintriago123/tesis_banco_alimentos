@@ -45,9 +45,11 @@ const createSupabase = (
   updateData: unknown,
   updateError: { message: string; code?: string } | null = null,
   includeDonorMapping = false,
+  mappingData: unknown = { id_deposito: '33333333-3333-4333-8333-333333333333' },
+  stateData: unknown = { estado: 'Pendiente' },
 ) => {
-  const mappingQuery = createQuery({ id_deposito: '33333333-3333-4333-8333-333333333333' });
-  const stateQuery = createQuery({ estado: 'Pendiente' });
+  const mappingQuery = createQuery(mappingData);
+  const stateQuery = createQuery(stateData);
   const updateQuery = createQuery(updateData, updateError);
   const queries = includeDonorMapping
     ? [mappingQuery, stateQuery, updateQuery]
@@ -155,5 +157,113 @@ describe('createDonationActionService cancellation', () => {
     expect(supabase.from).toHaveBeenCalledTimes(3);
     expect(updateQuery.update).toHaveBeenCalledTimes(1);
     expect(updateQuery.update).toHaveBeenCalledWith(expect.objectContaining({ estado: 'Aprobada' }));
+  });
+
+  it('validates malformed donations before touching Supabase', async () => {
+    const { supabase } = createSupabase({ id: donation.id });
+    const service = createDonationActionService(supabase);
+
+    const result = await service.updateDonationEstado({ ...donation, id: 0 }, 'Aprobada');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('donation.id');
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it('requires an active donor warehouse before approving', async () => {
+    const { supabase } = createSupabase(
+      { id: donation.id },
+      null,
+      true,
+      null,
+    );
+    const service = createDonationActionService(supabase);
+
+    const result = await service.updateDonationEstado({ ...donation, id: 13 }, 'Aprobada');
+
+    expect(result).toMatchObject({
+      success: false,
+      error: 'El donante no tiene una bodega principal activa. Debe completar la configuración de su perfil.',
+    });
+    expect(supabase.from).toHaveBeenCalledTimes(1);
+  });
+
+  it('approves a donation only after resolving the donor warehouse', async () => {
+    const { supabase, updateQuery } = createSupabase({ id: donation.id }, null, true);
+    const service = createDonationActionService(supabase);
+
+    const result = await service.updateDonationEstado({ ...donation, id: 14 }, 'Aprobada');
+
+    expect(result.success).toBe(true);
+    expect(updateQuery.update).toHaveBeenCalledWith(expect.objectContaining({
+      estado: 'Aprobada',
+      codigo_comprobante: expect.any(String),
+    }));
+    expect(sendNotification).toHaveBeenCalledWith({
+      event: 'donation_status_changed',
+      entityId: '14',
+    });
+  });
+
+  it('returns a migration error when cancellation audit columns are missing', async () => {
+    const { supabase } = createSupabase(
+      null,
+      { message: 'column motivo_cancelacion does not exist', code: '42703' },
+    );
+    const service = createDonationActionService(supabase);
+
+    const result = await service.updateDonationEstado({ ...donation, id: 15 }, 'Cancelada', {
+      motivo: 'solicitud_donante',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('base de datos no está actualizada');
+  });
+
+  it('keeps a successful state change when notification delivery fails', async () => {
+    vi.mocked(sendNotification).mockRejectedValueOnce(new Error('mailer unavailable'));
+    const { supabase } = createSupabase({ id: donation.id });
+    const service = createDonationActionService(supabase);
+
+    const result = await service.updateDonationEstado({ ...donation, id: 16 }, 'Cancelada', {
+      motivo: 'solicitud_donante',
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('rolls back an approval when the database reports a newer approved state', async () => {
+    const stateQuery = createQuery({ estado: 'Aprobada' });
+    const updateQuery = createQuery({ id: 17 });
+    const rollbackLookup = createQuery({ id_entrada: 'entrada-17', estado: 'disponible' });
+    const rollbackMutation = {
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn(),
+    };
+    rollbackMutation.eq
+      .mockReturnValueOnce(rollbackMutation)
+      .mockResolvedValueOnce({ error: null });
+
+    const supabase = {
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: ADMIN_ID } }, error: null }),
+      },
+      from: vi.fn()
+        .mockReturnValueOnce(stateQuery)
+        .mockReturnValueOnce(updateQuery)
+        .mockReturnValueOnce(rollbackLookup)
+        .mockReturnValueOnce(rollbackMutation),
+    } as unknown as SupabaseClient;
+    const service = createDonationActionService(supabase);
+
+    const result = await service.updateDonationEstado({ ...donation, id: 17 }, 'Cancelada', {
+      motivo: 'solicitud_donante',
+    });
+
+    expect(result.success).toBe(true);
+    expect(rollbackMutation.update).toHaveBeenCalledWith(expect.objectContaining({
+      cantidad_disponible: 0,
+      estado: 'cancelado',
+    }));
   });
 });

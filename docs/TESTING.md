@@ -11,6 +11,8 @@ Ejecuta los comandos desde la raíz del repositorio:
 ```bash
 pnpm test
 pnpm test:coverage
+pnpm test:coverage:critical
+pnpm test:integration
 pnpm lint
 pnpm build
 ```
@@ -22,10 +24,52 @@ ignorado por Git y sirve como evidencia local de la ejecución.
 
 | Comando | Resultado registrado el 2026-07-24 |
 |---------|-------------------------------------|
-| `pnpm test` | Aprobado: 32 archivos y 148 pruebas |
-| `pnpm test:coverage` | Aprobado: 56.42% statements, 48.46% branches, 59.16% funciones y 57.97% líneas |
+| `pnpm test` | Aprobado: 35 archivos, 210 pruebas; la suite de integración se ejecuta por separado |
+| `pnpm test:coverage` | Aprobado: 71.46% statements, 62.20% branches, 69.37% funciones y 73.47% líneas |
+| `pnpm test:coverage:critical` | Aprobado: 86.43% statements, 75.97% branches, 94.95% funciones y 88.06% líneas |
+| `pnpm test:integration` | Aprobado: 2 pruebas ejecutadas contra Supabase local mediante Podman |
 | `pnpm lint` | Aprobado |
-| `pnpm build` | Aprobado: Next.js 16.2.10 generó 49 rutas |
+| `pnpm build` | Aprobado: Next.js 16.2.10 compiló y generó 49 páginas estáticas |
+
+La cobertura global tiene un umbral inicial de 60% para statements y líneas,
+50% para ramas y 60% para funciones. La configuración separada de cobertura
+crítica exige 80% de statements/líneas y 70% de ramas. Los umbrales globales
+pueden elevarse progresivamente a 65% y 70% cuando se cubran los componentes
+visuales y plantillas que están fuera de la prioridad P0.
+
+## Integración real con Supabase local
+
+La suite `tests/integration/supabase-security.test.ts` no usa la base remota.
+Para ejecutarla contra una instancia local, inicia Supabase desde la raíz y
+exporta las credenciales mostradas por el CLI. Con Docker, el arranque directo
+es:
+
+```bash
+SUPABASE_TELEMETRY_DISABLED=1 supabase start
+RUN_SUPABASE_INTEGRATION=true \
+SUPABASE_TEST_URL=http://127.0.0.1:54321 \
+SUPABASE_TEST_PUBLISHABLE_KEY=... \
+SUPABASE_TEST_SERVICE_ROLE_KEY=... \
+pnpm test:integration
+```
+
+Con Podman, expón temporalmente su API compatible con Docker y conserva ese
+socket mientras se ejecutan `supabase start`, las pruebas y `supabase stop`:
+
+```bash
+podman system service --time=0 unix:///tmp/podman.sock
+DOCKER_HOST=unix:///tmp/podman.sock SUPABASE_TELEMETRY_DISABLED=1 supabase start
+# Ejecuta la suite con las mismas variables del ejemplo anterior.
+DOCKER_HOST=unix:///tmp/podman.sock SUPABASE_TELEMETRY_DISABLED=1 supabase stop
+```
+
+La preparación crea usuarios temporales mediante Auth administrativo; las
+operaciones bajo prueba usan clientes autenticados y el cierre elimina esos
+usuarios. Las pruebas comprueban aislamiento por RLS en `solicitudes` y que un
+solicitante no pueda ejecutar el RPC administrativo de aprobación de catálogo.
+La ejecución unitaria con mocks valida reglas de aplicación y cobertura de
+código; no sustituye esta validación de RLS, RPC, triggers o consistencia de
+inventario en PostgreSQL.
 
 ## Cobertura funcional automatizada
 

@@ -43,6 +43,29 @@ const createUsuarioQuery = (profile: unknown) => ({
   })),
 });
 
+const createListQuery = (result: {
+  data: unknown;
+  error: { message: string } | null;
+  count: number | null;
+}) => {
+  const query = {
+    select: vi.fn(),
+    order: vi.fn(),
+    range: vi.fn(),
+    eq: vi.fn(),
+    gte: vi.fn(),
+    lte: vi.fn(),
+    then: (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve),
+  };
+  query.select.mockReturnValue(query);
+  query.order.mockReturnValue(query);
+  query.range.mockReturnValue(query);
+  query.eq.mockReturnValue(query);
+  query.gte.mockReturnValue(query);
+  query.lte.mockReturnValue(query);
+  return query;
+};
+
 beforeEach(() => {
   mocks.createServerSupabaseClient.mockReset();
   mocks.createAdminSupabaseClient.mockReset();
@@ -156,5 +179,71 @@ describe('/api/operador/bajas', () => {
       error: 'Error al procesar la baja del producto',
       details: 'database unavailable',
     });
+  });
+
+  it('returns a domain error when the baja RPC rejects the operation', async () => {
+    mocks.adminRpc.mockResolvedValue({
+      data: [{ success: false, message: 'Cantidad insuficiente' }],
+      error: null,
+    });
+
+    const response = await POST(jsonRequest({
+      id_entrada: ENTRADA_ID,
+      cantidad: 20,
+      motivo: 'vencido',
+    }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'Cantidad insuficiente' });
+  });
+
+  it('lists bajas with validated filters and pagination', async () => {
+    const listQuery = createListQuery({
+      data: [{ id_baja: 'baja-1', motivo_baja: 'vencido' }],
+      error: null,
+      count: 3,
+    });
+    mocks.from
+      .mockReturnValueOnce(createUsuarioQuery({ id: USER_ID, rol: 'OPERADOR', estado: 'activo' }))
+      .mockReturnValueOnce(listQuery);
+
+    const response = await GET(new NextRequest(
+      'http://localhost/api/operador/bajas?motivo=vencido&fecha_inicio=2026-07-01&fecha_fin=2026-07-31&limit=2&offset=1',
+    ));
+
+    expect(response.status).toBe(200);
+    expect(listQuery.eq).toHaveBeenCalledWith('motivo_baja', 'vencido');
+    expect(listQuery.range).toHaveBeenCalledWith(1, 2);
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      pagination: { total: 3, limit: 2, offset: 1, has_more: false },
+    });
+  });
+
+  it('returns an error when the bajas history query fails', async () => {
+    const listQuery = createListQuery({
+      data: null,
+      error: { message: 'history unavailable' },
+      count: null,
+    });
+    mocks.from
+      .mockReturnValueOnce(createUsuarioQuery({ id: USER_ID, rol: 'OPERADOR', estado: 'activo' }))
+      .mockReturnValueOnce(listQuery);
+
+    const response = await GET(new NextRequest('http://localhost/api/operador/bajas'));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: 'Error al consultar bajas' });
+  });
+
+  it('rejects a missing CSRF source before authentication', async () => {
+    const response = await POST(new Request('http://localhost/api/operador/bajas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }) as NextRequest);
+
+    expect(response.status).toBe(403);
+    expect(mocks.createServerSupabaseClient).not.toHaveBeenCalled();
   });
 });

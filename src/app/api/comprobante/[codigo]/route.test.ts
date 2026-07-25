@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { createHash } from 'node:crypto';
+import { generarURLComprobante } from '@/lib/comprobante';
 import { GET } from './route';
 
 const DONOR_ID = '11111111-1111-4111-8111-111111111111';
@@ -219,5 +221,86 @@ describe('/api/comprobante/[codigo]', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'Donación no encontrada',
     });
+  });
+
+  it('rejects codes that exceed the maximum length', async () => {
+    const response = await getComprobante('x'.repeat(2049));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Código de comprobante demasiado largo',
+    });
+    expect(mocks.createServerSupabaseClient).not.toHaveBeenCalled();
+  });
+
+  it('denies a donor access to another user request', async () => {
+    mocks.dataQueue.push(createDataQuery({
+      data: solicitudRow(OTHER_DONOR_ID),
+      error: null,
+    }));
+
+    const response = await getComprobante('SOL-333-ABC');
+
+    expect(response.status).toBe(403);
+  });
+
+  it('allows an owner to view a request receipt', async () => {
+    mocks.dataQueue.push(createDataQuery({
+      data: solicitudRow(DONOR_ID),
+      error: null,
+    }));
+
+    const response = await getComprobante('SOL-333-ABC');
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      tipo: 'solicitud',
+      comprobante: {
+        pedido: { tipo: 'solicitud', unidad: 'kg' },
+      },
+    });
+  });
+
+  it('resolves a valid donation QR payload', async () => {
+    const url = generarURLComprobante(
+      'http://localhost:3000',
+      'DON-10-ABC',
+      'donacion',
+      DONOR_ID,
+      '10',
+    );
+    const encoded = url.split('/').pop() ?? '';
+    mocks.dataQueue.push(createDataQuery({ data: donationRow(DONOR_ID), error: null }));
+
+    const response = await getComprobante(encoded);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      tipo: 'donacion',
+    });
+  });
+
+  it('validates QR payload type and corrupted payloads before querying records', async () => {
+    const payload = {
+      c: 'DON-10-ABC',
+      t: 'X',
+      u: DONOR_ID,
+      p: '10',
+      f: String(Date.now()),
+    };
+    const checksum = createHash('sha256')
+      .update(`${payload.c}|${payload.t}|${payload.u}|${payload.p}|${payload.f}`)
+      .digest('hex')
+      .substring(0, 8);
+    const encoded = Buffer.from(JSON.stringify({ ...payload, v: checksum })).toString('base64url');
+
+    const invalidType = await getComprobante(encoded);
+    expect(invalidType.status).toBe(400);
+    await expect(invalidType.json()).resolves.toEqual({ error: 'Tipo de comprobante inválido' });
+
+    const invalidChecksum = await getComprobante(`${encoded.slice(0, -1)}A`);
+    expect(invalidChecksum.status).toBe(400);
+    expect(mocks.dataQueue).toHaveLength(0);
   });
 });

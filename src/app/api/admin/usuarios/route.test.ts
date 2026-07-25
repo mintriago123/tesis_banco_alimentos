@@ -39,15 +39,15 @@ const createProfileQuery = (profile: unknown) => ({
   })),
 });
 
-const createUpdateQuery = () => {
-  const eq = vi.fn(async () => ({ error: null }));
+const createUpdateQuery = (error: { message: string } | null = null) => {
+  const eq = vi.fn(async () => ({ error }));
   const update = vi.fn(() => ({ eq }));
 
   return { update, eq };
 };
 
-const createUpsertQuery = () => {
-  const single = vi.fn(async () => ({ data: { id: 'created-user' }, error: null }));
+const createUpsertQuery = (error: { message: string } | null = null) => {
+  const single = vi.fn(async () => ({ data: { id: 'created-user' }, error }));
   const select = vi.fn(() => ({ single }));
   const upsert = vi.fn(() => ({ select }));
 
@@ -199,5 +199,81 @@ describe('/api/admin/usuarios', () => {
       email: 'new@example.com',
       rol: 'DONANTE',
     });
+  });
+
+  it('rejects malformed create payloads before using the admin client', async () => {
+    enqueueProfile();
+
+    const response = await POST(jsonRequest('POST', {
+      email: ' ',
+      password: 'secret',
+      rol: 'DONANTE',
+    }));
+
+    expect(response.status).toBe(400);
+    expect(mocks.adminCreateUser).not.toHaveBeenCalled();
+  });
+
+  it('returns an auth creation error without inserting a profile', async () => {
+    enqueueProfile();
+    mocks.adminCreateUser.mockResolvedValue({
+      data: { user: null },
+      error: { message: 'auth failed' },
+    });
+
+    const response = await POST(jsonRequest('POST', {
+      email: 'new@example.com',
+      password: 'secret-password',
+      rol: 'DONANTE',
+    }));
+
+    expect(response.status).toBe(500);
+    expect(mocks.adminFromQueue).toHaveLength(0);
+  });
+
+  it('reports a profile persistence error after creating auth', async () => {
+    const upsertQuery = createUpsertQuery({ message: 'profile insert failed' });
+    enqueueProfile();
+    mocks.adminFromQueue.push(upsertQuery);
+    mocks.adminCreateUser.mockResolvedValue({
+      data: { user: { id: 'created-user-2' } },
+      error: null,
+    });
+
+    const response = await POST(jsonRequest('POST', {
+      email: 'new@example.com',
+      password: 'secret-password',
+      rol: 'OPERADOR',
+    }));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Usuario creado en auth, pero falló al registrar en la tabla usuarios.',
+    });
+  });
+
+  it('returns database errors from PATCH and handles invalid JSON', async () => {
+    const updateQuery = createUpdateQuery({ message: 'update failed' });
+    enqueueProfile();
+    mocks.adminFromQueue.push(updateQuery);
+
+    const response = await PATCH(jsonRequest('PATCH', {
+      userId: 'user-1',
+      updates: { estado: 'activo' },
+    }));
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'No fue posible actualizar el usuario',
+      details: 'update failed',
+    });
+
+    enqueueProfile();
+    const invalidJson = new Request('http://localhost/api/admin/usuarios', {
+      method: 'PATCH',
+      headers: { Origin: 'http://localhost', 'Content-Type': 'application/json' },
+      body: '{not-json',
+    });
+    const invalidResponse = await PATCH(invalidJson);
+    expect(invalidResponse.status).toBe(400);
   });
 });

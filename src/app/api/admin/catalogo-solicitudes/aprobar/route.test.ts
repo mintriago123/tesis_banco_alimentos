@@ -120,4 +120,63 @@ describe('/api/admin/catalogo-solicitudes/aprobar', () => {
     });
     await expect(response.json()).resolves.toEqual({ alimentoId: 123 });
   });
+
+  it('rejects invalid unit selections before invoking the RPC', async () => {
+    const response = await POST(jsonRequest({
+      solicitudId: SOLICITUD_ID,
+      nombre: 'Arroz',
+      categoria: 'Granos',
+      unidadIds: [1],
+      unidadPrincipalId: 2,
+    }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'La unidad principal debe estar seleccionada',
+    });
+    expect(mocks.adminRpc).not.toHaveBeenCalled();
+  });
+
+  it('rejects incomplete or oversized request payloads', async () => {
+    const emptyFields = await POST(jsonRequest({
+      solicitudId: SOLICITUD_ID,
+      nombre: ' ',
+      categoria: 'Granos',
+      unidadIds: [1],
+    }));
+    expect(emptyFields.status).toBe(400);
+
+    const oversized = await POST(jsonRequest({
+      solicitudId: SOLICITUD_ID,
+      nombre: 'Arroz',
+      categoria: 'Granos',
+      unidadIds: Array.from({ length: 51 }, (_, index) => index + 1),
+    }));
+    expect(oversized.status).toBe(400);
+    expect(mocks.adminRpc).not.toHaveBeenCalled();
+  });
+
+  it('returns RPC and malformed-result errors', async () => {
+    mocks.adminRpc.mockResolvedValueOnce({ data: null, error: { message: 'rpc failed' } });
+    const rpcError = await POST(jsonRequest({
+      solicitudId: SOLICITUD_ID,
+      nombre: 'Arroz',
+      categoria: 'Granos',
+      unidadIds: [1],
+    }));
+    expect(rpcError.status).toBe(500);
+    await expect(rpcError.json()).resolves.toEqual({ error: 'rpc failed' });
+
+    mocks.adminRpc.mockResolvedValueOnce({ data: 'not-an-id', error: null });
+    const invalidResult = await POST(jsonRequest({
+      solicitudId: SOLICITUD_ID,
+      nombre: 'Arroz',
+      categoria: 'Granos',
+      unidadIds: [1],
+    }));
+    expect(invalidResult.status).toBe(500);
+    await expect(invalidResult.json()).resolves.toMatchObject({
+      error: expect.stringContaining('respuesta del alimento creado'),
+    });
+  });
 });

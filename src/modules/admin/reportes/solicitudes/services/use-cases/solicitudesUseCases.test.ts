@@ -290,4 +290,159 @@ describe('solicitudes use cases', () => {
       expect.objectContaining({ esParcial: true, cantidadParcial: 4 })
     );
   });
+
+  it('validates approval identifiers and approved quantities', async () => {
+    const { deps } = createDeps();
+
+    await expect(approveSolicitud({
+      solicitud: { ...baseSolicitud, id: 'invalid' }, depositoId: DEPOSITO_ID,
+    }, deps)).resolves.toMatchObject({ success: false, error: expect.stringContaining('solicitud.id') });
+    await expect(approveSolicitud({
+      solicitud: { ...baseSolicitud, usuario_id: 'invalid' }, depositoId: DEPOSITO_ID,
+    }, deps)).resolves.toMatchObject({ success: false, error: expect.stringContaining('usuario_id') });
+    await expect(approveSolicitud({
+      solicitud: baseSolicitud, depositoId: DEPOSITO_ID, cantidadAprobada: 0,
+    }, deps)).resolves.toMatchObject({ success: false, error: 'cantidadAprobada debe ser mayor a 0.' });
+  });
+
+  it('restores inventory when the discount or state update fails', async () => {
+    const first = createDeps();
+    vi.mocked(first.inventoryService.descontarDelInventario).mockResolvedValue({
+      cantidadRestante: 1,
+      productosActualizados: 1,
+      noStock: true,
+      error: true,
+      detalleEntregado: [{
+        producto: { id_producto: PRODUCTO_ID, nombre_producto: 'Arroz', unidad_id: 1 },
+        cantidadEntregada: 2,
+      }],
+    });
+    const discountResult = await approveSolicitud({ solicitud: baseSolicitud, depositoId: DEPOSITO_ID }, first.deps);
+    expect(discountResult.success).toBe(false);
+    expect(first.inventoryService.restaurarInventario).toHaveBeenCalledTimes(1);
+
+    const second = createDeps();
+    second.supabase.updateResults.push({ error: { message: 'state update failed' } });
+    const stateResult = await approveSolicitud({ solicitud: baseSolicitud, depositoId: DEPOSITO_ID }, second.deps);
+    expect(stateResult).toMatchObject({ success: false, error: 'No fue posible actualizar el estado de la solicitud' });
+    expect(second.inventoryService.restaurarInventario).toHaveBeenCalledTimes(1);
+  });
+
+  it('covers delivery validation and persistence errors', async () => {
+    const { deps, supabase } = createDeps();
+    await expect(deliverSolicitud({ solicitud: baseSolicitud }, deps))
+      .resolves.toMatchObject({ success: false, error: expect.stringContaining('comprobante') });
+    await expect(deliverSolicitud({
+      solicitud: { ...baseSolicitud, codigo_comprobante: 'ABC' },
+      codigoComprobanteVerificado: 'XYZ',
+    }, deps)).resolves.toMatchObject({ success: false, error: expect.stringContaining('no coincide') });
+    await expect(deliverSolicitud({
+      solicitud: { ...baseSolicitud, codigo_comprobante: 'ABC', estado: 'rechazada' },
+      codigoComprobanteVerificado: 'ABC',
+    }, deps)).resolves.toMatchObject({ success: false, error: expect.stringContaining('aprobadas') });
+
+    supabase.updateResults.push({ error: { message: 'delivery update failed' } });
+    const updateError = await deliverSolicitud({
+      solicitud: { ...baseSolicitud, codigo_comprobante: 'ABC', estado: 'aprobada' },
+      codigoComprobanteVerificado: 'ABC',
+    }, deps);
+    expect(updateError).toMatchObject({ success: false, error: 'No fue posible actualizar el estado de la solicitud' });
+  });
+
+  it('handles complete partial deliveries and history errors', async () => {
+    const complete = createDeps();
+    complete.supabase.insertResults.push({ error: { message: 'history unavailable' } });
+    const result = await processPartialDelivery({
+      solicitud: baseSolicitud,
+      cantidadDonar: 10,
+      porcentaje: 100,
+      depositoId: DEPOSITO_ID,
+    }, complete.deps);
+    expect(result).toMatchObject({
+      success: true,
+      data: { message: 'Donación completada: 10 kg de Arroz' },
+    });
+    expect(complete.notificationService.notificarCambioEstado).toHaveBeenCalledWith(
+      baseSolicitud,
+      'aprobada',
+      expect.objectContaining({ esParcial: false }),
+    );
+  });
+
+  it('rejects partial deliveries without stock and restores failed discounts', async () => {
+    const noStock = createDeps();
+    vi.mocked(noStock.inventoryService.validarStockDisponiblePorDeposito).mockResolvedValue({
+      suficiente: false,
+      disponible: 0,
+      solicitado: 4,
+    });
+    await expect(processPartialDelivery({
+      solicitud: baseSolicitud, cantidadDonar: 4, porcentaje: 40, depositoId: DEPOSITO_ID,
+    }, noStock.deps)).resolves.toMatchObject({ success: false, error: expect.stringContaining('no tiene stock') });
+
+    const insufficient = createDeps();
+    vi.mocked(insufficient.inventoryService.validarStockDisponiblePorDeposito).mockResolvedValue({
+      suficiente: false,
+      disponible: 2,
+      solicitado: 4,
+    });
+    await expect(processPartialDelivery({
+      solicitud: baseSolicitud, cantidadDonar: 4, porcentaje: 40, depositoId: DEPOSITO_ID,
+    }, insufficient.deps)).resolves.toMatchObject({ success: false, error: expect.stringContaining('Stock insuficiente') });
+
+    const failedDiscount = createDeps();
+    vi.mocked(failedDiscount.inventoryService.descontarDelInventario).mockResolvedValue({
+      cantidadRestante: 1,
+      productosActualizados: 1,
+      noStock: true,
+      detalleEntregado: [{
+        producto: { id_producto: PRODUCTO_ID, nombre_producto: 'Arroz', unidad_id: 1 },
+        cantidadEntregada: 2,
+      }],
+    });
+    const discountResult = await processPartialDelivery({
+      solicitud: baseSolicitud, cantidadDonar: 4, porcentaje: 40, depositoId: DEPOSITO_ID,
+    }, failedDiscount.deps);
+    expect(discountResult.success).toBe(false);
+    expect(failedDiscount.inventoryService.restaurarInventario).toHaveBeenCalledTimes(1);
+  });
+
+  it('rolls partial delivery back when movement or state persistence fails', async () => {
+    const movementFailure = createDeps();
+    vi.mocked(movementFailure.movementService.registrarMovimientoSolicitud).mockResolvedValue({
+      success: false,
+      error: 'movement failed',
+    });
+    const movementResult = await processPartialDelivery({
+      solicitud: baseSolicitud, cantidadDonar: 4, porcentaje: 40, depositoId: DEPOSITO_ID,
+    }, movementFailure.deps);
+    expect(movementResult).toMatchObject({ success: false, error: 'movement failed' });
+    expect(movementFailure.inventoryService.restaurarInventario).toHaveBeenCalledTimes(1);
+    expect(movementFailure.supabase.updates).toHaveLength(2);
+
+    const stateFailure = createDeps();
+    stateFailure.supabase.updateResults.push({ error: { message: 'state failed' } });
+    const stateResult = await processPartialDelivery({
+      solicitud: baseSolicitud, cantidadDonar: 4, porcentaje: 40, depositoId: DEPOSITO_ID,
+    }, stateFailure.deps);
+    expect(stateResult).toMatchObject({ success: false, error: 'No fue posible registrar la donación' });
+    expect(stateFailure.inventoryService.restaurarInventario).toHaveBeenCalledTimes(1);
+  });
+
+  it('validates partial delivery parameters and rejection persistence', async () => {
+    const { deps, supabase } = createDeps();
+    await expect(processPartialDelivery({
+      solicitud: baseSolicitud, cantidadDonar: 1, porcentaje: 10,
+    }, deps)).resolves.toMatchObject({ success: false, error: expect.stringContaining('bodega') });
+    await expect(processPartialDelivery({
+      solicitud: baseSolicitud, cantidadDonar: 0, porcentaje: 10, depositoId: DEPOSITO_ID,
+    }, deps)).resolves.toMatchObject({ success: false, error: 'cantidadDonar debe ser mayor a 0.' });
+    await expect(processPartialDelivery({
+      solicitud: baseSolicitud, cantidadDonar: 1, porcentaje: 101, depositoId: DEPOSITO_ID,
+    }, deps)).resolves.toMatchObject({ success: false, error: expect.stringContaining('porcentaje') });
+
+    supabase.updateResults.push({ error: { message: 'reject failed' } });
+    const rejectResult = await rejectSolicitud({ solicitud: baseSolicitud, operadorId: OPERADOR_ID }, deps);
+    expect(rejectResult).toMatchObject({ success: false, error: 'No fue posible actualizar el estado de la solicitud' });
+  });
 });
