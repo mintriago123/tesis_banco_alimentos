@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  agruparStockPorUnidad,
   calcularTotalPorUnidades,
   createInventoryStockService,
 } from './inventoryStockService';
@@ -42,6 +43,38 @@ describe('calcularTotalPorUnidades', () => {
       { cantidad_disponible: 2, unidad_id: 1, unidad_simbolo: 'kg' },
       { cantidad_disponible: 500, unidad_simbolo: 'g' },
     ], conversiones)).toEqual({ calculable: false, cantidad: 0 });
+  });
+});
+
+describe('agruparStockPorUnidad', () => {
+  it('conserva cantidades separadas para cada unidad sin equivalencia', () => {
+    const saldos = [
+      {
+        id_entrada: 'entrada-caja',
+        id_deposito: 'deposito-1',
+        cantidad_disponible: 10,
+        deposito: 'Bodega 1',
+        fecha_actualizacion: null,
+        unidad_id: 13,
+        unidad_nombre: 'Caja',
+        unidad_simbolo: 'caja',
+      },
+      {
+        id_entrada: 'entrada-lata',
+        id_deposito: 'deposito-1',
+        cantidad_disponible: 20,
+        deposito: 'Bodega 1',
+        fecha_actualizacion: null,
+        unidad_id: 12,
+        unidad_nombre: 'Lata',
+        unidad_simbolo: 'lata',
+      },
+    ];
+
+    expect(agruparStockPorUnidad(saldos)).toEqual([
+      expect.objectContaining({ unidad_id: 13, cantidad_disponible: 10 }),
+      expect.objectContaining({ unidad_id: 12, cantidad_disponible: 20 }),
+    ]);
   });
 });
 
@@ -198,6 +231,10 @@ describe('createInventoryStockService', () => {
         total_calculable: false,
         total_disponible: 0,
         estado_stock: 'unidades_no_convertibles',
+        unidades_disponibles: [
+          expect.objectContaining({ unidad_id: 1, cantidad_disponible: 10 }),
+          expect.objectContaining({ unidad_id: 99, cantidad_disponible: 10 }),
+        ],
       },
     });
     expect(result.data?.total_formateado).toBeUndefined();

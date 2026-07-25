@@ -6,6 +6,24 @@ const stockInBoxes = {
   producto_encontrado: true,
   unidad_id: 3,
   unidad_simbolo: 'caja',
+  unidad_nombre: 'Caja',
+  total_disponible: 10,
+  depositos: [],
+  unidades_disponibles: [{
+    unidad_id: 3,
+    unidad_nombre: 'Caja',
+    unidad_simbolo: 'caja',
+    cantidad_disponible: 10,
+    cantidad_formateada: {
+      cantidad: 10,
+      simbolo: 'caja',
+      unidad_nombre: 'Caja',
+      cantidad_original: 10,
+      simbolo_original: 'caja',
+      fue_convertido: false,
+    },
+    depositos: [],
+  }],
 };
 
 const liquidConversions: ConversionData[] = [{
@@ -26,6 +44,6 @@ describe('getUnitCompatibilityMessage', () => {
 
   it('explains when stock cannot be converted to the requested unit', () => {
     expect(getUnitCompatibilityMessage(stockInBoxes, liquidConversions, 'L'))
-      .toBe('No existe una conversión registrada de L a caja. Selecciona caja o una unidad equivalente.');
+      .toBe('No existe una conversión registrada de L a las unidades disponibles (caja).');
   });
 });
