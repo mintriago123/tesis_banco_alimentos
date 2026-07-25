@@ -1,125 +1,254 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Building2, Check, Clock3, MapPin, RefreshCw, Search, X } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { Building2, Clock3, Eye, MapPin, RefreshCw, Search } from 'lucide-react';
+import { Alert, Badge, Button, SelectInput, TextInput } from '@/app/components';
 import { useSupabase } from '@/app/components/SupabaseProvider';
-import { MapboxStaticMap } from '@/modules/shared/components';
 import { useBodegaRequests } from '../hooks/useBodegaRequests';
-import type { BodegaSolicitud, BodegaSolicitudFilters } from '@/modules/shared/bodegas';
+import type { BodegaSolicitud, BodegaSolicitudEstado, BodegaSolicitudFilters } from '@/modules/shared/bodegas';
+import { BodegaRequestReviewModal, type BodegaRequestReviewMode } from './BodegaRequestReviewModal';
 
-const formatDate = (value: string) => new Intl.DateTimeFormat('es-EC', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+const formatDate = (value: string) => new Intl.DateTimeFormat('es-EC', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+}).format(new Date(value));
 
-const stateLabel: Record<BodegaSolicitud['estado'], string> = {
-  PENDIENTE: 'Pendiente', APROBADA: 'Aprobada', RECHAZADA: 'Rechazada', CANCELADA: 'Cancelada',
+const stateLabel: Record<BodegaSolicitudEstado, string> = {
+  PENDIENTE: 'Pendiente',
+  APROBADA: 'Aprobada',
+  RECHAZADA: 'Rechazada',
+  CANCELADA: 'Cancelada',
 };
 
-const stateClass: Record<BodegaSolicitud['estado'], string> = {
-  PENDIENTE: 'border-amber-200 bg-amber-50 text-amber-700',
-  APROBADA: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  RECHAZADA: 'border-rose-200 bg-rose-50 text-rose-700',
-  CANCELADA: 'border-slate-200 bg-slate-100 text-slate-600',
+const stateVariant: Record<BodegaSolicitudEstado, 'default' | 'success' | 'error' | 'warning' | 'info'> = {
+  PENDIENTE: 'warning',
+  APROBADA: 'success',
+  RECHAZADA: 'error',
+  CANCELADA: 'default',
 };
 
-const initialReasons = (): Record<string, string> => ({});
+const typeLabel = {
+  ALTA: 'Alta',
+  MODIFICACION: 'Modificación',
+} as const;
 
-function RequestCard({
-  solicitud,
-  rejecting,
-  reason,
-  processing,
-  onApprove,
-  onStartReject,
-  onReasonChange,
-  onReject,
-  onCancelReject,
-}: {
+interface RequestCardProps {
   readonly solicitud: BodegaSolicitud;
-  readonly rejecting: boolean;
-  readonly reason: string;
-  readonly processing: boolean;
-  readonly onApprove: (id: string) => void;
-  readonly onStartReject: (id: string) => void;
-  readonly onReasonChange: (id: string, value: string) => void;
-  readonly onReject: (id: string) => void;
-  readonly onCancelReject: () => void;
-}) {
+  readonly onReview: (solicitud: BodegaSolicitud) => void;
+}
+
+function RequestCard({ solicitud, onReview }: RequestCardProps) {
   const isPending = solicitud.estado === 'PENDIENTE';
+
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:border-slate-300 hover:shadow-md">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="rounded-xl bg-orange-50 p-2.5 text-orange-700"><Building2 aria-hidden="true" className="h-5 w-5" /></span>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-700" aria-hidden="true">
+            <Building2 className="h-5 w-5" />
+          </span>
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold text-slate-900">{solicitud.nombre}</h2><span className="rounded-full border px-2 py-0.5 text-xs font-semibold">{solicitud.tipo === 'ALTA' ? 'Alta' : 'Modificación'}</span></div>
-            <p className="mt-1 text-sm text-slate-600">{solicitud.donante?.nombre ?? 'Donante sin nombre'} · {solicitud.donante?.email ?? 'Sin correo'}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="break-words font-semibold text-slate-950">{solicitud.nombre}</h2>
+              <Badge size="sm">{typeLabel[solicitud.tipo]}</Badge>
+            </div>
+            <p className="mt-1 break-words text-sm text-slate-600">
+              {solicitud.donante?.nombre ?? 'Donante sin nombre'} · {solicitud.donante?.email ?? 'Sin correo'}
+            </p>
           </div>
         </div>
-        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${stateClass[solicitud.estado]}`}>{stateLabel[solicitud.estado]}</span>
+        <Badge variant={stateVariant[solicitud.estado]}>{stateLabel[solicitud.estado]}</Badge>
       </div>
 
-      <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
-        <p className="flex gap-2"><MapPin aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />{solicitud.direccion}</p>
-        <p><strong className="font-medium text-slate-500">Teléfono:</strong> {solicitud.telefono}</p>
-        <p><strong className="font-medium text-slate-500">Enviada:</strong> {formatDate(solicitud.created_at)}</p>
-        {solicitud.descripcion && <p><strong className="font-medium text-slate-500">Descripción:</strong> {solicitud.descripcion}</p>}
+      <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
+        <div className="flex min-w-0 items-start gap-2">
+          <MapPin aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+          <div className="min-w-0">
+            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dirección</dt>
+            <dd className="mt-1 break-words text-slate-700">{solicitud.direccion}</dd>
+          </div>
+        </div>
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recibida</dt>
+          <dd className="mt-1 text-slate-700">{formatDate(solicitud.created_at)}</dd>
+        </div>
+      </dl>
+
+      <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <span className={`text-xs font-medium ${isPending ? 'text-amber-700' : 'text-slate-500'}`}>
+          {isPending ? 'Requiere revisión' : 'Solicitud revisada'}
+        </span>
+        <Button type="button" variant="secondary" accent="operador" onClick={() => onReview(solicitud)}>
+          <Eye aria-hidden="true" className="h-4 w-4" />
+          Ver detalle
+        </Button>
       </div>
-
-      {solicitud.latitud !== null && solicitud.longitud !== null && <div className="mt-4"><MapboxStaticMap latitude={solicitud.latitud} longitude={solicitud.longitud} address={solicitud.direccion} height="180px" /></div>}
-
-      {solicitud.estado === 'RECHAZADA' && solicitud.motivo_rechazo && <p className="mt-4 rounded-lg bg-rose-50 p-3 text-sm text-rose-700"><strong>Motivo de rechazo:</strong> {solicitud.motivo_rechazo}</p>}
-      {solicitud.revisado_at && <p className="mt-3 text-xs text-slate-500">Revisada el {formatDate(solicitud.revisado_at)}{solicitud.revisor?.nombre ? ` por ${solicitud.revisor.nombre}` : ''}.</p>}
-
-      {isPending && !rejecting && <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => onStartReject(solicitud.id)} disabled={processing} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-rose-200 px-4 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"><X aria-hidden="true" className="h-4 w-4" /> Rechazar</button><button type="button" onClick={() => onApprove(solicitud.id)} disabled={processing} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"><Check aria-hidden="true" className="h-4 w-4" /> Aprobar</button></div>}
-
-      {isPending && rejecting && <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4"><label htmlFor={`motivo-${solicitud.id}`} className="mb-2 block text-sm font-semibold text-rose-900">Motivo del rechazo</label><textarea id={`motivo-${solicitud.id}`} value={reason} onChange={(event) => onReasonChange(solicitud.id, event.target.value)} maxLength={500} rows={3} autoFocus className="w-full rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300" aria-describedby={`motivo-ayuda-${solicitud.id}`} /><p id={`motivo-ayuda-${solicitud.id}`} className="mt-1 text-xs text-rose-700">Explica al donante qué debe corregir (mínimo 5 caracteres).</p><div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={onCancelReject} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-white">Cancelar</button><button type="button" onClick={() => onReject(solicitud.id)} disabled={processing || reason.trim().length < 5} className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60">{processing ? 'Guardando...' : 'Confirmar rechazo'}</button></div></div>}
     </article>
   );
 }
+
+type InboxMessage = { type: 'success' | 'error'; text: string };
 
 export default function BodegaRequestsInbox() {
   const { supabase } = useSupabase();
   const { filteredSolicitudes, solicitudes, filters, setFilters, isLoading, errorMessage, refetch, service } = useBodegaRequests(supabase);
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [rejectingId, setRejectingId] = useState<string | null>(null);
-  const [reasons, setReasons] = useState<Record<string, string>>(initialReasons);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [selectedSolicitud, setSelectedSolicitud] = useState<BodegaSolicitud | null>(null);
+  const [reviewMode, setReviewMode] = useState<BodegaRequestReviewMode>('detail');
+  const [motivoRechazo, setMotivoRechazo] = useState('');
+  const [message, setMessage] = useState<InboxMessage | null>(null);
 
-  const counters = useMemo(() => solicitudes.reduce<Record<string, number>>((accumulator, solicitud) => {
+  const counters = useMemo(() => solicitudes.reduce<Partial<Record<BodegaSolicitudEstado, number>>>((accumulator, solicitud) => {
     accumulator[solicitud.estado] = (accumulator[solicitud.estado] ?? 0) + 1;
     return accumulator;
   }, {}), [solicitudes]);
 
+  const hasActiveFilters = filters.search.trim().length > 0 || filters.estado !== 'PENDIENTE';
   const updateFilters = (patch: Partial<BodegaSolicitudFilters>) => setFilters((previous) => ({ ...previous, ...patch }));
 
-  const handleApprove = async (id: string) => {
-    if (!window.confirm('¿Aprobar esta solicitud de bodega?')) return;
-    setProcessingId(id); setMessage(null);
-    try { await service.aprobarSolicitud(id); setMessage({ type: 'success', text: 'Solicitud aprobada y bodega actualizada.' }); await refetch(); }
-    catch (error: unknown) { setMessage({ type: 'error', text: error instanceof Error ? error.message : 'No se pudo aprobar la solicitud.' }); }
-    finally { setProcessingId(null); }
+  const openReview = (solicitud: BodegaSolicitud) => {
+    setSelectedSolicitud(solicitud);
+    setReviewMode('detail');
+    setMotivoRechazo('');
+    setMessage(null);
   };
 
-  const handleReject = async (id: string) => {
-    setProcessingId(id); setMessage(null);
-    try { await service.rechazarSolicitud(id, reasons[id] ?? ''); setMessage({ type: 'success', text: 'Solicitud rechazada y donante notificado.' }); setRejectingId(null); await refetch(); }
-    catch (error: unknown) { setMessage({ type: 'error', text: error instanceof Error ? error.message : 'No se pudo rechazar la solicitud.' }); }
-    finally { setProcessingId(null); }
+  const closeReview = useCallback(() => {
+    if (processingId) return;
+    setSelectedSolicitud(null);
+    setReviewMode('detail');
+    setMotivoRechazo('');
+  }, [processingId]);
+
+  const finishReview = () => {
+    setSelectedSolicitud(null);
+    setReviewMode('detail');
+    setMotivoRechazo('');
+  };
+
+  const handleApprove = async () => {
+    if (!selectedSolicitud || selectedSolicitud.estado !== 'PENDIENTE') return;
+
+    const id = selectedSolicitud.id;
+    setProcessingId(id);
+    setMessage(null);
+    try {
+      await service.aprobarSolicitud(id);
+      finishReview();
+      setMessage({ type: 'success', text: 'Solicitud aprobada y bodega actualizada.' });
+      await refetch();
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'No se pudo aprobar la solicitud.' });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!selectedSolicitud || selectedSolicitud.estado !== 'PENDIENTE' || motivoRechazo.trim().length < 5) return;
+
+    const id = selectedSolicitud.id;
+    setProcessingId(id);
+    setMessage(null);
+    try {
+      await service.rechazarSolicitud(id, motivoRechazo);
+      finishReview();
+      setMessage({ type: 'success', text: 'Solicitud rechazada y donante notificado.' });
+      await refetch();
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'No se pudo rechazar la solicitud.' });
+    } finally {
+      setProcessingId(null);
+    }
   };
 
   return (
     <div className="space-y-6">
-      {message && <div role={message.type === 'error' ? 'alert' : 'status'} className={`rounded-xl border px-4 py-3 text-sm ${message.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>{message.text}</div>}
+      {message && <Alert tipo={message.type} mensaje={message.text} />}
+
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-label="Filtros de solicitudes">
         <div className="grid gap-3 lg:grid-cols-[1fr_220px_auto]">
-          <label className="relative block"><span className="sr-only">Buscar por donante o bodega</span><Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={filters.search} onChange={(event) => updateFilters({ search: event.target.value })} placeholder="Buscar donante o bodega" className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200" /></label>
-          <label><span className="sr-only">Filtrar por estado</span><select value={filters.estado} onChange={(event) => updateFilters({ estado: event.target.value as BodegaSolicitudFilters['estado'] })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"><option value="PENDIENTE">Pendientes</option><option value="TODAS">Todos los estados</option><option value="APROBADA">Aprobadas</option><option value="RECHAZADA">Rechazadas</option><option value="CANCELADA">Canceladas</option></select></label>
-          <button type="button" onClick={() => void refetch()} disabled={isLoading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"><RefreshCw aria-hidden="true" className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} /> Actualizar</button>
+          <label className="relative block">
+            <span className="sr-only">Buscar por donante o bodega</span>
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <TextInput
+              type="search"
+              value={filters.search}
+              onChange={(event) => updateFilters({ search: event.target.value })}
+              placeholder="Buscar donante o bodega"
+              className="pl-9"
+            />
+          </label>
+          <label>
+            <span className="sr-only">Filtrar por estado</span>
+            <SelectInput
+              value={filters.estado}
+              onChange={(event) => updateFilters({ estado: event.target.value as BodegaSolicitudFilters['estado'] })}
+            >
+              <option value="PENDIENTE">Pendientes</option>
+              <option value="TODAS">Todos los estados</option>
+              <option value="APROBADA">Aprobadas</option>
+              <option value="RECHAZADA">Rechazadas</option>
+              <option value="CANCELADA">Canceladas</option>
+            </SelectInput>
+          </label>
+          <Button type="button" variant="secondary" accent="operador" onClick={() => void refetch()} disabled={isLoading}>
+            <RefreshCw aria-hidden="true" className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-600"><span className="rounded-full bg-amber-50 px-3 py-1">Pendientes: {counters.PENDIENTE ?? 0}</span><span className="rounded-full bg-emerald-50 px-3 py-1">Aprobadas: {counters.APROBADA ?? 0}</span><span className="rounded-full bg-rose-50 px-3 py-1">Rechazadas: {counters.RECHAZADA ?? 0}</span></div>
+        <div className="mt-4 flex flex-wrap gap-2" aria-label="Resumen de solicitudes">
+          <Badge variant="warning">Pendientes: {counters.PENDIENTE ?? 0}</Badge>
+          <Badge variant="success">Aprobadas: {counters.APROBADA ?? 0}</Badge>
+          <Badge variant="error">Rechazadas: {counters.RECHAZADA ?? 0}</Badge>
+        </div>
       </section>
 
-      {errorMessage && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{errorMessage}</div>}
-      {isLoading ? <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-600" aria-busy="true"><Clock3 aria-hidden="true" className="mx-auto mb-2 h-6 w-6 animate-pulse" />Cargando solicitudes...</div> : filteredSolicitudes.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-600">No hay solicitudes que coincidan con los filtros.</div> : <div className="grid gap-4 xl:grid-cols-2">{filteredSolicitudes.map((solicitud) => <RequestCard key={solicitud.id} solicitud={solicitud} rejecting={rejectingId === solicitud.id} reason={reasons[solicitud.id] ?? ''} processing={processingId === solicitud.id} onApprove={(id) => void handleApprove(id)} onStartReject={setRejectingId} onReasonChange={(id, value) => setReasons((previous) => ({ ...previous, [id]: value }))} onReject={(id) => void handleReject(id)} onCancelReject={() => setRejectingId(null)} />)}</div>}
+      {errorMessage && <Alert tipo="error" mensaje={errorMessage} />}
+
+      {isLoading ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-600" aria-busy="true">
+          <Clock3 aria-hidden="true" className="mx-auto mb-2 h-6 w-6 animate-pulse" />
+          Cargando solicitudes...
+        </div>
+      ) : filteredSolicitudes.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-600">
+          <p>No hay solicitudes que coincidan con los filtros.</p>
+          {hasActiveFilters && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="mt-3"
+              onClick={() => setFilters({ estado: 'PENDIENTE', search: '' })}
+            >
+              Limpiar filtros
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-2" aria-label="Solicitudes de bodegas">
+          {filteredSolicitudes.map((solicitud) => (
+            <RequestCard key={solicitud.id} solicitud={solicitud} onReview={openReview} />
+          ))}
+        </div>
+      )}
+
+      <BodegaRequestReviewModal
+        open={selectedSolicitud !== null}
+        solicitud={selectedSolicitud}
+        mode={reviewMode}
+        motivoRechazo={motivoRechazo}
+        processing={processingId === selectedSolicitud?.id}
+        errorMessage={message?.type === 'error' ? message.text : null}
+        onClose={closeReview}
+        onModeChange={(mode) => {
+          setMessage(null);
+          setReviewMode(mode);
+        }}
+        onMotivoChange={setMotivoRechazo}
+        onApprove={() => void handleApprove()}
+        onReject={() => void handleReject()}
+      />
     </div>
   );
 }

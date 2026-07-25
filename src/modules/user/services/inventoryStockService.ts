@@ -10,7 +10,6 @@ import {
   resolverConversionLocal,
 } from '@/lib/unidadConversion';
 import {
-  escapeLikePattern,
   parseFiniteNumberValue,
   parseOptionalTextValue,
 } from '@/lib/validation-core';
@@ -67,21 +66,15 @@ type ConversionRow = {
   unidad_destino: UnidadRelation | UnidadRelation[];
 };
 
-type StockInventarioRow = {
+type StockRpcRow = {
   id_entrada: string;
   id_deposito: string;
   cantidad_disponible: number | null;
   fecha_ingreso: string | null;
   unidad_id: number | null;
-  productos_donados: {
-    id_producto?: string | null;
-    nombre_producto?: string | null;
-    unidad_id?: number | null;
-    unidades?: UnidadRelation | UnidadRelation[];
-  } | null;
-  depositos: {
-    nombre?: string | null;
-  } | null;
+  unidad_nombre: string | null;
+  unidad_simbolo: string | null;
+  deposito: string | null;
 };
 
 const singleRelation = <T>(relation: T | T[] | null | undefined): T | null => {
@@ -239,24 +232,9 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
 
     try {
       const conversiones = await obtenerConversiones();
-      const { data, error } = await supabaseClient
-        .from('entradas_inventario')
-        .select(`
-          id_entrada,
-          id_deposito,
-          unidad_id,
-          cantidad_disponible,
-          fecha_ingreso,
-          productos_donados!inner(
-            id_producto,
-            nombre_producto,
-            unidad_id,
-            unidades!inner(id, nombre, simbolo)
-          ),
-          depositos!inner(nombre)
-        `)
-        .ilike('productos_donados.nombre_producto', `%${escapeLikePattern(nombre.value)}%`)
-        .order('cantidad_disponible', { ascending: false });
+      const { data, error } = await supabaseClient.rpc('obtener_stock_por_producto', {
+        p_nombre_producto: nombre.value,
+      });
 
       if (error) {
         logger.error('Error consultando stock disponible', error);
@@ -269,16 +247,13 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
 
       const stockPorDepositoYUnidad = new Map<string, StockInfo>();
 
-      for (const row of data as StockInventarioRow[]) {
-        const producto = singleRelation(row.productos_donados);
-        const unidad = singleRelation(producto?.unidades);
+      for (const row of data as StockRpcRow[]) {
         const cantidad = Number(row.cantidad_disponible ?? 0);
-        if (!Number.isFinite(cantidad) || cantidad <= 0 || !producto?.unidad_id) {
+        if (!Number.isFinite(cantidad) || cantidad <= 0 || !row.unidad_id) {
           continue;
         }
 
-        const deposito = singleRelation(row.depositos);
-        const key = `${row.id_deposito}:${producto.unidad_id}`;
+        const key = `${row.id_deposito}:${row.unidad_id}`;
         const existente = stockPorDepositoYUnidad.get(key);
         if (existente) {
           existente.cantidad_disponible += cantidad;
@@ -300,15 +275,15 @@ export const createInventoryStockService = (supabaseClient: SupabaseClient) => {
           id_entrada: row.id_entrada,
           id_deposito: row.id_deposito,
           cantidad_disponible: cantidad,
-          deposito: deposito?.nombre ?? 'Sin depósito',
+          deposito: row.deposito ?? 'Sin depósito',
           fecha_actualizacion: row.fecha_ingreso,
-          unidad_id: row.unidad_id ?? producto.unidad_id,
-          unidad_nombre: unidad?.nombre ?? undefined,
-          unidad_simbolo: unidad?.simbolo ?? undefined,
+          unidad_id: row.unidad_id,
+          unidad_nombre: row.unidad_nombre ?? undefined,
+          unidad_simbolo: row.unidad_simbolo ?? undefined,
           cantidad_formateada: crearCantidadFormateada(
             cantidad,
-            unidad?.simbolo ?? '',
-            unidad?.nombre ?? '',
+            row.unidad_simbolo ?? '',
+            row.unidad_nombre ?? '',
           ),
         });
       }

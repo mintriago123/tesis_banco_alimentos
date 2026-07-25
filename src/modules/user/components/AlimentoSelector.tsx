@@ -51,21 +51,19 @@ export function AlimentoSelector({
             </span>
           </div>
         ) : (
-          <>
-            <SelectInput
-              id="filtroCategoria"
-              className="min-h-11 px-4"
-              value={filtroCategoria}
-              onChange={onCategoriaChange}
-            >
-              <option value="">Todas las categorías</option>
-              {categorias.map((categoria) => (
-                <option key={categoria} value={categoria}>
-                  {categoria}
-                </option>
-              ))}
-            </SelectInput>
-          </>
+          <SelectInput
+            id="filtroCategoria"
+            className="min-h-11 px-4"
+            value={filtroCategoria}
+            onChange={onCategoriaChange}
+          >
+            <option value="">Todas las categorías</option>
+            {categorias.map((categoria) => (
+              <option key={categoria} value={categoria}>
+                {categoria}
+              </option>
+            ))}
+          </SelectInput>
         )}
       </FormField>
 

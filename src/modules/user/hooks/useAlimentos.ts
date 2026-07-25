@@ -74,19 +74,12 @@ export function useAlimentos(
       setAlimentos(alimentosConUnidades);
       setAlimentosFiltrados(alimentosConUnidades);
 
-      // Obtener categorías solo de productos con stock
-      const { data: categoriasData, error: categoriasError } =
-        await service.getCategoriasConStock();
-
-      if (categoriasError || !categoriasData) {
-        // Si falla, extraer categorías de los alimentos obtenidos
-        const categoriasUnicas = [
-          ...new Set(alimentosConUnidades.map((a) => a.categoria)),
-        ].sort();
-        setCategorias(categoriasUnicas);
-      } else {
-        setCategorias(categoriasData);
-      }
+      // El listado ya está limitado a alimentos con stock; reutilizarlo
+      // evita una segunda consulta y mantiene filtros y opciones sincronizados.
+      const categoriasUnicas = [
+        ...new Set(alimentosConUnidades.map((alimento) => alimento.categoria).filter(Boolean)),
+      ].sort();
+      setCategorias(categoriasUnicas);
 
       setLoading('success');
     };
