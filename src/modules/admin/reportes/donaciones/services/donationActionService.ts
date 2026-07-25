@@ -372,8 +372,22 @@ export const createDonationActionService = (supabaseClient: SupabaseClient) => {
           };
         }
         
+        const databaseErrorMessage = error.message?.toLowerCase() ?? '';
+
+        if (
+          error.code === '42703' &&
+          databaseErrorMessage.includes('productos_donados') &&
+          databaseErrorMessage.includes('cantidad')
+        ) {
+          return {
+            success: false,
+            error: 'La base de datos remota tiene pendiente la migración de reparación del trigger de donaciones (20260725051713). Aplica las migraciones pendientes y vuelve a intentar.',
+            errorDetails: error
+          };
+        }
+
         // Si el error es por columnas que no existen
-        if (error.code === '42703' || error.message?.includes('column')) {
+        if (error.code === '42703' || databaseErrorMessage.includes('column')) {
           return {
             success: false,
             error: 'La base de datos no está actualizada. Ejecuta las migraciones de supabase/migrations/ en orden ascendente.',

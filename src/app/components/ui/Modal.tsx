@@ -12,11 +12,12 @@ interface ModalProps {
   readonly children: ReactNode;
   readonly size?: 'sm' | 'md' | 'lg';
   readonly closeOnOverlayClick?: boolean;
+  readonly closeButtonDisabled?: boolean;
 }
 
 const focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function Modal({ open, onClose, title, description, children, size = 'md', closeOnOverlayClick = true }: ModalProps) {
+export function Modal({ open, onClose, title, description, children, size = 'md', closeOnOverlayClick = true, closeButtonDisabled = false }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
@@ -27,7 +28,8 @@ export function Modal({ open, onClose, title, description, children, size = 'md'
     if (!open) return;
 
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const focusable = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus], ' + focusableSelector);
+    const autofocus = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]:not([disabled])');
+    const focusable = autofocus ?? dialogRef.current?.querySelector<HTMLElement>(focusableSelector);
     focusable?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -64,14 +66,18 @@ export function Modal({ open, onClose, title, description, children, size = 'md'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" role="presentation">
-      <button type="button" className="absolute inset-0 cursor-default bg-slate-950/40 backdrop-blur-[2px]" aria-label="Cerrar ventana" onClick={closeOnOverlayClick ? onClose : undefined} />
+      {closeOnOverlayClick ? (
+        <button type="button" className="absolute inset-0 cursor-default bg-slate-950/40 backdrop-blur-[2px]" aria-label="Cerrar ventana" onClick={onClose} />
+      ) : (
+        <div aria-hidden="true" className="absolute inset-0 cursor-default bg-slate-950/40 backdrop-blur-[2px]" />
+      )}
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} className={`relative max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl ${sizeClasses[size]}`}>
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
           <div>
             <h2 id={titleId} className="text-lg font-bold text-slate-950">{title}</h2>
             {description && <p id={descriptionId} className="mt-1 text-sm text-slate-600">{description}</p>}
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600" aria-label="Cerrar ventana">
+          <button type="button" onClick={onClose} disabled={closeButtonDisabled} className="flex min-h-11 min-w-11 items-center justify-center rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Cerrar ventana">
             <X aria-hidden="true" className="h-5 w-5" />
           </button>
         </div>
@@ -80,4 +86,3 @@ export function Modal({ open, onClose, title, description, children, size = 'md'
     </div>
   );
 }
-

@@ -221,6 +221,25 @@ describe('createDonationActionService cancellation', () => {
     expect(result.error).toContain('base de datos no está actualizada');
   });
 
+  it('identifies the pending donation trigger repair migration', async () => {
+    const triggerError = {
+      message: 'column "cantidad" of relation "productos_donados" does not exist',
+      code: '42703',
+    };
+    const { supabase } = createSupabase(null, triggerError);
+    const service = createDonationActionService(supabase);
+
+    const result = await service.updateDonationEstado({ ...donation, id: 151 }, 'Cancelada', {
+      motivo: 'solicitud_donante',
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: 'La base de datos remota tiene pendiente la migración de reparación del trigger de donaciones (20260725051713). Aplica las migraciones pendientes y vuelve a intentar.',
+      errorDetails: triggerError,
+    });
+  });
+
   it('keeps a successful state change when notification delivery fails', async () => {
     vi.mocked(sendNotification).mockRejectedValueOnce(new Error('mailer unavailable'));
     const { supabase } = createSupabase({ id: donation.id });
