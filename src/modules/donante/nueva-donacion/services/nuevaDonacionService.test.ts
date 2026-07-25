@@ -7,6 +7,7 @@ import { NuevaDonacionService } from './nuevaDonacionService';
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 
 const validForm: DonacionFormulario = {
+  id_deposito: '33333333-3333-4333-8333-333333333333',
   tipo_producto: '1',
   cantidad: '10.5',
   unidad_id: '1',
@@ -115,6 +116,7 @@ describe('NuevaDonacionService.crearDonacion', () => {
 
     expect(insert).toHaveBeenCalledWith([expect.objectContaining({
       user_id: USER_ID,
+      id_deposito: validForm.id_deposito,
       nombre_donante: 'Donante de prueba',
       alimento_id: 1,
       tipo_producto: 'Arroz blanco',

@@ -37,6 +37,11 @@ export class NuevaDonacionService {
       throw new Error(userIdResult.error);
     }
 
+    const depositoId = parseUuidValue(formulario.id_deposito, { name: 'id_deposito' });
+    if (!depositoId.success) {
+      throw new Error('Selecciona una bodega activa antes de registrar la donación.');
+    }
+
     const cantidad = parsePositiveNumberValue(formulario.cantidad, { name: 'cantidad' });
     if (!cantidad.success) {
       throw new Error(cantidad.error);
@@ -80,6 +85,7 @@ export class NuevaDonacionService {
 
     const datosDonacion = {
       user_id: userIdResult.value,
+      id_deposito: depositoId.value,
       nombre_donante: userProfile?.nombre || '',
       telefono: userProfile?.telefono || '',
       email: userProfile?.email || '',

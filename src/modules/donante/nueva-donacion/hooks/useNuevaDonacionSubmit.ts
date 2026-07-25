@@ -1,8 +1,8 @@
 import { useState, useCallback, useMemo } from 'react';
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { NuevaDonacionService } from '../services/nuevaDonacionService';
-import { DonacionFormulario } from '../../donaciones/types';
-import { ProductoSeleccionado, ImpactoCalculado, Alimento } from '../types';
+import type { DonacionFormulario } from '../../donaciones/types';
+import type { ProductoSeleccionado, ImpactoCalculado, Alimento } from '../types';
 
 interface UserProfile {
   nombre?: string;
