@@ -89,6 +89,8 @@ const SolicitudDetailModal = ({
   const depositoActual = inventario.find(item => item.id_deposito === depositoSeleccionado);
   const stockDepositoSeleccionado = depositoActual?.cantidad_disponible ?? 0;
   const maxAprobable = Math.max(0, Math.min(solicitud.cantidad, stockDepositoSeleccionado));
+  const permiteFraccion = solicitud.unidades?.permite_fraccion !== false;
+  const cantidadAprobadaValida = permiteFraccion || Number.isInteger(cantidadAprobar);
 
   const handleCantidadAprobarChange = (value: string) => {
     if (value.trim() === '') {
@@ -404,19 +406,27 @@ const SolicitudDetailModal = ({
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="cantidad-aprobar" className="block text-sm font-medium text-gray-700 mb-1">
                           Cantidad a aprobar
                         </label>
                         <input
+                          id="cantidad-aprobar"
                           type="number"
                           min={0}
                           max={maxAprobable}
-                          step={0.01}
+                          step={permiteFraccion ? 0.01 : 1}
                           value={cantidadAprobar}
                           onChange={(event) => handleCantidadAprobarChange(event.target.value)}
+                          aria-invalid={!cantidadAprobadaValida}
+                          aria-describedby={!cantidadAprobadaValida ? 'cantidad-aprobar-error' : undefined}
                           className="w-full p-2 border border-gray-300 rounded-lg"
                           disabled={isProcessing || !depositoSeleccionado}
                         />
+                        {!cantidadAprobadaValida && (
+                          <p id="cantidad-aprobar-error" role="alert" className="mt-1 text-xs text-red-700">
+                            La unidad {solicitud.unidades?.nombre ?? solicitud.unidades?.simbolo ?? 'seleccionada'} no permite cantidades decimales. Ingresa una cantidad entera.
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -542,8 +552,8 @@ const SolicitudDetailModal = ({
                     type="button"
                     onClick={onAprobar}
                     className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                    disabled={isProcessing || inventarioLoading || !depositoSeleccionado || cantidadAprobar <= 0 || cantidadAprobar > maxAprobable}
-                    title={!depositoSeleccionado ? 'Selecciona una bodega para aprobar' : (cantidadAprobar > maxAprobable ? 'La cantidad supera el stock disponible en la bodega seleccionada' : '')}
+                    disabled={isProcessing || inventarioLoading || !depositoSeleccionado || !cantidadAprobadaValida || cantidadAprobar <= 0 || cantidadAprobar > maxAprobable}
+                    title={!depositoSeleccionado ? 'Selecciona una bodega para aprobar' : (!cantidadAprobadaValida ? 'La unidad seleccionada requiere una cantidad entera' : (cantidadAprobar > maxAprobable ? 'La cantidad supera el stock disponible en la bodega seleccionada' : ''))}
                   >
                     <CheckCircle className="w-4 h-4" />
                     <span>Aprobar Solicitud</span>

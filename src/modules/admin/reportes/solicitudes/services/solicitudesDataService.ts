@@ -59,7 +59,9 @@ export const createSolicitudesDataService = (supabaseClient: SupabaseClient) => 
             nombre,
             simbolo,
             tipo_magnitud_id,
-            es_base
+            es_base,
+            es_discreta,
+            permite_fraccion
           ),
           usuarios:usuario_id (
             nombre,
@@ -220,6 +222,8 @@ const mapSolicitudUnidad = (unidad: unknown): import('../types').SolicitudUnidad
     simbolo?: string | null;
     tipo_magnitud_id?: number | null;
     es_base?: boolean | null;
+    es_discreta?: boolean | null;
+    permite_fraccion?: boolean | null;
   };
 
   if (!u.id || !u.nombre || !u.simbolo || u.tipo_magnitud_id === null || u.tipo_magnitud_id === undefined) {
@@ -231,7 +235,9 @@ const mapSolicitudUnidad = (unidad: unknown): import('../types').SolicitudUnidad
     nombre: u.nombre,
     simbolo: u.simbolo,
     tipo_magnitud_id: u.tipo_magnitud_id,
-    es_base: u.es_base ?? false
+    es_base: u.es_base ?? false,
+    es_discreta: u.es_discreta ?? undefined,
+    permite_fraccion: u.permite_fraccion ?? undefined,
   };
 };
 
