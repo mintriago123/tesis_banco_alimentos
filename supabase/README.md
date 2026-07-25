@@ -35,6 +35,10 @@ La secuencia actual permite levantar una base nueva desde cero:
 25. `20260724220103_consolidate_entries_inventory_source.sql`
 26. `20260724222434_reuse_catalog_identity_for_entries.sql`
 27. `20260724222657_index_inventory_entry_foreign_keys.sql`
+28. `20260725015123_solicitudes_bodega_workflow.sql`
+29. `20260725022235_fix_ambiguous_bodega_principal.sql`
+30. `20260725040607_asociar_unidades_presentacion_catalogo.sql`
+31. `20260725051713_repair_donation_trigger_entries_source.sql`
 
 Para consultar qué migraciones ya recibió el proyecto vinculado:
 

@@ -10,13 +10,17 @@ env SUPABASE_TELEMETRY_DISABLED=1 supabase migration list --linked
 env SUPABASE_TELEMETRY_DISABLED=1 supabase db push --linked --dry-run
 ```
 
-La lista documentada debe coincidir con los 27 archivos de
-`supabase/migrations/`, incluyendo las tres migraciones de consolidación de
-inventario más recientes:
+La lista documentada debe coincidir con los 31 archivos de
+`supabase/migrations/`, incluyendo la consolidación de inventario, el flujo de
+bodegas y la reparación final del trigger:
 
 - `20260724220103_consolidate_entries_inventory_source.sql`
 - `20260724222434_reuse_catalog_identity_for_entries.sql`
 - `20260724222657_index_inventory_entry_foreign_keys.sql`
+- `20260725015123_solicitudes_bodega_workflow.sql`
+- `20260725022235_fix_ambiguous_bodega_principal.sql`
+- `20260725040607_asociar_unidades_presentacion_catalogo.sql`
+- `20260725051713_repair_donation_trigger_entries_source.sql`
 
 Antes de aplicar cualquier pendiente, realiza el respaldo descrito en
 [`BACKUP_RESTORE.md`](./BACKUP_RESTORE.md). Esta entrega no aplica migraciones
@@ -92,7 +96,7 @@ env SUPABASE_TELEMETRY_DISABLED=1 supabase db advisors --linked --type all --lev
 
 | Comprobación | Resultado |
 |--------------|-----------|
-| Revisión de los 27 archivos de migración y orden ascendente | Revisado localmente |
+| Revisión de los 31 archivos de migración y orden ascendente | Revisado localmente |
 | Revisión estática de la consolidación de inventario | Revisado localmente; incluye guardas de diferencias de saldo, fuente activa `entradas_inventario`, RLS de vistas e índices de FK |
 | `supabase migration list --linked` | Pendiente: requiere `SUPABASE_ACCESS_TOKEN` |
 | `supabase db lint --linked` y advisors | Pendiente: requiere acceso al proyecto remoto |

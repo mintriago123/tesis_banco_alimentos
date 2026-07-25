@@ -712,7 +712,7 @@ unidades (N) ──── (N) unidades (a través de conversiones)
 
 La responsabilidad se divide entre base de datos y capa de aplicación:
 
-- **Donaciones**: la base de datos gobierna la creación de una entrada independiente en `entradas_inventario` mediante `trigger_crear_producto` / `crear_producto_desde_donacion()` cuando una donación pasa a estado `Aprobada`. `productos_donados` solo se crea o reutiliza como identidad de catálogo.
+- **Donaciones**: la base de datos gobierna la creación de una entrada independiente en `entradas_inventario` mediante `trigger_crear_producto` / `crear_producto_desde_donacion()` cuando una donación pasa a estado `Aprobada`. El trigger valida la bodega almacenada en la donación y `productos_donados` solo se crea o reutiliza como identidad de catálogo.
 - **Bajas de productos**: la base de datos gobierna el flujo mediante la RPC `dar_baja_producto(p_id_entrada, ...)`, que bloquea y actualiza la entrada exacta y registra la baja y el movimiento en una unidad transaccional.
 - **Solicitudes aprobadas y entregas parciales**: la capa de aplicación solicita descuentos FEFO a `descontar_stock_por_lote()`. La RPC modifica directamente las entradas seleccionadas y devuelve sus `idEntrada`; si falla la actualización posterior, el servicio restaura esas entradas con `restaurar_entrada_inventario()`.
 - **Historial de entregas parciales**: `historial_donaciones` se mantiene como auditoría de aplicación; un fallo al registrar historial se reporta en logs y no duplica descuentos de inventario.
