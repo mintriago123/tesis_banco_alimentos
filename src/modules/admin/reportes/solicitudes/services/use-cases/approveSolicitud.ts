@@ -1,6 +1,9 @@
 import { generarCodigoComprobante } from '@/lib/comprobante';
 import type { Solicitud } from '../../types';
-import { buildResultadoMensaje } from '../solicitudesResultMessages';
+import {
+  buildInventoryDiscountError,
+  buildResultadoMensaje,
+} from '../solicitudesResultMessages';
 import {
   rollbackSolicitudState,
   snapshotSolicitudState,
@@ -124,7 +127,10 @@ export const approveSolicitud = async (
 
     return {
       success: false,
-      error: 'No fue posible descontar el inventario requerido para aprobar la solicitud',
+      error: buildInventoryDiscountError(
+        resultadoInventario.errorDetails,
+        'No fue posible descontar el inventario requerido para aprobar la solicitud',
+      ),
       errorDetails: resultadoInventario.errorDetails ?? resultadoInventario,
     };
   }

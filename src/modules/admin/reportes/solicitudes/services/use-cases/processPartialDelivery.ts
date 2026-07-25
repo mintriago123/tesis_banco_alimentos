@@ -6,6 +6,7 @@ import {
   updateSolicitudById,
 } from './solicitudStatePersistence';
 import type { SolicitudActionResult, SolicitudUseCaseDeps } from './types';
+import { buildInventoryDiscountError } from '../solicitudesResultMessages';
 import {
   parseFiniteNumberValue,
   parseOptionalTextValue,
@@ -151,7 +152,10 @@ export const processPartialDelivery = async (
 
     return {
       success: false,
-      error: 'No fue posible descontar el inventario requerido para registrar la entrega',
+      error: buildInventoryDiscountError(
+        resultadoInventario.errorDetails,
+        'No fue posible descontar el inventario requerido para registrar la entrega',
+      ),
       errorDetails: resultadoInventario.errorDetails ?? resultadoInventario,
     };
   }
