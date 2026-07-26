@@ -79,8 +79,8 @@ describe('/api/proxy/consultar-cedula', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('rejects non-HTTPS service URLs in production', async () => {
-    const fetchMock = vi.fn();
+  it('allows a server-side HTTP service URL in production', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ paquete: [] }));
     vi.stubGlobal('fetch', fetchMock);
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('SERVICIO_CONSULTAS_DINARAP', 'http://consultas.example.test/cedula');
@@ -89,7 +89,30 @@ describe('/api/proxy/consultar-cedula', () => {
       'https://app.example.test/api/proxy/consultar-cedula?identificacion=1710034065'
     ));
 
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://consultas.example.test/cedula?identificacion=1710034065',
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+    expect(mocks.createAdminSupabaseClient).toHaveBeenCalledOnce();
+  });
+
+  it('rejects service URLs with unsupported protocols', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('SERVICIO_CONSULTAS_DINARAP', 'file:///tmp/consulta');
+
+    const response = await GET(new NextRequest(
+      'http://localhost/api/proxy/consultar-cedula?identificacion=1710034065'
+    ));
+
     expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: 'El servicio de consultas debe usar HTTP o HTTPS.',
+    });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(mocks.createAdminSupabaseClient).not.toHaveBeenCalled();
   });
