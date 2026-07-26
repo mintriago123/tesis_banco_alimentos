@@ -77,13 +77,15 @@ export function resolveServerServiceUrl(
     };
   }
 
-  if (process.env.NODE_ENV === 'production' && url.protocol !== 'https:') {
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     return {
       success: false,
-      response: configurationError('El servicio de consultas debe usar HTTPS en producción.'),
+      response: configurationError('El servicio de consultas debe usar HTTP o HTTPS.'),
     };
   }
 
+  // Compatibilidad temporal con los servicios legados de identidad, que solo exponen HTTP.
+  // Las consultas siguen siendo server-side para evitar Mixed Content en el navegador.
   return { success: true, url };
 }
 

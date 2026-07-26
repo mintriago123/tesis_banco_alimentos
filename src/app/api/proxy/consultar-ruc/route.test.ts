@@ -121,8 +121,8 @@ describe('/api/proxy/consultar-ruc', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Error al consultar RUC' });
   });
 
-  it('rejects non-HTTPS service URLs in production', async () => {
-    const fetchMock = vi.fn();
+  it('allows a server-side HTTP service URL in production', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
     vi.stubGlobal('fetch', fetchMock);
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('SERVICIO_CONSULTAS_RUC', 'http://consultas.example.test/ruc');
@@ -131,8 +131,14 @@ describe('/api/proxy/consultar-ruc', () => {
       'https://app.example.test/api/proxy/consultar-ruc?ruc=1710034065001'
     ));
 
-    expect(response.status).toBe(500);
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(mocks.createAdminSupabaseClient).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://consultas.example.test/ruc?ruc=1710034065001',
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+    expect(mocks.createAdminSupabaseClient).toHaveBeenCalledOnce();
   });
 });
