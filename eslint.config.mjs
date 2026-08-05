@@ -1,5 +1,7 @@
-import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
-import nextTypescript from "eslint-config-next/typescript";
+import {
+  nextCoreWebVitals,
+  nextTypescript,
+} from "@tesis/eslint-next";
 
 const eslintConfig = [
   {
