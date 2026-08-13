@@ -51,3 +51,10 @@ next-env.d.ts
 
 # scratch assets
 /images/
+
+# temporary files
+.docx-qa/
+supabase/seed.sql
+supabase/tests/
+tests/coverage-baseline.json
+tests/business-rules.json
