@@ -69,15 +69,17 @@ const createProfileQuery = (profile: unknown) => ({
   })),
 });
 
+let currentProfile: ReturnType<typeof createProfileQuery>;
+
 const enqueueProfile = (overrides: Record<string, unknown> = {}) => {
-  mocks.adminFromQueue.push(createProfileQuery({
+  currentProfile = createProfileQuery({
     id: 'user-1',
     rol: 'DONANTE',
     estado: 'activo',
     nombre: 'Usuario',
     email: 'usuario@example.com',
     ...overrides,
-  }));
+  });
 };
 
 beforeEach(() => {
@@ -90,24 +92,27 @@ beforeEach(() => {
   mocks.createNotification.mockReset();
   mocks.NotificationService.mockReset();
 
+  enqueueProfile();
+
   mocks.serverGetUser.mockResolvedValue({
     data: { user: { id: 'user-1', email: 'usuario@example.com' } },
     error: null,
   });
+
+  mocks.adminFrom.mockImplementation(() => {
+    const query = mocks.adminFromQueue.shift();
+    if (!query) {
+      return currentProfile;
+    }
+    return query;
+  });
+
   mocks.createServerSupabaseClient.mockResolvedValue({
     auth: { getUser: mocks.serverGetUser },
+    from: vi.fn(() => currentProfile),
   });
   mocks.createAdminSupabaseClient.mockReturnValue({
     from: mocks.adminFrom,
-  });
-  mocks.adminFrom.mockImplementation(() => {
-    const query = mocks.adminFromQueue.shift();
-
-    if (!query) {
-      throw new Error('Unexpected admin query');
-    }
-
-    return query;
   });
   mocks.NotificationService.mockImplementation(function MockNotificationService() {
     return {

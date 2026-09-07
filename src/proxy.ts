@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { RUTAS_PUBLICAS } from '@/lib/constantes';
 import { NextResponse, type NextRequest } from 'next/server';
 import type { User } from '@supabase/supabase-js';
+import { ROLES_PROTEGIDOS_PAGINA, RUTAS_PUBLICAS, RUTAS_REQUIEREN_SESION } from '@/lib/constantes';
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;
 
@@ -20,20 +20,6 @@ type ProxyUserProfile = {
   ruc?: string | null;
 };
 
-const SHARED_PRIVATE_ROUTES = [
-  '/perfil/actualizar',
-  '/notificaciones',
-  '/configuracion-notificaciones',
-  '/comprobante',
-] as const;
-
-const ROLE_PROTECTED_ROUTES = [
-  { route: '/admin', role: 'ADMINISTRADOR' },
-  { route: '/operador', role: 'OPERADOR' },
-  { route: '/donante', role: 'DONANTE' },
-  { route: '/user', role: 'SOLICITANTE' },
-] as const;
-
 const hasText = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;
 
@@ -50,7 +36,7 @@ const isAnyRouteMatch = (pathname: string, routes: readonly string[]) =>
   routes.some((route) => isRouteMatch(pathname, route));
 
 const getRoleAccessForPath = (pathname: string) =>
-  ROLE_PROTECTED_ROUTES.find(({ route }) => isRouteMatch(pathname, route));
+  ROLES_PROTEGIDOS_PAGINA.find(({ route }) => isRouteMatch(pathname, route));
 
 const isInactiveStatus = (estado: string | null | undefined) =>
   estado === 'bloqueado' || estado === 'desactivado';
@@ -74,6 +60,12 @@ const redirectToLogin = (
 
   return NextResponse.redirect(url);
 };
+
+const forbiddenJson = (message: string) =>
+  NextResponse.json({ error: message }, { status: 403 });
+
+const notFoundJson = () =>
+  NextResponse.json({ error: 'Recurso no encontrado.' }, { status: 404 });
 
 const redirectAfterInactiveProfile = async (
   supabase: ServerSupabaseClient,
@@ -105,6 +97,30 @@ const getCurrentProfile = async (supabase: ServerSupabaseClient, userId: string)
   }
 
   return perfil as ProxyUserProfile | null;
+};
+
+const isApiPath = (pathname: string) => pathname.startsWith('/api/');
+
+const classifyPath = (pathname: string) => {
+  if (isAnyRouteMatch(pathname, RUTAS_PUBLICAS)) {
+    return 'public' as const;
+  }
+  if (isApiPath(pathname)) {
+    return 'api' as const;
+  }
+  if (isCompletarPerfilPath(pathname)) {
+    return 'completar-perfil' as const;
+  }
+  if (pathname === '/dashboard') {
+    return 'dashboard' as const;
+  }
+  if (isAnyRouteMatch(pathname, RUTAS_REQUIEREN_SESION)) {
+    return 'session-required' as const;
+  }
+  if (getRoleAccessForPath(pathname)) {
+    return 'role-protected' as const;
+  }
+  return 'unknown' as const;
 };
 
 const protectPrivateRoute = async (
@@ -139,7 +155,7 @@ const protectPrivateRoute = async (
     }
 
     if (requiredRole && perfil.rol !== requiredRole) {
-      return redirectToLogin(request, { error: 'forbidden' });
+      return forbiddenJson('Acceso denegado por rol.');
     }
 
     if (request.nextUrl.pathname === '/dashboard') {
@@ -150,6 +166,25 @@ const protectPrivateRoute = async (
   } catch (error) {
     console.error('Error en middleware al verificar perfil:', error);
     return redirectToLogin(request);
+  }
+};
+
+const protectApiRoute = async (
+  request: NextRequest,
+  supabase: ServerSupabaseClient,
+  user: User | null,
+  supabaseResponse: NextResponse
+) => {
+  if (!user) {
+    return forbiddenJson('Se requiere autenticacion.');
+  }
+
+  try {
+    await getCurrentProfile(supabase, user.id);
+    return supabaseResponse;
+  } catch (error) {
+    console.error('Error en middleware al validar sesion API:', error);
+    return forbiddenJson('No fue posible validar la sesion.');
   }
 };
 
@@ -240,27 +275,55 @@ export async function proxy(request: NextRequest) {
       }
     }
 
-    if (isAnyRouteMatch(pathname, RUTAS_PUBLICAS)) {
+    const classification = classifyPath(pathname);
+
+    if (classification === 'public') {
       return supabaseResponse;
     }
 
-    const roleAccess = getRoleAccessForPath(pathname);
+    if (classification === 'unknown') {
+      return notFoundJson();
+    }
 
-    if (
-      pathname === '/dashboard' ||
-      isAnyRouteMatch(pathname, SHARED_PRIVATE_ROUTES) ||
-      roleAccess
-    ) {
+    if (classification === 'api') {
+      return protectApiRoute(
+        request,
+        supabase,
+        isAuthenticated ? user : null,
+        supabaseResponse,
+      );
+    }
+
+    if (classification === 'dashboard') {
       return protectPrivateRoute(
         request,
         supabase,
         isAuthenticated ? user : null,
         supabaseResponse,
-        roleAccess?.role
       );
     }
 
-    return supabaseResponse;
+    if (classification === 'session-required') {
+      return protectPrivateRoute(
+        request,
+        supabase,
+        isAuthenticated ? user : null,
+        supabaseResponse,
+      );
+    }
+
+    const roleAccess = getRoleAccessForPath(pathname);
+    if (classification === 'role-protected' && roleAccess) {
+      return protectPrivateRoute(
+        request,
+        supabase,
+        isAuthenticated ? user : null,
+        supabaseResponse,
+        roleAccess.role,
+      );
+    }
+
+    return notFoundJson();
   } catch (error: unknown) {
     const errorCode = getErrorCode(error);
     if (errorCode !== 'refresh_token_not_found' && errorCode !== 'ECONNRESET') {
@@ -268,20 +331,20 @@ export async function proxy(request: NextRequest) {
     }
 
     const pathname = request.nextUrl.pathname;
-    const isProtectedRoute =
-      isCompletarPerfilPath(pathname) ||
-      pathname === '/dashboard' ||
-      isAnyRouteMatch(pathname, SHARED_PRIVATE_ROUTES) ||
-      !!getRoleAccessForPath(pathname);
+    const classification = classifyPath(pathname);
 
-    if (isProtectedRoute) {
-      return redirectToLogin(request, {
-        callbackUrl: requestedPath(request),
-        error: 'unauthorized',
-      });
+    if (classification === 'unknown') {
+      return notFoundJson();
     }
 
-    return supabaseResponse;
+    if (classification === 'api') {
+      return forbiddenJson('No fue posible validar la sesion.');
+    }
+
+    return redirectToLogin(request, {
+      callbackUrl: requestedPath(request),
+      error: 'unauthorized',
+    });
   }
 }
 
@@ -289,8 +352,8 @@ export const config = {
   matcher: [
     /*
      * Coincide con todas las rutas de solicitud excepto las que comienzan con:
-     * - _next/static (archivos estáticos)
-     * - _next/image (archivos de optimización de imagen)
+     * - _next/static (archivos estaticos)
+     * - _next/image (archivos de optimizacion de imagen)
      * - favicon.ico (archivo favicon)
      */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',

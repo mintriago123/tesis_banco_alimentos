@@ -78,11 +78,14 @@ beforeEach(() => {
     data: { user: { id: USER_ID } },
     error: null,
   });
-  mocks.from.mockReturnValue(createUsuarioQuery({
+
+  const defaultProfile = createUsuarioQuery({
     id: USER_ID,
     rol: 'OPERADOR',
     estado: 'activo',
-  }));
+  });
+  mocks.from.mockReturnValue(defaultProfile);
+
   mocks.adminRpc.mockResolvedValue({
     data: [{
       success: true,
@@ -97,9 +100,7 @@ beforeEach(() => {
     from: mocks.from,
     rpc: mocks.rpc,
   });
-  mocks.createAdminSupabaseClient.mockReturnValue({
-    rpc: mocks.adminRpc,
-  });
+  mocks.createAdminSupabaseClient.mockReturnValue({ rpc: mocks.adminRpc });
 });
 
 describe('/api/operador/bajas', () => {

@@ -1,11 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  assertRoleAllowed,
   getActiveUserProfile,
   getAuthenticatedUser,
   isValidUserRole,
   isValidUserStatus,
   requireActiveUserRole,
+  requireAuth,
   requireRole,
   sanitizeAdminUserPatchUpdates,
   type ActiveUserProfile,
@@ -107,8 +109,8 @@ describe('server-auth helpers', () => {
       estado: 'activo',
     };
 
-    expect(requireRole(profile, ['ADMINISTRADOR']).response?.status).toBe(403);
-    expect(requireRole({ ...profile, rol: 'ADMINISTRADOR' }, ['ADMINISTRADOR']).authorized).toBe(true);
+    expect(assertRoleAllowed(profile, ['ADMINISTRADOR']).response?.status).toBe(403);
+    expect(assertRoleAllowed({ ...profile, rol: 'ADMINISTRADOR' }, ['ADMINISTRADOR']).authorized).toBe(true);
   });
 
   it('requires an active user with an allowed role', async () => {
@@ -140,5 +142,75 @@ describe('server-auth helpers', () => {
 
     const allowed = await requireActiveUserRole(client, ['DONANTE']);
     expect(allowed.profile?.rol).toBe('DONANTE');
+  });
+
+  it('requireAuth returns 401 when there is no user', async () => {
+    const result = await requireAuth(createAuthClient({
+      data: { user: null },
+      error: null,
+    }) as SupabaseClient);
+
+    expect(result.response?.status).toBe(401);
+  });
+
+  it('requireAuth returns profile for an authenticated active user', async () => {
+    const profile = {
+      id: 'user-1',
+      rol: 'DONANTE',
+      estado: 'activo',
+      nombre: 'Donante X',
+      email: 'donante@example.com',
+    };
+
+    const authClient = createAuthClient({
+      data: { user: { id: 'user-1' } },
+      error: null,
+    });
+    const profileClient = createProfileClient({ data: profile, error: null });
+    authClient.from = profileClient.from;
+
+    const result = await requireAuth(authClient as SupabaseClient);
+    expect(result.profile?.rol).toBe('DONANTE');
+    expect(result.user?.id).toBe('user-1');
+  });
+
+  it('requireRole rejects when role does not match', async () => {
+    const profile = {
+      id: 'user-1',
+      rol: 'DONANTE',
+      estado: 'activo',
+      nombre: 'Donante',
+      email: 'd@example.com',
+    };
+
+    const authClient = createAuthClient({
+      data: { user: { id: 'user-1' } },
+      error: null,
+    });
+    const profileClient = createProfileClient({ data: profile, error: null });
+    authClient.from = profileClient.from;
+
+    const denied = await requireRole(authClient as SupabaseClient, ['OPERADOR']);
+    expect(denied.response?.status).toBe(403);
+  });
+
+  it('requireRole allows when role matches', async () => {
+    const profile = {
+      id: 'user-1',
+      rol: 'ADMINISTRADOR',
+      estado: 'activo',
+      nombre: 'Admin',
+      email: 'admin@example.com',
+    };
+
+    const authClient = createAuthClient({
+      data: { user: { id: 'user-1' } },
+      error: null,
+    });
+    const profileClient = createProfileClient({ data: profile, error: null });
+    authClient.from = profileClient.from;
+
+    const allowed = await requireRole(authClient as SupabaseClient, ['ADMINISTRADOR']);
+    expect(allowed.profile?.rol).toBe('ADMINISTRADOR');
   });
 });

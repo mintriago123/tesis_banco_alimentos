@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { createAdminSupabaseClient } from '@/lib/supabase-admin';
 import { parsePositiveIntParam } from '@/lib/api-validation';
-import { requireActiveUserRole } from '@/lib/server-auth';
+import { requireRole } from '@/lib/server-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
-    const authResult = await requireActiveUserRole(supabase, ['ADMINISTRADOR', 'OPERADOR']);
+    const authResult = await requireRole(supabase, ['ADMINISTRADOR', 'OPERADOR']);
 
     if (authResult.response) {
       return authResult.response;

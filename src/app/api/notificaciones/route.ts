@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { createAdminSupabaseClient } from '@/lib/supabase-admin';
-import {
-  getActiveUserProfile,
-  getAuthenticatedUser,
-} from '@/lib/server-auth';
+import { requireAuth } from '@/lib/server-auth';
 import {
   buildNotificationForEvent,
   NotificationDispatchError,
@@ -31,10 +28,10 @@ export async function POST(request: Request) {
     }
 
     const supabase = await createServerSupabaseClient();
-    const authResult = await getAuthenticatedUser(supabase);
+    const auth = await requireAuth(supabase);
 
-    if (authResult.response) {
-      return authResult.response;
+    if (auth.response) {
+      return auth.response;
     }
 
     const jsonBody = await readJsonBody(request);
@@ -50,15 +47,10 @@ export async function POST(request: Request) {
     }
 
     const adminSupabase = createAdminSupabaseClient();
-    const profileResult = await getActiveUserProfile(adminSupabase, authResult.user.id);
-
-    if (profileResult.response) {
-      return profileResult.response;
-    }
 
     const input = await buildNotificationForEvent(
       adminSupabase,
-      profileResult.profile,
+      auth.profile,
       payloadResult.payload
     );
     const service = new NotificationService(adminSupabase);

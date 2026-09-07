@@ -53,19 +53,20 @@ beforeEach(() => {
     data: { user: { id: ADMIN_ID } },
     error: null,
   });
-  mocks.from.mockReturnValue(createUsuarioQuery({
+
+  const defaultProfile = createUsuarioQuery({
     id: ADMIN_ID,
     rol: 'ADMINISTRADOR',
     estado: 'activo',
-  }));
+  });
+  mocks.from.mockReturnValue(defaultProfile);
+
   mocks.createServerSupabaseClient.mockResolvedValue({
     auth: { getUser: mocks.getUser },
     from: mocks.from,
   });
   mocks.adminRpc.mockResolvedValue({ data: 123, error: null });
-  mocks.createAdminSupabaseClient.mockReturnValue({
-    rpc: mocks.adminRpc,
-  });
+  mocks.createAdminSupabaseClient.mockReturnValue({ rpc: mocks.adminRpc });
 });
 
 describe('/api/admin/catalogo-solicitudes/aprobar', () => {

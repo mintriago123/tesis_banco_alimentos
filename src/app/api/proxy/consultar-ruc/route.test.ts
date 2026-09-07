@@ -33,8 +33,25 @@ describe('/api/proxy/consultar-ruc', () => {
       data: { user: { id: '11111111-1111-4111-8111-111111111111' } },
       error: null,
     });
+
+    const profileQuery = {
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          maybeSingle: vi.fn(async () => ({
+            data: {
+              id: '11111111-1111-4111-8111-111111111111',
+              rol: 'DONANTE',
+              estado: 'activo',
+            },
+            error: null,
+          })),
+        })),
+      })),
+    };
+
     mocks.createServerSupabaseClient.mockResolvedValue({
       auth: { getUser: mocks.getUser },
+      from: vi.fn(() => profileQuery),
     });
     mocks.adminRpc.mockResolvedValue({
       data: [{

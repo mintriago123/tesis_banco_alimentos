@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validarCedulaEcuatoriana } from '@/lib/validaciones';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { createAdminSupabaseClient } from '@/lib/supabase-admin';
-import { getAuthenticatedUser } from '@/lib/server-auth';
+import { requireAuth } from '@/lib/server-auth';
 import {
   enforceDocumentLookupRateLimit,
   resolveServerServiceUrl,
@@ -15,10 +15,10 @@ import {
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
-    const authResult = await getAuthenticatedUser(supabase);
+    const auth = await requireAuth(supabase);
 
-    if (authResult.response) {
-      return authResult.response;
+    if (auth.response) {
+      return auth.response;
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     const adminSupabase = createAdminSupabaseClient();
     const rateLimit = await enforceDocumentLookupRateLimit(adminSupabase, {
-      userId: authResult.user.id,
+      userId: auth.user.id,
       endpoint: 'consultar-cedula',
       documentValue: identificacionLimpia,
     });

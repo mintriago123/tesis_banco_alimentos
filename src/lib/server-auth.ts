@@ -36,6 +36,9 @@ export type AuthorizationResult = { authorized: true; response?: never } | { aut
 export type ActiveRoleResult =
   | { user: User; profile: ActiveUserProfile; response?: never }
   | { user?: never; profile?: never; response: NextResponse };
+export type AuthOnlyResult =
+  | { user: User; profile: ActiveUserProfile; response?: never }
+  | { user?: never; profile?: never; response: NextResponse };
 export type PatchValidationResult =
   | { success: true; updates: AdminUserPatchUpdates }
   | { success: false; error: string };
@@ -149,7 +152,7 @@ export async function getActiveUserProfile(
   };
 }
 
-export function requireRole(profile: ActiveUserProfile, roles: readonly AppUserRole[]): AuthorizationResult {
+export function assertRoleAllowed(profile: ActiveUserProfile, roles: readonly AppUserRole[]): AuthorizationResult {
   if (!roles.includes(profile.rol)) {
     return { response: forbidden('Rol no permitido.') };
   }
@@ -173,7 +176,7 @@ export async function requireActiveUserRole(
     return { response: profileResult.response };
   }
 
-  const roleResult = requireRole(profileResult.profile, roles);
+  const roleResult = assertRoleAllowed(profileResult.profile, roles);
 
   if (roleResult.response) {
     return { response: roleResult.response };
@@ -182,5 +185,46 @@ export async function requireActiveUserRole(
   return {
     user: authResult.user,
     profile: profileResult.profile,
+  };
+}
+
+export async function requireAuth(supabase: SupabaseClient): Promise<AuthOnlyResult> {
+  const authResult = await getAuthenticatedUser(supabase);
+
+  if (authResult.response) {
+    return { response: authResult.response };
+  }
+
+  const profileResult = await getActiveUserProfile(supabase, authResult.user.id);
+
+  if (profileResult.response) {
+    return { response: profileResult.response };
+  }
+
+  return {
+    user: authResult.user,
+    profile: profileResult.profile,
+  };
+}
+
+export async function requireRole(
+  supabase: SupabaseClient,
+  roles: readonly AppUserRole[]
+): Promise<ActiveRoleResult> {
+  const auth = await requireAuth(supabase);
+
+  if (auth.response) {
+    return { response: auth.response };
+  }
+
+  const roleResult = assertRoleAllowed(auth.profile, roles);
+
+  if (roleResult.response) {
+    return { response: roleResult.response };
+  }
+
+  return {
+    user: auth.user,
+    profile: auth.profile,
   };
 }

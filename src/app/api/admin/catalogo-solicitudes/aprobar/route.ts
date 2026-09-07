@@ -3,7 +3,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase-admin';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { readJsonObject } from '@/lib/api-validation';
 import { validateCsrfRequest } from '@/lib/csrf';
-import { requireActiveUserRole } from '@/lib/server-auth';
+import { requireRole } from '@/lib/server-auth';
 import {
   parsePositiveIntegerArrayValue,
   parsePositiveIntegerValue,
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     }
 
     const supabase = await createServerSupabaseClient();
-    const authResult = await requireActiveUserRole(supabase, ['ADMINISTRADOR']);
+    const authResult = await requireRole(supabase, ['ADMINISTRADOR']);
 
     if (authResult.response) {
       return authResult.response;

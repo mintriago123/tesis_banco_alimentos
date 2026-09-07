@@ -127,6 +127,11 @@ export class AuthService {
 
   /**
    * Registrar un nuevo usuario
+   *
+   * Nota de seguridad: el frontend envía `rol` en metadata, pero el trigger
+   * `public.handle_new_user` lo acota a DONANTE/SOLICITANTE y degrada cualquier
+   * otro valor (incluido ADMINISTRADOR/OPERADOR) a SOLICITANTE. Eliminar este
+   * envío rompe la auto-selección DONANTE; se mantiene como defensa cero.
    */
   async registrar(datos: DatosRegistro): Promise<ResultadoAuth> {
     try {
@@ -135,7 +140,7 @@ export class AuthService {
         email: datos.email,
         password: datos.password,
         options: {
-          data: { 
+          data: {
             rol: datos.rol,
           },
         },

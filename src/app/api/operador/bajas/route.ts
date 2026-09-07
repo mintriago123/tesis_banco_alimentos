@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { createAdminSupabaseClient } from '@/lib/supabase-admin';
-import { requireActiveUserRole } from '@/lib/server-auth';
+import { requireRole } from '@/lib/server-auth';
 import {
   parseEnumParam,
   parseIsoDateParam,
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient();
-    const authResult = await requireActiveUserRole(supabase, ['ADMINISTRADOR', 'OPERADOR']);
+    const authResult = await requireRole(supabase, ['ADMINISTRADOR', 'OPERADOR']);
 
     if (authResult.response) {
       return authResult.response;
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
-    const authResult = await requireActiveUserRole(supabase, ['ADMINISTRADOR', 'OPERADOR']);
+    const authResult = await requireRole(supabase, ['ADMINISTRADOR', 'OPERADOR']);
 
     if (authResult.response) {
       return authResult.response;

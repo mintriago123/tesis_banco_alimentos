@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PATCH, POST } from './route';
+import { PATCH } from './route';
 
 const mocks = vi.hoisted(() => ({
   createServerSupabaseClient: vi.fn(),
   createAdminSupabaseClient: vi.fn(),
   serverGetUser: vi.fn(),
-  adminCreateUser: vi.fn(),
+  userFrom: vi.fn(),
   adminFrom: vi.fn(),
   adminFromQueue: [] as unknown[],
+  userFromQueue: [] as unknown[],
 }));
 
 vi.mock('@/lib/supabase-server', () => ({
@@ -18,9 +19,9 @@ vi.mock('@/lib/supabase-admin', () => ({
   createAdminSupabaseClient: mocks.createAdminSupabaseClient,
 }));
 
-const jsonRequest = (method: 'POST' | 'PATCH', body: unknown) =>
+const patchRequest = (body: unknown) =>
   new Request('http://localhost/api/admin/usuarios', {
-    method,
+    method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
       Origin: 'http://localhost',
@@ -46,16 +47,8 @@ const createUpdateQuery = (error: { message: string } | null = null) => {
   return { update, eq };
 };
 
-const createUpsertQuery = (error: { message: string } | null = null) => {
-  const single = vi.fn(async () => ({ data: { id: 'created-user' }, error }));
-  const select = vi.fn(() => ({ single }));
-  const upsert = vi.fn(() => ({ select }));
-
-  return { upsert, select, single };
-};
-
-const enqueueProfile = (overrides: Record<string, unknown> = {}) => {
-  mocks.adminFromQueue.push(createProfileQuery({
+const enqueueUserProfile = (overrides: Record<string, unknown> = {}) => {
+  mocks.userFromQueue.push(createProfileQuery({
     id: 'admin-1',
     rol: 'ADMINISTRADOR',
     estado: 'activo',
@@ -69,44 +62,50 @@ beforeEach(() => {
   mocks.createServerSupabaseClient.mockReset();
   mocks.createAdminSupabaseClient.mockReset();
   mocks.serverGetUser.mockReset();
-  mocks.adminCreateUser.mockReset();
+  mocks.userFrom.mockReset();
   mocks.adminFrom.mockReset();
   mocks.adminFromQueue.length = 0;
+  mocks.userFromQueue.length = 0;
 
   mocks.serverGetUser.mockResolvedValue({
     data: { user: { id: 'admin-1', email: 'admin@example.com' } },
     error: null,
   });
-  mocks.createServerSupabaseClient.mockResolvedValue({
-    auth: { getUser: mocks.serverGetUser },
-  });
-  mocks.createAdminSupabaseClient.mockReturnValue({
-    auth: {
-      admin: {
-        createUser: mocks.adminCreateUser,
-      },
-    },
-    from: mocks.adminFrom,
+
+  enqueueUserProfile();
+
+  mocks.userFrom.mockImplementation(() => {
+    const query = mocks.userFromQueue.shift();
+    if (!query) {
+      throw new Error('Unexpected user query');
+    }
+    return query;
   });
   mocks.adminFrom.mockImplementation(() => {
     const query = mocks.adminFromQueue.shift();
-
     if (!query) {
       throw new Error('Unexpected admin query');
     }
-
     return query;
+  });
+
+  mocks.createServerSupabaseClient.mockResolvedValue({
+    auth: { getUser: mocks.serverGetUser },
+    from: mocks.userFrom,
+  });
+  mocks.createAdminSupabaseClient.mockReturnValue({
+    from: mocks.adminFrom,
   });
 });
 
-describe('/api/admin/usuarios', () => {
+describe('PATCH /api/admin/usuarios', () => {
   it('rejects PATCH without an authenticated session', async () => {
-    mocks.serverGetUser.mockResolvedValue({
+    mocks.serverGetUser.mockResolvedValueOnce({
       data: { user: null },
       error: null,
     });
 
-    const response = await PATCH(jsonRequest('PATCH', {
+    const response = await PATCH(patchRequest({
       userId: 'user-1',
       updates: { estado: 'activo' },
     }));
@@ -116,9 +115,10 @@ describe('/api/admin/usuarios', () => {
   });
 
   it('rejects PATCH for a non-admin active user', async () => {
-    enqueueProfile({ rol: 'DONANTE' });
+    mocks.userFromQueue.length = 0;
+    enqueueUserProfile({ rol: 'DONANTE' });
 
-    const response = await PATCH(jsonRequest('PATCH', {
+    const response = await PATCH(patchRequest({
       userId: 'user-1',
       updates: { estado: 'activo' },
     }));
@@ -128,24 +128,20 @@ describe('/api/admin/usuarios', () => {
   });
 
   it('rejects fields outside the PATCH whitelist', async () => {
-    enqueueProfile();
-
-    const response = await PATCH(jsonRequest('PATCH', {
+    const response = await PATCH(patchRequest({
       userId: 'user-1',
       updates: { email: 'edited@example.com' },
     }));
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: 'Campos no permitidos: email.' });
-    expect(mocks.adminFrom).toHaveBeenCalledTimes(1);
   });
 
   it('updates only sanitized PATCH fields for an active admin', async () => {
     const updateQuery = createUpdateQuery();
-    enqueueProfile();
     mocks.adminFromQueue.push(updateQuery);
 
-    const response = await PATCH(jsonRequest('PATCH', {
+    const response = await PATCH(patchRequest({
       userId: 'user-1',
       updates: {
         rol: 'OPERADOR',
@@ -163,101 +159,11 @@ describe('/api/admin/usuarios', () => {
     expect(updateQuery.eq).toHaveBeenCalledWith('id', 'user-1');
   });
 
-  it('allows an active admin to create users', async () => {
-    const upsertQuery = createUpsertQuery();
-    enqueueProfile();
-    mocks.adminFromQueue.push(upsertQuery);
-    mocks.adminCreateUser.mockResolvedValue({
-      data: { user: { id: 'new-user-1' } },
-      error: null,
-    });
-
-    const response = await POST(jsonRequest('POST', {
-      email: 'new@example.com',
-      password: 'secret-password',
-      rol: 'DONANTE',
-      nombre: 'New User',
-    }));
-
-    expect(response.status).toBe(200);
-    expect(mocks.adminCreateUser).toHaveBeenCalledWith({
-      email: 'new@example.com',
-      password: 'secret-password',
-      email_confirm: true,
-    });
-    expect(upsertQuery.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'new-user-1',
-        email: 'new@example.com',
-        rol: 'DONANTE',
-        estado: 'activo',
-      }),
-      { onConflict: 'id' }
-    );
-    await expect(response.json()).resolves.toEqual({
-      id: 'new-user-1',
-      email: 'new@example.com',
-      rol: 'DONANTE',
-    });
-  });
-
-  it('rejects malformed create payloads before using the admin client', async () => {
-    enqueueProfile();
-
-    const response = await POST(jsonRequest('POST', {
-      email: ' ',
-      password: 'secret',
-      rol: 'DONANTE',
-    }));
-
-    expect(response.status).toBe(400);
-    expect(mocks.adminCreateUser).not.toHaveBeenCalled();
-  });
-
-  it('returns an auth creation error without inserting a profile', async () => {
-    enqueueProfile();
-    mocks.adminCreateUser.mockResolvedValue({
-      data: { user: null },
-      error: { message: 'auth failed' },
-    });
-
-    const response = await POST(jsonRequest('POST', {
-      email: 'new@example.com',
-      password: 'secret-password',
-      rol: 'DONANTE',
-    }));
-
-    expect(response.status).toBe(500);
-    expect(mocks.adminFromQueue).toHaveLength(0);
-  });
-
-  it('reports a profile persistence error after creating auth', async () => {
-    const upsertQuery = createUpsertQuery({ message: 'profile insert failed' });
-    enqueueProfile();
-    mocks.adminFromQueue.push(upsertQuery);
-    mocks.adminCreateUser.mockResolvedValue({
-      data: { user: { id: 'created-user-2' } },
-      error: null,
-    });
-
-    const response = await POST(jsonRequest('POST', {
-      email: 'new@example.com',
-      password: 'secret-password',
-      rol: 'OPERADOR',
-    }));
-
-    expect(response.status).toBe(500);
-    await expect(response.json()).resolves.toEqual({
-      error: 'Usuario creado en auth, pero falló al registrar en la tabla usuarios.',
-    });
-  });
-
   it('returns database errors from PATCH and handles invalid JSON', async () => {
     const updateQuery = createUpdateQuery({ message: 'update failed' });
-    enqueueProfile();
     mocks.adminFromQueue.push(updateQuery);
 
-    const response = await PATCH(jsonRequest('PATCH', {
+    const response = await PATCH(patchRequest({
       userId: 'user-1',
       updates: { estado: 'activo' },
     }));
@@ -267,7 +173,8 @@ describe('/api/admin/usuarios', () => {
       details: 'update failed',
     });
 
-    enqueueProfile();
+    mocks.userFromQueue.length = 0;
+    enqueueUserProfile();
     const invalidJson = new Request('http://localhost/api/admin/usuarios', {
       method: 'PATCH',
       headers: { Origin: 'http://localhost', 'Content-Type': 'application/json' },

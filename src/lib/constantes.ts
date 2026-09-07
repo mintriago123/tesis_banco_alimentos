@@ -1,4 +1,3 @@
-// Constantes de la aplicación
 export const RUTAS_PUBLICAS = [
   '/',
   '/contribuyentes',
@@ -7,4 +6,43 @@ export const RUTAS_PUBLICAS = [
   '/auth/olvide-contrasena',
   '/auth/restablecer-contrasena',
   '/auth/verificar-email',
+] as const;
+
+export const RUTAS_REQUIEREN_SESION = [
+  '/perfil/actualizar',
+  '/notificaciones',
+  '/configuracion-notificaciones',
+  '/comprobante',
+  '/user/formulario',
+  '/user/solicitudes',
+  '/user/perfil',
+  '/user/configuracion',
+  '/donante/perfil',
+  '/donante/configuracion',
+  '/donante/donaciones',
+  '/donante/nueva-donacion',
+  '/donante/solicitar-alimento',
+  '/admin/perfil',
+  '/admin/configuracion',
+  '/admin/catalogo',
+  '/admin/reportes',
+  '/admin/dashboard',
+  '/admin/usuarios',
+  '/operador/perfil',
+  '/operador/configuracion',
+  '/operador/donaciones',
+  '/operador/inventario',
+  '/operador/solicitudes',
+  '/operador/solicitudes-bodegas',
+  '/operador/validar-comprobante',
+  '/operador/bajas',
+  '/operador/dashboard',
+  '/operador/comprobante',
+] as const;
+
+export const ROLES_PROTEGIDOS_PAGINA = [
+  { route: '/admin', role: 'ADMINISTRADOR' },
+  { route: '/operador', role: 'OPERADOR' },
+  { route: '/donante', role: 'DONANTE' },
+  { route: '/user', role: 'SOLICITANTE' },
 ] as const;

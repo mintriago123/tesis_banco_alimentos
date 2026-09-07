@@ -13,7 +13,7 @@ import {
   parsePaginationParams,
 } from '@/lib/api-validation';
 import { isUuid } from '@/lib/validation-core';
-import { requireActiveUserRole } from '@/lib/server-auth';
+import { requireRole } from '@/lib/server-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +35,7 @@ const MOTIVOS_CANCELACION_FILTRO = [
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
-    const authResult = await requireActiveUserRole(supabase, ['ADMINISTRADOR']);
+    const authResult = await requireRole(supabase, ['ADMINISTRADOR']);
 
     if (authResult.response) {
       return authResult.response;

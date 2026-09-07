@@ -43,11 +43,14 @@ beforeEach(() => {
     data: { user: { id: USER_ID } },
     error: null,
   });
-  mocks.from.mockReturnValue(createProfileQuery({
+
+  const defaultProfile = createProfileQuery({
     id: USER_ID,
     rol: 'OPERADOR',
     estado: 'activo',
-  }));
+  });
+  mocks.from.mockReturnValue(defaultProfile);
+
   mocks.createServerSupabaseClient.mockResolvedValue({
     auth: { getUser: mocks.getUser },
     from: mocks.from,

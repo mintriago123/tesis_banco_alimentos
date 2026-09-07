@@ -7,7 +7,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { decodificarQRPayload, formatearFecha, formatearFechaSolo } from '@/lib/comprobante';
 import type { DatosComprobante, QRPayload } from '@/lib/comprobante/types';
 import { parsePositiveIntParam, parseUuid, type ApiValidationResult } from '@/lib/api-validation';
-import { requireActiveUserRole } from '@/lib/server-auth';
+import { requireAuth } from '@/lib/server-auth';
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;
 
@@ -98,24 +98,19 @@ async function obtenerAccesoUsuario(supabase: ServerSupabaseClient): Promise<{
   usuario: AccesoUsuario | null;
   errorResponse?: NextResponse;
 }> {
-  const authResult = await requireActiveUserRole(supabase, [
-    'ADMINISTRADOR',
-    'OPERADOR',
-    'DONANTE',
-    'SOLICITANTE',
-  ]);
+  const auth = await requireAuth(supabase);
 
-  if (authResult.response) {
+  if (auth.response) {
     return {
       usuario: null,
-      errorResponse: authResult.response,
+      errorResponse: auth.response,
     };
   }
 
   return {
     usuario: {
-      id: authResult.user.id,
-      rol: authResult.profile.rol
+      id: auth.user.id,
+      rol: auth.profile.rol
     }
   };
 }
