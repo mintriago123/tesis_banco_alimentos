@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "notes": "Baseline captured after landing the Server Action / route contract integration tests (tests/integration/**) that replaced the old Supabase-mocked unit tests during the Postgres migration. Regenerate via: RUN_DB_INTEGRATION=true pnpm test:coverage:business && node scripts/generate-coverage-baseline.mjs (or hand-edit minimum to match a new coverage-business/coverage-summary.json run, raising target as coverage grows).",
+  "generatedAt": "2026-09-11",
+  "minimum": {
+    "statements": {
+      "total": 4468,
+      "covered": 945,
+      "pct": 21.15
+    },
+    "branches": {
+      "total": 2846,
+      "covered": 670,
+      "pct": 23.54
+    },
+    "functions": {
+      "total": 791,
+      "covered": 147,
+      "pct": 18.58
+    },
+    "lines": {
+      "total": 4153,
+      "covered": 922,
+      "pct": 22.2
+    }
+  },
+  "target": {
+    "statements": 35,
+    "branches": 35,
+    "functions": 30,
+    "lines": 35
+  }
+}

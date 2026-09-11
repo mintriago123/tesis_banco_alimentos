@@ -12,6 +12,7 @@
     "test:coverage": "vitest run --coverage",
     "test:coverage:critical": "vitest run --config vitest.critical.config.ts --coverage",
     "test:coverage:business": "vitest run --config vitest.business.config.ts --coverage",
+    "test:coverage:business:ratchet": "pnpm test:coverage:business && node scripts/check-coverage-ratchet.mjs",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:e2e": "playwright test"
   },

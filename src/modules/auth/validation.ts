@@ -1,6 +1,15 @@
 import { z } from 'zod';
 
-export const emailSchema = z.email({ message: 'El correo electrónico no es válido.' }).trim().toLowerCase();
+// Trim/lowercase run as a plain string transform *before* the email-format
+// check, not after — z.email().trim() would validate the raw (possibly
+// whitespace-padded) input first and only trim on success, rejecting a
+// pasted address with incidental leading/trailing whitespace instead of
+// cleaning it up. Caught by a test, not by tsc/build.
+export const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.email({ message: 'El correo electrónico no es válido.' }));
 
 export const passwordSchema = z
   .string()

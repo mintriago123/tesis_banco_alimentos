@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/coverage-business
+/coverage-critical
 
 # next.js
 /.next/
