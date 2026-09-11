@@ -35,6 +35,17 @@ export default defineConfig({
     url: appOrigin,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
+    // Redirects outgoing mail at the spawned server to Mailpit instead of
+    // Gmail, so PROFILE-P1-001 can assert on a real captured email — only
+    // for this process; .env.local's own EMAIL_* defaults (suppressed) stay
+    // untouched for `pnpm dev`/`pnpm start` run by hand.
+    env: {
+      EMAIL_PROVIDER: 'smtp',
+      EMAIL_SUPPRESS_SEND: 'false',
+      EMAIL_LOG_ONLY: 'false',
+      EMAIL_SMTP_HOST: process.env.EMAIL_SMTP_HOST ?? '127.0.0.1',
+      EMAIL_SMTP_PORT: process.env.EMAIL_SMTP_PORT ?? '1025',
+    },
   },
   projects: [
     {

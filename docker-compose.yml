@@ -16,5 +16,22 @@ services:
       timeout: 5s
       retries: 10
 
+  # Local SMTP capture for e2e (PROFILE-P1-001) — opt-in via `--profile e2e`
+  # so a bare `docker compose up -d` (normal dev) never starts it. No
+  # healthcheck: the image is a minimal static binary with no shell
+  # utilities to run a CMD-SHELL probe with; readiness is polled from the
+  # test side instead (tests/e2e/helpers/mailpit.ts's isMailpitReachable).
+  mailpit:
+    image: axllent/mailpit:v1.21
+    restart: unless-stopped
+    profiles: ["e2e"]
+    ports:
+      - "1025:1025" # SMTP capture
+      - "8025:8025" # Web UI + REST API
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+
 volumes:
   db_data:

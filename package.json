@@ -14,7 +14,8 @@
     "test:coverage:business": "vitest run --config vitest.business.config.ts --coverage",
     "test:coverage:business:ratchet": "pnpm test:coverage:business && node scripts/check-coverage-ratchet.mjs",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "docker:e2e": "docker compose --profile e2e up -d"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

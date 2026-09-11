@@ -3,6 +3,7 @@ import 'server-only';
 import { loadEmailConfig } from './config';
 import type { EmailOptions, EmailProvider } from './types';
 import { GmailEmailProvider } from './providers/GmailEmailProvider';
+import { SmtpEmailProvider } from './providers/SmtpEmailProvider';
 
 let providerInstance: EmailProvider | null = null;
 let suppressMessageShown = false;
@@ -16,6 +17,9 @@ function ensureProvider(): EmailProvider {
     switch (config.provider) {
       case 'gmail':
         providerInstance = new GmailEmailProvider(config);
+        break;
+      case 'smtp':
+        providerInstance = new SmtpEmailProvider(config);
         break;
       default:
         throw new Error(`Proveedor de correo no soportado: ${config.provider}`);

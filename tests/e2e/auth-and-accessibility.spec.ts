@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { extractResetUrl, isMailpitReachable, purgeMailpitInbox, waitForMailpitMessage } from './helpers/mailpit';
 import { getAccount, readRuntime } from './helpers/runtime';
 
 const ownRoutes = {
@@ -69,15 +70,47 @@ test('A11Y-P2-001 critical auth forms expose labels, language and keyboard valid
   await expect(email).toBeFocused();
 });
 
-// Skipped: the old assertion polled Supabase local's Mailpit inbox
-// (http://127.0.0.1:54324) to confirm a reset email was captured. That
-// infrastructure doesn't exist in this stack, and .env.local sets
-// EMAIL_SUPPRESS_SEND=true/EMAIL_LOG_ONLY=true for dev, so no email is
-// actually dispatched to inspect. A real port needs either a local SMTP
-// capture tool (e.g. Mailpit or MailHog wired to EMAIL_PROVIDER) or an
-// assertion against solicitarResetPasswordAction's return value instead of
-// an inbox.
-test.skip('PROFILE-P1-001 password recovery stays inside local Mailpit', async () => {});
+// Ported: playwright.config.ts's webServer.env points the app at a
+// Mailpit instance (EMAIL_PROVIDER=smtp) for this process only — .env.local
+// keeps EMAIL_SUPPRESS_SEND=true for `pnpm dev`/`pnpm start` run by hand.
+// Self-skips (rather than failing) when Mailpit isn't running, mirroring
+// this repo's RUN_DB_INTEGRATION gating for DB integration tests: start it
+// with `pnpm docker:e2e` first for full coverage.
+test('PROFILE-P1-001 password recovery round-trips through a captured Mailpit email', async ({ page, browser }) => {
+  test.skip(!(await isMailpitReachable()), 'Mailpit no está disponible — levanta `pnpm docker:e2e` antes de correr esta prueba.');
+
+  const runtime = await readRuntime();
+  const requester = getAccount(runtime, 'SOLICITANTE'); // defaults to status: 'activo'
+  await purgeMailpitInbox();
+
+  await page.goto('/auth/olvide-contrasena');
+  await page.getByLabel('Correo electrónico').fill(requester.email);
+  await page.getByRole('button', { name: 'Enviar Enlace de Restablecimiento' }).click();
+  await expect(page.getByText(/revisa tu bandeja de entrada/i)).toBeVisible();
+
+  const message = await waitForMailpitMessage(requester.email);
+  const resetUrl = extractResetUrl(message.text || message.html);
+
+  const newPassword = `${requester.password}-Nueva1!`;
+  await page.goto(resetUrl);
+  await page.locator('#password').fill(newPassword);
+  await page.locator('#confirmPassword').fill(newPassword);
+  await page.getByRole('button', { name: 'Actualizar Contraseña' }).click();
+  await expect(page.getByRole('heading', { name: '¡Contraseña Actualizada!' })).toBeVisible();
+
+  // Close the loop: the new password logs in — proves restablecerPasswordAction
+  // actually persisted the change, not just that the UI showed success.
+  // Any future test that live-logs-in with this account's *original*
+  // password must run before this one, or use a different account.
+  const freshContext = await browser.newContext({ baseURL: process.env.APP_ORIGIN ?? 'http://127.0.0.1:3000' });
+  const freshPage = await freshContext.newPage();
+  await freshPage.goto('/auth/iniciar-sesion');
+  await freshPage.getByLabel('Correo electrónico').fill(requester.email);
+  await freshPage.locator('#password').fill(newPassword);
+  await freshPage.getByRole('button', { name: 'Iniciar Sesión' }).click();
+  await expect(freshPage).toHaveURL(/\/user\/dashboard$/);
+  await freshContext.close();
+});
 
 test('UX-P2-001 renders the requester empty state without leaking another run', async ({ browser }) => {
   const runtime = await readRuntime();

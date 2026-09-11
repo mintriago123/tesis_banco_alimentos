@@ -14,6 +14,10 @@
 /coverage
 /coverage-business
 /coverage-critical
+/playwright-report
+/test-results
+/tests/.auth
+/tests/.runtime
 
 # next.js
 /.next/

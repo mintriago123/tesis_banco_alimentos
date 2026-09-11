@@ -1,6 +1,6 @@
 import 'server-only';
 
-export type SupportedEmailProvider = 'gmail';
+export type SupportedEmailProvider = 'gmail' | 'smtp';
 
 export interface ResolvedEmailConfig {
   provider: SupportedEmailProvider;
@@ -14,6 +14,12 @@ export interface ResolvedEmailConfig {
     port: number;
     secure: boolean;
     requireTLS: boolean;
+  };
+  /** Generic SMTP transport, no vendor host baked in — used for local/e2e mail capture (Mailpit). */
+  smtp: {
+    host: string;
+    port: number;
+    secure: boolean;
   };
 }
 
@@ -29,7 +35,7 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
 export function loadEmailConfig(): ResolvedEmailConfig {
   const provider = (process.env.EMAIL_PROVIDER ?? 'gmail') as SupportedEmailProvider;
 
-  if (provider !== 'gmail') {
+  if (provider !== 'gmail' && provider !== 'smtp') {
     throw new Error(`Proveedor de correo no soportado: ${provider}`);
   }
 
@@ -50,12 +56,17 @@ export function loadEmailConfig(): ResolvedEmailConfig {
   const gmailRequireTLS =
     typeof requireTLSEnv === 'undefined' ? gmailPort === 587 : parseBoolean(requireTLSEnv, gmailPort === 587);
 
-  if ((!gmailUser || !gmailPass) && !suppressSend) {
+  if (provider === 'gmail' && (!gmailUser || !gmailPass) && !suppressSend) {
     throw new Error('Faltan las variables EMAIL_GMAIL_USER o EMAIL_GMAIL_PASS para enviar correos con Gmail.');
   }
 
   const defaultFromEmail = process.env.EMAIL_FROM_ADDRESS ?? (gmailUser || 'no-reply@example.com');
   const defaultFromName = process.env.EMAIL_FROM_NAME ?? DEFAULT_FROM_NAME;
+
+  const smtpHost = process.env.EMAIL_SMTP_HOST ?? '127.0.0.1';
+  const parsedSmtpPort = Number(process.env.EMAIL_SMTP_PORT ?? '1025');
+  const smtpPort = Number.isInteger(parsedSmtpPort) ? parsedSmtpPort : 1025;
+  const smtpSecure = parseBoolean(process.env.EMAIL_SMTP_SECURE, false);
 
   return {
     provider,
@@ -69,6 +80,11 @@ export function loadEmailConfig(): ResolvedEmailConfig {
       port: gmailPort,
       secure: gmailSecure,
       requireTLS: gmailRequireTLS,
+    },
+    smtp: {
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
     },
   };
 }
