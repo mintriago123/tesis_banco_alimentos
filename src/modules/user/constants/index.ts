@@ -1,0 +1,54 @@
+// ============================================================================
+// Constants - Módulo Usuario/Solicitante
+// ============================================================================
+
+// ---------- Filtros de Estado ----------
+export const FILTROS_ESTADO = [
+  { label: 'TODOS', value: 'TODOS' },
+  { label: 'PENDIENTES', value: 'pendiente' },
+  { label: 'APROBADAS', value: 'aprobada' },
+  { label: 'RECHAZADAS', value: 'rechazada' },
+] as const;
+
+// ---------- Mensajes ----------
+export const MESSAGES = {
+  SOLICITUD: {
+    SUCCESS_CREATE: 'Solicitud enviada con éxito.',
+    SUCCESS_UPDATE: 'Solicitud actualizada.',
+    SUCCESS_DELETE: 'Solicitud eliminada.',
+    ERROR_CREATE: 'Error al enviar la solicitud',
+    ERROR_UPDATE: 'Error al actualizar la solicitud.',
+    ERROR_DELETE: 'Error al eliminar la solicitud.',
+    ERROR_LOAD: 'Error al cargar las solicitudes.',
+    EMPTY: 'No hay solicitudes para mostrar.',
+    STOCK_INSUFFICIENT: 'No hay suficiente stock disponible.',
+    NO_STOCK_AVAILABLE: 'No hay productos disponibles en inventario en este momento.',
+    NO_CATEGORY_AVAILABLE: 'No hay categorías con productos disponibles.',
+  },
+  PERFIL: {
+    SUCCESS_UPDATE: 'Perfil actualizado correctamente',
+    ERROR_UPDATE: 'Error al actualizar el perfil',
+    ERROR_LOAD: 'Error al cargar los datos del perfil',
+    NOT_FOUND: 'No se encontró el perfil del usuario',
+  },
+  VALIDATION: {
+    REQUIRED_FIELDS: 'Por favor completa todos los campos requeridos.',
+    CANTIDAD_INVALID: 'La cantidad debe ser mayor que cero.',
+    TELEFONO_INVALID: 'El teléfono debe tener 10 dígitos',
+    NOMBRE_REQUIRED: 'El nombre es obligatorio',
+  },
+  AUTH: {
+    NOT_AUTHENTICATED: 'Usuario no autenticado',
+  },
+  UBICACION: {
+    ERROR: 'No se pudo obtener la ubicación.',
+  },
+};
+
+// ---------- Configuración de Formularios ----------
+export const FORM_CONFIG = {
+  COMENTARIOS_MAX_LENGTH: 500,
+  TELEFONO_LENGTH: 10,
+  CANTIDAD_MIN: 0.1,
+  CANTIDAD_STEP: 0.1,
+};

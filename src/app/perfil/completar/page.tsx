@@ -1,0 +1,435 @@
+"use client";
+
+import { useState, lazy, Suspense } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import {
+  useIdentityValidation,
+  useProfileForm,
+  useCompletarPerfil,
+} from "@/modules/shared/hooks";
+import { validarCedulaEcuatoriana, validarRucEcuatoriano } from "@/lib/validaciones";
+import { Loader2 } from "lucide-react";
+
+const MapboxLocationPicker = lazy(() => import("@/modules/shared/components/MapboxLocationPicker"));
+
+type DateFieldName = "fechaEmisionIngresada" | "fechaExpRepreIngresada";
+
+export default function CompletarPerfil() {
+  const router = useRouter();
+  const { data: session, update: updateSession } = useSession();
+
+  const {
+    consultando,
+    validacionDocumento,
+    fechasValidasNatural,
+    fechasValidasJuridica,
+    consultarCedula,
+    consultarRuc,
+    resetValidation,
+  } = useIdentityValidation();
+
+  const {
+    form,
+    nombreBloqueado,
+    handleChange,
+    updateField,
+    updateMultipleFields,
+    updateLocation,
+    resetForm,
+    lockName,
+    validateTelefono,
+  } = useProfileForm();
+
+  const {
+    error,
+    success: exito,
+    setError,
+    checkDuplicateIdentification,
+    saveProfile,
+    ensureDonorWarehouse,
+  } = useCompletarPerfil();
+
+  const [, setIdentificacionValidada] = useState(false);
+
+  const limpiarFormulario = (tipo: "Natural" | "Juridica") => {
+    resetForm(tipo);
+    resetValidation();
+    setIdentificacionValidada(false);
+    setError(null);
+  };
+
+  const manejarCambioFecha = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    let cleanValue = value.replace(/\D/g, "");
+    if (cleanValue.length > 8) cleanValue = cleanValue.slice(0, 8);
+
+    let dia = cleanValue.slice(0, 2);
+    let mes = cleanValue.slice(2, 4);
+    const anio = cleanValue.slice(4, 8);
+
+    if (dia) {
+      const nDia = parseInt(dia, 10);
+      if (nDia > 31) dia = "31";
+      if (nDia < 1 && dia.length === 2) dia = "01";
+    }
+    if (mes) {
+      const nMes = parseInt(mes, 10);
+      if (nMes > 12) mes = "12";
+      if (nMes < 1 && mes.length === 2) mes = "01";
+    }
+
+    let nuevaFecha = dia;
+    if (mes) nuevaFecha += "/" + mes;
+    if (anio) nuevaFecha += "/" + anio;
+
+    updateField(name as DateFieldName, nuevaFecha);
+    setError(null);
+  };
+
+  const consultarIdentificacion = async () => {
+    const numero = form.tipo_persona === "Natural" ? form.cedula : form.ruc;
+    if (!numero || numero.length < (form.tipo_persona === "Natural" ? 10 : 13)) {
+      setError("Ingrese un documento válido.");
+      return;
+    }
+
+    setError(null);
+
+    if (form.tipo_persona === "Natural") {
+      const resultado = await consultarCedula(numero);
+      if (resultado) {
+        updateMultipleFields({ nombre: resultado.nombre || '', cedula: resultado.cedula || numero });
+        lockName(true);
+        setIdentificacionValidada(false);
+      } else {
+        lockName(false);
+        setIdentificacionValidada(false);
+      }
+    } else {
+      const resultado = await consultarRuc(numero);
+      if (resultado) {
+        updateMultipleFields({ nombre: resultado.nombre || '', direccion: resultado.direccion || '', representante: resultado.representante || '' });
+        lockName(true);
+        setIdentificacionValidada(false);
+      } else {
+        lockName(false);
+        setIdentificacionValidada(false);
+      }
+    }
+  };
+
+  const validarFechaNatural = () => {
+    if (!fechasValidasNatural.length || !form.fechaEmisionIngresada) return false;
+    const normalizar = (fecha: string) => fecha.replace(/[-/]/g, "").trim().toLowerCase();
+    return fechasValidasNatural.some((f) => normalizar(form.fechaEmisionIngresada) === normalizar(f));
+  };
+
+  const validarFechaJuridica = () => {
+    if (!fechasValidasJuridica.length || !form.fechaExpRepreIngresada) return false;
+    const normalizar = (fecha: string) => fecha.replace(/[-/]/g, "").trim().toLowerCase();
+    return fechasValidasJuridica.some((f) => normalizar(form.fechaExpRepreIngresada) === normalizar(f));
+  };
+
+  const manejarEnvio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (form.tipo_persona === "Natural" && !form.cedula) {
+      setError("La cédula es obligatoria.");
+      return;
+    }
+    if (form.tipo_persona === "Juridica" && !form.ruc) {
+      setError("El RUC es obligatorio.");
+      return;
+    }
+
+    if (!nombreBloqueado) {
+      if (form.tipo_persona === "Natural" && !validarCedulaEcuatoriana(form.cedula)) {
+        setError("El formato de la cédula no es válido. Por favor, verifica que sea una cédula ecuatoriana correcta.");
+        return;
+      }
+      if (form.tipo_persona === "Juridica" && !validarRucEcuatoriano(form.ruc)) {
+        setError("El formato del RUC no es válido. Por favor, verifica que sea un RUC ecuatoriano correcto.");
+        return;
+      }
+    }
+
+    if (!form.telefono || !validateTelefono(form.telefono)) {
+      setError("El número de teléfono es obligatorio y debe tener 10 dígitos.");
+      return;
+    }
+
+    if (!form.direccion || !form.latitud || !form.longitud) {
+      setError("Debes seleccionar una ubicación en el mapa.");
+      return;
+    }
+
+    if (form.tipo_persona === "Natural" && fechasValidasNatural.length) {
+      if (!form.fechaEmisionIngresada) {
+        setError("Debes ingresar la fecha de emisión o expiración de tu cédula.");
+        return;
+      }
+      if (!validarFechaNatural()) {
+        setError("La fecha de emisión o expiración no coincide con la registrada.");
+        return;
+      }
+    }
+    if (form.tipo_persona === "Juridica" && fechasValidasJuridica.length) {
+      if (!form.fechaExpRepreIngresada) {
+        setError("Debes ingresar la fecha de emisión o expiración de la cédula del representante legal.");
+        return;
+      }
+      if (!validarFechaJuridica()) {
+        setError("La fecha de emisión o expiración del representante legal no coincide con la registrada.");
+        return;
+      }
+    }
+
+    if (!session?.user) {
+      setError("No se pudo obtener el usuario autenticado.");
+      return;
+    }
+
+    if (form.tipo_persona === "Natural") {
+      const isDuplicate = await checkDuplicateIdentification('Natural', form.cedula);
+      if (isDuplicate) return;
+    }
+    if (form.tipo_persona === "Juridica") {
+      const isDuplicate = await checkDuplicateIdentification('Juridica', form.ruc);
+      if (isDuplicate) return;
+    }
+
+    const success = await saveProfile({
+      tipo_persona: form.tipo_persona,
+      cedula: form.cedula || null,
+      ruc: form.ruc || null,
+      nombre: form.nombre,
+      direccion: form.direccion,
+      telefono: form.telefono,
+      representante: form.representante || null,
+      latitud: form.latitud,
+      longitud: form.longitud,
+    });
+
+    if (success) {
+      if (session.user.rol === 'DONANTE') {
+        const warehouseCreated = await ensureDonorWarehouse();
+        if (!warehouseCreated) return;
+      }
+
+      await updateSession();
+      router.push("/auth/iniciar-sesion");
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50 px-4 py-8">
+      <form className="w-full max-w-lg space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-lg sm:p-8" onSubmit={manejarEnvio}>
+        <h2 className="mb-4 text-center text-3xl font-extrabold text-slate-950">Completa tu Perfil</h2>
+
+        <div>
+          <label className="font-semibold text-gray-700 block mb-2 text-center">
+            Tipo de Persona <span className="text-red-600">*</span>
+          </label>
+          <div className="grid grid-cols-2 gap-4 mb-2">
+            <button
+              type="button"
+              className={`flex flex-col items-center justify-center px-0 py-4 rounded-xl border-2 transition-all font-medium ${
+                form.tipo_persona === "Natural" ? "border-blue-700 bg-blue-700 text-white shadow-sm" : "border-blue-200 bg-white text-blue-900 hover:bg-blue-50"
+              }`}
+              onClick={() => limpiarFormulario("Natural")}
+            >
+              Natural
+              <span className="block text-xs font-normal mt-1">Cédula</span>
+            </button>
+            <button
+              type="button"
+              className={`flex flex-col items-center justify-center px-0 py-4 rounded-xl border-2 transition-all font-medium ${
+                form.tipo_persona === "Juridica" ? "border-blue-700 bg-blue-700 text-white shadow-sm" : "border-blue-200 bg-white text-blue-900 hover:bg-blue-50"
+              }`}
+              onClick={() => limpiarFormulario("Juridica")}
+            >
+              Jurídica
+              <span className="block text-xs font-normal mt-1">RUC</span>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor={form.tipo_persona === "Natural" ? "cedula" : "ruc"} className="font-semibold text-gray-700 block mb-1">
+            {form.tipo_persona === "Natural" ? "Cédula" : "RUC"} <span className="text-red-600">*</span>
+          </label>
+          <div className="flex gap-2">
+            <input
+              name={form.tipo_persona === "Natural" ? "cedula" : "ruc"}
+              id={form.tipo_persona === "Natural" ? "cedula" : "ruc"}
+              type="text"
+              maxLength={form.tipo_persona === "Natural" ? 10 : 13}
+              placeholder={form.tipo_persona === "Natural" ? "Cédula" : "RUC"}
+              className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-400 outline-none"
+              value={form.tipo_persona === "Natural" ? form.cedula : form.ruc}
+              onChange={handleChange}
+            />
+            <button
+              type="button"
+              className="inline-flex items-center rounded-xl bg-blue-700 px-4 py-2 font-semibold text-white shadow-sm hover:bg-blue-800"
+              disabled={consultando}
+              onClick={consultarIdentificacion}
+            >
+              {consultando ? "..." : "Consultar"}
+            </button>
+          </div>
+          {validacionDocumento.mensaje && (
+            <div
+              className={`mt-2 text-xs rounded-lg px-3 py-2 ${
+                validacionDocumento.mensaje.includes("Por favor, ingresa la fecha de emisión o expiración")
+                  ? "text-blue-700 bg-blue-100"
+                  : validacionDocumento.esValido
+                    ? "text-green-700 bg-green-100"
+                    : "text-red-600 bg-red-100"
+              }`}
+            >
+              {validacionDocumento.mensaje}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label htmlFor="nombre" className="font-semibold text-gray-700 block mb-1">
+            {form.tipo_persona === "Natural" ? "Nombre" : "Razón Social"} <span className="text-red-600">*</span>
+          </label>
+          <textarea
+            name="nombre"
+            id="nombre"
+            placeholder={form.tipo_persona === "Natural" ? "Nombre" : "Razón Social"}
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-400 outline-none resize-none"
+            value={form.nombre}
+            onChange={handleChange}
+            disabled={nombreBloqueado}
+            rows={2}
+          />
+        </div>
+
+        {form.tipo_persona === "Juridica" && (
+          <div>
+            <label htmlFor="representante" className="font-semibold text-gray-700 block mb-1">
+              Nombre del Representante Legal <span className="text-red-600">*</span>
+            </label>
+            <input
+              name="representante"
+              id="representante"
+              type="text"
+              placeholder="Representante Legal"
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-400 outline-none"
+              value={form.representante}
+              onChange={handleChange}
+              disabled={nombreBloqueado}
+            />
+          </div>
+        )}
+
+        <div>
+          <label className="font-semibold text-gray-700 block mb-2">
+            Ubicación <span className="text-red-600">*</span>
+          </label>
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-64 bg-gray-100 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2 text-gray-500">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span className="text-sm">Cargando mapa...</span>
+                </div>
+              </div>
+            }
+          >
+            <MapboxLocationPicker
+              initialAddress={form.direccion}
+              initialLatitude={form.latitud || -2.1894}
+              initialLongitude={form.longitud || -79.8891}
+              onLocationSelect={updateLocation}
+              placeholder="Buscar tu dirección..."
+            />
+          </Suspense>
+        </div>
+
+        <div>
+          <label htmlFor="telefono" className="font-semibold text-gray-700 block mb-1">
+            Teléfono <span className="text-red-600">*</span>
+          </label>
+          <input
+            name="telefono"
+            id="telefono"
+            type="tel"
+            placeholder="Teléfono"
+            maxLength={10}
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-400 outline-none"
+            value={form.telefono}
+            onChange={handleChange}
+            inputMode="numeric"
+            autoComplete="off"
+          />
+        </div>
+        {form.tipo_persona === "Natural" && fechasValidasNatural.length > 0 && (
+          <div>
+            <label htmlFor="fechaEmisionIngresada" className="font-semibold text-gray-700 block mb-1">
+              Fecha de emisión o expiración de la cédula <span className="text-red-600">*</span>
+            </label>
+            <input
+              name="fechaEmisionIngresada"
+              id="fechaEmisionIngresada"
+              type="text"
+              placeholder="DD/MM/AAAA"
+              maxLength={10}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-400 outline-none"
+              value={form.fechaEmisionIngresada}
+              onChange={manejarCambioFecha}
+              inputMode="numeric"
+              autoComplete="off"
+            />
+            <div className="text-xs text-gray-500 mt-1">Puedes ingresar la fecha de emisión <b>o</b> expiración de tu cédula.</div>
+            {form.fechaEmisionIngresada && !validarFechaNatural() && <div className="text-sm text-red-600 mt-1">La fecha ingresada no coincide con los registros oficiales.</div>}
+            {form.fechaEmisionIngresada && validarFechaNatural() && <div className="text-sm text-green-700 mt-1">Fecha verificada correctamente.</div>}
+          </div>
+        )}
+
+        {form.tipo_persona === "Juridica" && nombreBloqueado && fechasValidasJuridica.length > 0 && (
+          <div>
+            <label htmlFor="fechaExpRepreIngresada" className="font-semibold text-gray-700 block mb-1">
+              Fecha de emisión o expiración de la cédula del representante legal <span className="text-red-600">*</span>
+            </label>
+            <input
+              name="fechaExpRepreIngresada"
+              id="fechaExpRepreIngresada"
+              type="text"
+              placeholder="DD/MM/AAAA"
+              maxLength={10}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-400 outline-none"
+              value={form.fechaExpRepreIngresada}
+              onChange={manejarCambioFecha}
+              inputMode="numeric"
+              autoComplete="off"
+            />
+            <div className="text-xs text-gray-500 mt-1">
+              Puedes ingresar la fecha de emisión <b>o</b> expiración de la cédula del representante legal.
+              {fechasValidasJuridica.length === 0 && <span className="block text-red-500 mt-1">(No se pudo obtener la fecha oficial, se guardará tu dato pero no se validará)</span>}
+            </div>
+            {form.fechaExpRepreIngresada && fechasValidasJuridica.length > 0 && !validarFechaJuridica() && (
+              <div className="text-sm text-red-600 mt-1">La fecha ingresada no coincide con los registros oficiales.</div>
+            )}
+            {form.fechaExpRepreIngresada && fechasValidasJuridica.length > 0 && validarFechaJuridica() && (
+              <div className="text-sm text-green-700 mt-1">Fecha verificada correctamente.</div>
+            )}
+          </div>
+        )}
+
+        {error && <div className="text-center text-red-700 bg-red-100 py-2 px-3 rounded-lg">{error}</div>}
+        {exito && <div className="text-center text-green-700 bg-green-100 py-2 px-3 rounded-lg">{exito}</div>}
+
+        <button type="submit" className="w-full rounded-xl bg-blue-700 py-3 font-semibold text-white shadow-sm hover:bg-blue-800">
+          Guardar
+        </button>
+      </form>
+    </div>
+  );
+}

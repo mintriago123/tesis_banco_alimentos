@@ -1,0 +1,185 @@
+import { Donacion } from '../types';
+import { useDateFormatter } from '@/modules/shared/hooks/useDateFormatter';
+import { QrCode, ExternalLink } from 'lucide-react';
+
+interface DonacionDetalleModalProps {
+  donacion: Donacion;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function DonacionDetalleModal({ donacion, isOpen, onClose }: DonacionDetalleModalProps) {
+  const { formatDate } = useDateFormatter();
+
+  if (!isOpen) return null;
+
+  const getEstadoBadge = (estado: string) => {
+    const base = 'px-3 py-1 text-xs font-semibold rounded-full border ';
+    switch (estado) {
+      case 'Pendiente':
+        return base + 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'Aprobada':
+        return base + 'bg-green-100 text-green-800 border-green-300';
+      case 'Cancelada':
+        return base + 'bg-red-100 text-red-800 border-red-300';
+      default:
+        return base + 'bg-gray-100 text-gray-800 border-gray-300';
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-xl font-bold mb-4">Detalles de la Donación</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <div>
+              <h4 className="font-semibold text-gray-700 mb-2">Información del Producto</h4>
+              <div className="bg-gray-50 p-3 rounded-md space-y-2">
+                <p>
+                  <span className="font-medium">Tipo:</span> {donacion.tipo_producto}
+                </p>
+                <p>
+                  <span className="font-medium">Categoría:</span> {donacion.categoria_comida}
+                </p>
+                <p>
+                  <span className="font-medium">Cantidad:</span> {donacion.cantidad}{' '}
+                  {donacion.unidad_simbolo}
+                </p>
+                {donacion.fecha_vencimiento && (
+                  <p>
+                    <span className="font-medium">Vencimiento:</span>{' '}
+                    {formatDate(donacion.fecha_vencimiento)}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-gray-700 mb-2">Información de Entrega</h4>
+              <div className="bg-gray-50 p-3 rounded-md space-y-2">
+                <p>
+                  <span className="font-medium">Fecha disponible:</span>{' '}
+                  {formatDate(donacion.fecha_disponible)}
+                </p>
+                <p>
+                  <span className="font-medium">Dirección:</span> {donacion.direccion_entrega}
+                </p>
+                {donacion.horario_preferido && (
+                  <p>
+                    <span className="font-medium">Horario:</span> {donacion.horario_preferido}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <h4 className="font-semibold text-gray-700 mb-2">Estado e Impacto</h4>
+              <div className="bg-gray-50 p-3 rounded-md space-y-2">
+                <div className="flex items-center space-x-2">
+                  <span className={getEstadoBadge(donacion.estado)}>{donacion.estado}</span>
+                </div>
+                {donacion.impacto_estimado_personas && (
+                  <p>
+                    <span className="font-medium">Impacto estimado:</span>{' '}
+                    {donacion.impacto_estimado_personas} personas
+                  </p>
+                )}
+                {donacion.impacto_equivalente && (
+                  <p>
+                    <span className="font-medium">Equivalente:</span> {donacion.impacto_equivalente}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-gray-700 mb-2">Contacto</h4>
+              <div className="bg-gray-50 p-3 rounded-md space-y-2">
+                <p>
+                  <span className="font-medium">Teléfono:</span> {donacion.telefono}
+                </p>
+                <p>
+                  <span className="font-medium">Email:</span> {donacion.email}
+                </p>
+              </div>
+            </div>
+
+            {donacion.estado === 'Cancelada' && (
+              <div>
+                <h4 className="font-semibold text-gray-700 mb-2">Información de cancelación</h4>
+                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-gray-700 space-y-2">
+                  {donacion.fecha_cancelacion && (
+                    <p>
+                      <span className="font-medium">Fecha:</span>{' '}
+                      {formatDate(donacion.fecha_cancelacion)}
+                    </p>
+                  )}
+                  {donacion.motivo_cancelacion && (
+                    <p>
+                      <span className="font-medium">Motivo:</span>{' '}
+                      {donacion.motivo_cancelacion}
+                    </p>
+                  )}
+                  {donacion.observaciones_cancelacion && (
+                    <p>
+                      <span className="font-medium">Observaciones:</span>{' '}
+                      {donacion.observaciones_cancelacion}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {donacion.observaciones && (
+            <div className="md:col-span-2">
+              <h4 className="font-semibold text-gray-700 mb-2">Observaciones</h4>
+              <div className="bg-gray-50 p-3 rounded-md">
+                <p>{donacion.observaciones}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Código de Verificación */}
+          {donacion.codigo_comprobante && (
+            <div className="md:col-span-2">
+              <h4 className="font-semibold text-gray-700 mb-2 flex items-center">
+                <QrCode className="w-4 h-4 mr-2 text-red-600" />
+                Código de Verificación
+              </h4>
+              <div className="bg-gradient-to-r from-red-50 to-red-100 border border-red-200 p-4 rounded-md">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Código de Comprobante</p>
+                    <p className="font-mono font-bold text-lg text-red-700">{donacion.codigo_comprobante}</p>
+                  </div>
+                  <a
+                    href={`/comprobante/${donacion.codigo_comprobante}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Ver Comprobante
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end mt-6">
+          <button
+            onClick={onClose}
+            className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
